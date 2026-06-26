@@ -1,7 +1,21 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx create-next-app@latest . --typescript --tailwind --app --no-src-dir --no-import-alias --eslint --use-npm)"
+      "Bash(npx create-next-app@latest . --typescript --tailwind --app --no-src-dir --no-import-alias --eslint --use-npm)",
+      "mcp__claude_ai_Vercel__list_teams",
+      "mcp__claude_ai_Supabase__list_projects",
+      "mcp__claude_ai_Vercel__list_projects",
+      "mcp__claude_ai_Supabase__get_publishable_keys",
+      "mcp__claude_ai_Supabase__get_project_url",
+      "mcp__claude_ai_Supabase__list_tables",
+      "mcp__claude_ai_Supabase__apply_migration",
+      "mcp__claude_ai_Vercel__deploy_to_vercel",
+      "Bash(vercel link *)",
+      "Bash(vercel env *)",
+      "Bash(gh api *)",
+      "Bash(gh repo *)",
+      "Bash(git remote *)",
+      "Bash(git branch *)"
     ]
   }
 }
