@@ -13,10 +13,16 @@ export default function Navbar() {
   const pathname = usePathname()
 
   return (
-    <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/80 backdrop-blur">
+    <header className="sticky top-0 z-40" style={{
+      background: 'rgba(255,255,255,0.75)',
+      backdropFilter: 'blur(18px)',
+      WebkitBackdropFilter: 'blur(18px)',
+      borderBottom: '1px solid rgba(255,255,255,0.6)',
+      boxShadow: '0 2px 16px rgba(61,90,54,0.07)',
+    }}>
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-14 items-center justify-between">
-          <Link href="/" className="text-sm font-semibold text-indigo-600">
+          <Link href="/" className="text-sm font-bold tracking-wide" style={{ color: 'var(--verde-dark)' }}>
             Fondo Comunitario
           </Link>
           <nav className="flex gap-1">
@@ -24,11 +30,13 @@ export default function Navbar() {
               <Link
                 key={link.href}
                 href={link.href}
-                className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
-                  pathname === link.href
-                    ? 'bg-indigo-50 text-indigo-600 font-medium'
-                    : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
-                }`}
+                className="rounded-lg px-3 py-1.5 text-sm font-medium transition-all"
+                style={pathname === link.href ? {
+                  background: 'var(--verde)',
+                  color: '#fff',
+                } : {
+                  color: 'var(--cafe)',
+                }}
               >
                 {link.label}
               </Link>

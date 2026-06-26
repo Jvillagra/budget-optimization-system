@@ -81,15 +81,16 @@ export default function SimuladorPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-gray-900">Simulador Comparativo</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <h1 className="text-lg font-bold" style={{ color: 'var(--verde-dark)' }}>Simulador Comparativo</h1>
+          <p className="text-sm mt-0.5" style={{ color: 'rgba(0,0,0,0.45)' }}>
             Compara proveedores y encuentra la mejor opción para la comunidad.
           </p>
         </div>
         <button
           onClick={calcular}
           disabled={calculando || proveedores.length === 0}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white font-medium hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="rounded-xl px-4 py-2 text-sm text-white font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          style={{ background: 'var(--verde)' }}
         >
           {calculando ? 'Calculando...' : 'Simular'}
         </button>
@@ -100,73 +101,63 @@ export default function SimuladorPage() {
         <StatCard label="Total beneficiarios" value={beneficiarios.length.toString()} />
         <StatCard label="Presupuesto por socio" value={formatCLP(189000)} />
         <StatCard label="Invernadero" value={invernadero.length.toString()} accent="green" />
-        <StatCard label="Cierre Perimetral" value={cierrePerimetral.length.toString()} accent="blue" />
+        <StatCard label="Cierre Perimetral" value={cierrePerimetral.length.toString()} accent="cafe" />
       </div>
 
       {/* Resultados de la simulación */}
       {resultados.length > 0 ? (
         <div>
-          <h2 className="text-sm font-medium text-gray-500 mb-3">Resultados por proveedor</h2>
+          <h2 className="text-sm font-semibold mb-3" style={{ color: 'var(--cafe)' }}>Resultados por proveedor</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {resultados.map((res, idx) => {
               const esMejor = res.proveedor.id === mejorEscenario?.proveedor.id
               return (
                 <div
                   key={res.proveedor.id}
-                  className={`rounded-xl border p-5 space-y-4 ${
-                    esMejor
-                      ? 'border-emerald-400 bg-emerald-50 shadow-sm shadow-emerald-100'
-                      : 'border-gray-200 bg-white'
-                  }`}
+                  className="rounded-2xl p-5 space-y-4 transition-all"
+                  style={esMejor ? {
+                    background: 'rgba(58,125,68,0.08)',
+                    backdropFilter: 'blur(14px)',
+                    WebkitBackdropFilter: 'blur(14px)',
+                    border: '1.5px solid var(--verde)',
+                    boxShadow: '0 4px 24px rgba(58,125,68,0.14)',
+                  } : {
+                    background: 'rgba(255,255,255,0.65)',
+                    backdropFilter: 'blur(14px)',
+                    WebkitBackdropFilter: 'blur(14px)',
+                    border: '1px solid rgba(255,255,255,0.55)',
+                    boxShadow: '0 2px 12px rgba(61,90,54,0.07)',
+                  }}
                 >
                   <div className="flex items-center justify-between">
-                    <h3 className="font-semibold text-gray-900">{res.proveedor.nombre}</h3>
+                    <h3 className="font-bold" style={{ color: '#1c1c1c' }}>{res.proveedor.nombre}</h3>
                     {esMejor && (
-                      <span className="flex items-center gap-1 text-xs bg-emerald-600 text-white px-2 py-0.5 rounded-full font-medium">
+                      <span className="flex items-center gap-1 text-xs text-white px-2.5 py-0.5 rounded-full font-semibold" style={{ background: 'var(--verde)' }}>
                         Mejor opción
                       </span>
                     )}
                     {idx === resultados.length - 1 && !esMejor && (
-                      <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--cafe-muted)', color: 'var(--cafe)' }}>
                         #{idx + 1}
                       </span>
                     )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <MetricCard
-                      label="Volumen total"
-                      value={res.volumenTotal.toString()}
-                      sublabel="unidades comunidad"
-                      highlight={esMejor}
-                    />
-                    <MetricCard
-                      label="Gasto comunidad"
-                      value={formatCLP(res.gastoComunidad)}
-                      sublabel="total 29 socios"
-                    />
-                    <MetricCard
-                      label="Aporte de bolsillo"
-                      value={formatCLP(res.aporteBolsilloTotal)}
-                      sublabel="total comunidad"
-                      danger={res.aporteBolsilloTotal > 0}
-                    />
-                    <MetricCard
-                      label="Insumos disponibles"
-                      value={res.insumos.length.toString()}
-                      sublabel="en catálogo"
-                    />
+                    <MetricCard label="Volumen total" value={res.volumenTotal.toString()} sublabel="unidades comunidad" highlight={esMejor} />
+                    <MetricCard label="Gasto comunidad" value={formatCLP(res.gastoComunidad)} sublabel="total 29 socios" />
+                    <MetricCard label="Aporte de bolsillo" value={formatCLP(res.aporteBolsilloTotal)} sublabel="total comunidad" danger={res.aporteBolsilloTotal > 0} />
+                    <MetricCard label="Insumos disponibles" value={res.insumos.length.toString()} sublabel="en catálogo" />
                   </div>
 
-                  {/* Desglose de insumos */}
                   {res.insumos.length > 0 && (
                     <div>
-                      <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Catálogo</p>
+                      <p className="text-xs uppercase tracking-wide mb-2" style={{ color: 'rgba(0,0,0,0.35)' }}>Catálogo</p>
                       <div className="space-y-1">
                         {res.insumos.map((i) => (
-                          <div key={i.id} className="flex justify-between text-xs text-gray-600">
+                          <div key={i.id} className="flex justify-between text-xs" style={{ color: 'rgba(0,0,0,0.6)' }}>
                             <span>{i.nombre}</span>
-                            <span className="font-medium">{formatCLP(i.precio_unitario)} / {i.formato_venta}</span>
+                            <span className="font-semibold">{formatCLP(i.precio_unitario)} / {i.formato_venta}</span>
                           </div>
                         ))}
                       </div>
@@ -179,8 +170,8 @@ export default function SimuladorPage() {
 
           {/* Resumen comparativo */}
           {resultados.length >= 2 && (
-            <div className="mt-4 rounded-xl bg-gray-900 text-white p-5">
-              <h3 className="text-sm font-medium text-gray-300 mb-3">Análisis comparativo</h3>
+            <div className="mt-4 rounded-2xl p-5" style={{ background: 'var(--verde-dark)' }}>
+              <h3 className="text-sm font-semibold mb-3" style={{ color: 'rgba(255,255,255,0.7)' }}>Análisis comparativo</h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {(() => {
                   const mejor = resultados[0]
@@ -213,9 +204,9 @@ export default function SimuladorPage() {
           )}
         </div>
       ) : (
-        <div className="rounded-xl border-2 border-dashed border-gray-200 p-12 text-center">
-          <p className="text-gray-400 text-sm">Presiona &ldquo;Simular&rdquo; para comparar los proveedores.</p>
-          <p className="text-gray-300 text-xs mt-1">
+        <div className="rounded-2xl border-2 border-dashed p-12 text-center" style={{ borderColor: 'rgba(58,125,68,0.2)' }}>
+          <p className="text-sm" style={{ color: 'rgba(0,0,0,0.4)' }}>Presiona &ldquo;Simular&rdquo; para comparar los proveedores.</p>
+          <p className="text-xs mt-1" style={{ color: 'rgba(0,0,0,0.3)' }}>
             El sistema calculará automáticamente la asignación óptima para los {beneficiarios.length} beneficiarios.
           </p>
         </div>
@@ -224,14 +215,13 @@ export default function SimuladorPage() {
   )
 }
 
-function StatCard({ label, value, accent }: { label: string; value: string; accent?: 'green' | 'blue' }) {
+function StatCard({ label, value, accent }: { label: string; value: string; accent?: 'green' | 'cafe' }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4">
-      <p className="text-xs text-gray-400">{label}</p>
-      <p className={`text-xl font-bold mt-0.5 ${
-        accent === 'green' ? 'text-green-600' :
-        accent === 'blue' ? 'text-blue-600' : 'text-gray-900'
-      }`}>{value}</p>
+    <div className="rounded-2xl p-4 glass">
+      <p className="text-xs" style={{ color: 'rgba(0,0,0,0.4)' }}>{label}</p>
+      <p className="text-xl font-bold mt-0.5" style={{
+        color: accent === 'green' ? 'var(--verde)' : accent === 'cafe' ? 'var(--cafe)' : '#1c1c1c'
+      }}>{value}</p>
     </div>
   )
 }
@@ -240,12 +230,14 @@ function MetricCard({ label, value, sublabel, highlight, danger }: {
   label: string; value: string; sublabel?: string; highlight?: boolean; danger?: boolean
 }) {
   return (
-    <div className={`rounded-lg p-3 ${highlight ? 'bg-emerald-100' : 'bg-gray-50'}`}>
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className={`text-base font-bold mt-0.5 ${
-        highlight ? 'text-emerald-700' : danger ? 'text-red-600' : 'text-gray-900'
-      }`}>{value}</p>
-      {sublabel && <p className="text-xs text-gray-400 mt-0.5">{sublabel}</p>}
+    <div className="rounded-xl p-3" style={{
+      background: highlight ? 'rgba(58,125,68,0.1)' : 'rgba(0,0,0,0.04)',
+    }}>
+      <p className="text-xs" style={{ color: 'rgba(0,0,0,0.45)' }}>{label}</p>
+      <p className="text-base font-bold mt-0.5" style={{
+        color: highlight ? 'var(--verde-dark)' : danger ? '#dc2626' : '#1c1c1c'
+      }}>{value}</p>
+      {sublabel && <p className="text-xs mt-0.5" style={{ color: 'rgba(0,0,0,0.35)' }}>{sublabel}</p>}
     </div>
   )
 }

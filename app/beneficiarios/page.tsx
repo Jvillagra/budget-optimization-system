@@ -118,15 +118,23 @@ export default function BeneficiariosPage() {
       {/* Lista de beneficiarios */}
       <div className="lg:col-span-2 space-y-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold text-gray-900">Beneficiarios <span className="text-gray-400 font-normal text-sm">({beneficiarios.length})</span></h1>
+          <h1 className="text-lg font-bold" style={{ color: 'var(--verde-dark)' }}>
+            Beneficiarios <span className="font-normal text-sm" style={{ color: 'rgba(0,0,0,0.35)' }}>({beneficiarios.length})</span>
+          </h1>
           <div className="flex gap-1">
             {(['Todos', 'Invernadero', 'Cierre Perimetral'] as const).map((f) => (
               <button
                 key={f}
                 onClick={() => setFiltroProyecto(f)}
-                className={`text-xs px-3 py-1 rounded-full border transition-colors ${
-                  filtroProyecto === f ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-200 text-gray-500 hover:border-gray-300'
-                }`}
+                className="text-xs px-3 py-1 rounded-full border transition-all"
+                style={filtroProyecto === f ? {
+                  background: 'var(--verde)',
+                  color: '#fff',
+                  borderColor: 'var(--verde)',
+                } : {
+                  color: 'var(--cafe)',
+                  borderColor: 'rgba(127,79,36,0.3)',
+                }}
               >
                 {f}
               </button>
@@ -166,11 +174,11 @@ export default function BeneficiariosPage() {
         <PresupuestoPanel resumen={resumen} />
 
         {seleccionado && (
-          <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
-            <h3 className="text-sm font-medium text-gray-700">Agregar insumo</h3>
+          <div className="rounded-2xl p-4 space-y-3 glass">
+            <h3 className="text-sm font-semibold" style={{ color: 'var(--cafe-dark)' } as React.CSSProperties}>Agregar insumo</h3>
 
             {sugerencia && (
-              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+              <p className="text-xs rounded-lg p-2" style={{ background: 'var(--cafe-muted)', color: 'var(--cafe-dark)', border: '1px solid rgba(127,79,36,0.2)' }}>
                 {sugerencia}
               </p>
             )}
@@ -178,7 +186,7 @@ export default function BeneficiariosPage() {
             <select
               value={insumoSeleccionado}
               onChange={(e) => setInsumoSeleccionado(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2" style={{ border: '1px solid rgba(58,125,68,0.25)', background: 'rgba(255,255,255,0.7)', focusRingColor: 'var(--verde)' } as React.CSSProperties}
             >
               <option value="">Seleccionar insumo...</option>
               {insumosFiltrados.map((i) => (
@@ -194,12 +202,12 @@ export default function BeneficiariosPage() {
                 min={1}
                 value={cantidad}
                 onChange={(e) => setCantidad(Math.max(1, parseInt(e.target.value) || 1))}
-                className="w-24 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-24 rounded-lg px-3 py-2 text-sm focus:outline-none" style={{ border: '1px solid rgba(58,125,68,0.25)', background: 'rgba(255,255,255,0.7)' }}
               />
               <button
                 onClick={agregarAsignacion}
                 disabled={!insumoSeleccionado}
-                className="flex-1 rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white font-medium hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="flex-1 rounded-lg px-3 py-2 text-sm text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-all" style={{ background: 'var(--verde)' }}
               >
                 Agregar
               </button>
@@ -208,7 +216,7 @@ export default function BeneficiariosPage() {
             {/* Lista de asignaciones con opción de eliminar */}
             {(asignacionesPorBeneficiario[seleccionado] ?? []).length > 0 && (
               <div>
-                <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Eliminar del carrito</p>
+                <p className="text-xs uppercase tracking-wide mb-2" style={{ color: 'rgba(0,0,0,0.35)' }}>Eliminar del carrito</p>
                 <ul className="space-y-1">
                   {(asignacionesPorBeneficiario[seleccionado] ?? []).map((a) => (
                     <li key={a.id} className="flex items-center justify-between text-xs text-gray-600 group">
