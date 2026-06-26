@@ -388,7 +388,7 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
                       </div>
                       <button
                         onClick={() => eliminar(a.id)}
-                        className="shrink-0 p-1 rounded-lg opacity-0 group-hover:opacity-100 active:opacity-100 transition-opacity"
+                        className="shrink-0 p-1 rounded-lg"
                         style={{ color: '#dc2626', background: '#fee2e2' }}
                       >
                         <TrashIcon />
