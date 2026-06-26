@@ -6,15 +6,47 @@ import { useEffect, useState } from 'react'
 import { TrendingUp, Wallet, Package, Users } from 'lucide-react'
 import {
   BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
+  XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LabelList,
 } from 'recharts'
 import { supabase } from '@/lib/supabase'
 import type { Proveedor, Beneficiario, CatalogoInsumo, AyudaMemoria, KPISimulacion, ResultadoSimulacion } from '@/lib/types'
-import { buildPrecioMap, calcularKPI, formatCLP, METROS_POLY_MIN } from '@/lib/business-logic'
+import { buildPrecioMap, calcularKPI, formatCLP } from '@/lib/business-logic'
 
 const VERDE = '#3a7d44'
 const CAFE = '#7f4f24'
 const PIE_COLORS = [VERDE, '#e5e7eb', '#dc2626']
+
+type DesgloseItem = { nombre: string; corto: string; total: number; unidad: string }
+
+function shortName(nombre: string): string {
+  return nombre
+    .replace('Polietileno (Largo 4m, Ancho 8m)', 'Polietileno')
+    .replace('Polines (3 a 4 cm)', 'Polines')
+    .replace('Malla Galvanizada 5014', 'Galv.')
+    .replace('Malla Inchalam Ecosol', 'Ecosol')
+    .replace('Malla Inchalam', 'Inchalam')
+    .replace('Malla Ursus', 'Ursus')
+}
+
+function getDesglose(resultados: ResultadoSimulacion[]): DesgloseItem[] {
+  const exitosos = resultados.filter(r => r.error === null)
+  const map = new Map<string, DesgloseItem>()
+  for (const r of exitosos) {
+    if (r.insumo_base_id && r.insumo_base_nombre) {
+      const existing = map.get(r.insumo_base_id)
+      if (existing) existing.total += r.insumo_base_cantidad
+      else map.set(r.insumo_base_id, {
+        nombre: r.insumo_base_nombre,
+        corto: shortName(r.insumo_base_nombre),
+        total: r.insumo_base_cantidad,
+        unidad: r.insumo_base_nombre.startsWith('Polietileno') ? 'm' : 'rollos',
+      })
+    }
+  }
+  const totalPolines = exitosos.reduce((s, r) => s + r.polines, 0)
+  if (totalPolines > 0) map.set('__polines', { nombre: 'Polines (3 a 4 cm)', corto: 'Polines', total: totalPolines, unidad: 'un.' })
+  return Array.from(map.values())
+}
 
 export default function SimuladorPage() {
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
@@ -79,34 +111,23 @@ export default function SimuladorPage() {
     setSimulado(true)
   }
 
-  // Desglose por insumo para barras comparativas
-  const maxPerInsumo: Record<string, number> = {}
-  if (simulado && kpis.length === 2) {
-    for (const kpi of kpis) {
-      for (const item of getDesglose(kpi.resultados)) {
-        maxPerInsumo[item.nombre] = Math.max(maxPerInsumo[item.nombre] ?? 0, item.total)
+  // Datos gráfico comparativo de materiales (barras agrupadas horizontales)
+  const desgloseData = (() => {
+    if (!simulado || kpis.length !== 2) return []
+    const a = getDesglose(kpis[0].resultados)
+    const b = getDesglose(kpis[1].resultados)
+    const nombresSet = new Set([...a.map(i => i.nombre), ...b.map(i => i.nombre)])
+    return Array.from(nombresSet).map(nombre => {
+      const ai = a.find(i => i.nombre === nombre)
+      const bi = b.find(i => i.nombre === nombre)
+      return {
+        corto: ai?.corto ?? bi?.corto ?? nombre,
+        unidad: ai?.unidad ?? bi?.unidad ?? '',
+        [kpis[0].proveedor.nombre]: ai?.total ?? 0,
+        [kpis[1].proveedor.nombre]: bi?.total ?? 0,
       }
-    }
-  }
-
-  // Datos para gráficos (calculados desde resultados)
-  const barData = simulado && kpis.length === 2 ? [
-    {
-      categoria: 'Polines',
-      [kpis[0].proveedor.nombre]: kpis[0].resultados.filter(r => !r.error).reduce((s, r) => s + r.polines, 0),
-      [kpis[1].proveedor.nombre]: kpis[1].resultados.filter(r => !r.error).reduce((s, r) => s + r.polines, 0),
-    },
-    {
-      categoria: 'Polietileno (m)',
-      [kpis[0].proveedor.nombre]: kpis[0].resultados.filter(r => !r.error && r.beneficiario.segmento === 'Invernadero').length * METROS_POLY_MIN,
-      [kpis[1].proveedor.nombre]: kpis[1].resultados.filter(r => !r.error && r.beneficiario.segmento === 'Invernadero').length * METROS_POLY_MIN,
-    },
-    {
-      categoria: 'Mallas',
-      [kpis[0].proveedor.nombre]: kpis[0].resultados.filter(r => !r.error && r.beneficiario.segmento === 'Cierre Perimetral').length,
-      [kpis[1].proveedor.nombre]: kpis[1].resultados.filter(r => !r.error && r.beneficiario.segmento === 'Cierre Perimetral').length,
-    },
-  ] : []
+    })
+  })()
 
   const invernadero = beneficiarios.filter(b => b.segmento === 'Invernadero')
   const cierre = beneficiarios.filter(b => b.segmento === 'Cierre Perimetral')
@@ -123,7 +144,7 @@ export default function SimuladorPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-lg font-bold" style={{ color: 'var(--verde-dark)' }}>simulador comparativo</h1>
+        <h1 className="text-lg font-bold" style={{ color: 'var(--verde-dark)' }}>Simulador comparativo</h1>
         <p className="text-xs mt-0.5" style={{ color: 'rgba(0,0,0,0.4)' }}>
           Simulación en memoria basada en la ayuda memoria de cada socio. No altera el carrito real.
         </p>
@@ -131,10 +152,10 @@ export default function SimuladorPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard label="total socios" value={String(beneficiarios.length)} />
+        <StatCard label="Total socios" value={String(beneficiarios.length)} />
         <StatCard label="Invernadero" value={String(invernadero.length)} color="verde" />
         <StatCard label="Cierre Perimetral" value={String(cierre.length)} color="cafe" />
-        <StatCard label="con ayuda memoria" value={String(Object.keys(ayudaMemoriaPorBen).length)} color="verde" />
+        <StatCard label="Con ayuda memoria" value={String(Object.keys(ayudaMemoriaPorBen).length)} color="verde" />
       </div>
 
       {/* Selector */}
@@ -172,93 +193,118 @@ export default function SimuladorPage() {
         <>
           {/* KPI cards side-by-side */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {kpis.map(kpi => <KPICard key={kpi.proveedor.id} kpi={kpi} maxPerInsumo={maxPerInsumo} />)}
+            {kpis.map(kpi => <KPICard key={kpi.proveedor.id} kpi={kpi} />)}
           </div>
 
-          {/* Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-            {/* Bar chart (3/5) */}
-            <div className="lg:col-span-3 rounded-2xl p-5 glass">
-              <p className="text-sm font-semibold mb-4" style={{ color: 'var(--verde-dark)' }}>
-                Volumen de Materiales
-              </p>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={barData} margin={{ top: 0, right: 10, left: -10, bottom: 0 }}>
-                  <XAxis dataKey="categoria" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey={kpis[0].proveedor.nombre} fill={VERDE} radius={[4, 4, 0, 0]} />
-                  <Bar dataKey={kpis[1].proveedor.nombre} fill={CAFE} radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+          {/* Gráfico comparativo de materiales */}
+          <div className="rounded-2xl p-5 glass">
+            <p className="text-sm font-semibold mb-1" style={{ color: 'var(--verde-dark)' }}>
+              Materiales que puede adquirir la comunidad
+            </p>
+            <p className="text-xs mb-4" style={{ color: 'rgba(0,0,0,0.4)' }}>
+              Total de unidades por insumo dado los precios de cada proveedor
+            </p>
+            <ResponsiveContainer width="100%" height={desgloseData.length * 52 + 40}>
+              <BarChart
+                data={desgloseData}
+                layout="vertical"
+                margin={{ top: 0, right: 48, left: 8, bottom: 0 }}
+                barCategoryGap="28%"
+                barGap={4}
+              >
+                <XAxis type="number" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+                <YAxis
+                  type="category"
+                  dataKey="corto"
+                  tick={{ fontSize: 11, fill: 'rgba(0,0,0,0.6)' }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={90}
+                />
+                <Tooltip
+                  formatter={(v, name) => [`${v} ${desgloseData.find(d => d[name as string] !== undefined)?.unidad ?? ''}`, name]}
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)' }}
+                />
+                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                <Bar dataKey={kpis[0].proveedor.nombre} fill={VERDE} radius={[0, 4, 4, 0]}>
+                  <LabelList dataKey={kpis[0].proveedor.nombre} position="right" style={{ fontSize: 10, fill: VERDE, fontWeight: 700 }} />
+                </Bar>
+                <Bar dataKey={kpis[1].proveedor.nombre} fill={CAFE} radius={[0, 4, 4, 0]}>
+                  <LabelList dataKey={kpis[1].proveedor.nombre} position="right" style={{ fontSize: 10, fill: CAFE, fontWeight: 700 }} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
 
-            {/* Donut charts (2/5) */}
-            <div className="lg:col-span-2 grid grid-cols-2 lg:grid-cols-1 gap-3">
-              {kpis.map(kpi => {
-                const exitosos = kpi.resultados.filter(r => !r.error)
-                const gastado = exitosos.reduce((s, r) => s + Math.min(r.gasto_total, 189000), 0)
-                const saldo = exitosos.reduce((s, r) => s + Math.max(0, 189000 - r.gasto_total), 0)
-                const aporte = kpi.aporte_bolsillo_total
-                const pieData = [
-                  { name: 'Gastado', value: gastado },
-                  { name: 'Saldo', value: saldo },
-                  ...(aporte > 0 ? [{ name: 'Aporte bolsillo', value: aporte }] : []),
-                ]
-                return (
-                  <div key={kpi.proveedor.id} className="rounded-2xl p-3 glass text-center">
-                    <p className="text-xs font-semibold truncate mb-1" style={{ color: kpi.es_ganador ? 'var(--verde-dark)' : 'var(--cafe)' }}>
-                      {kpi.proveedor.nombre}
-                    </p>
-                    <ResponsiveContainer width="100%" height={130}>
+          {/* Donut charts */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {kpis.map(kpi => {
+              const exitosos = kpi.resultados.filter(r => !r.error)
+              const gastado = exitosos.reduce((s, r) => s + Math.min(r.gasto_total, 189000), 0)
+              const saldo = exitosos.reduce((s, r) => s + Math.max(0, 189000 - r.gasto_total), 0)
+              const aporte = kpi.aporte_bolsillo_total
+              const pieData = [
+                { name: 'Gastado', value: gastado },
+                { name: 'Saldo', value: saldo },
+                ...(aporte > 0 ? [{ name: 'Aporte bolsillo', value: aporte }] : []),
+              ]
+              return (
+                <div key={kpi.proveedor.id} className="rounded-2xl p-4 glass flex items-center gap-4">
+                  <div className="shrink-0">
+                    <ResponsiveContainer width={120} height={120}>
                       <PieChart>
-                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={38} outerRadius={55} dataKey="value" strokeWidth={0}>
+                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={34} outerRadius={52} dataKey="value" strokeWidth={0}>
                           {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i]} />)}
                         </Pie>
                         <Tooltip formatter={(v) => formatCLP(v as number)} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
-                )
-              })}
-            </div>
+                  <div className="space-y-1">
+                    <p className="text-sm font-bold" style={{ color: kpi.es_ganador ? 'var(--verde-dark)' : 'var(--cafe)' }}>
+                      {kpi.proveedor.nombre}
+                    </p>
+                    {pieData.map((d, i) => (
+                      <div key={d.name} className="flex items-center gap-1.5">
+                        <div className="w-2 h-2 rounded-full shrink-0" style={{ background: PIE_COLORS[i] }} />
+                        <span className="text-xs" style={{ color: 'rgba(0,0,0,0.55)' }}>{d.name}:</span>
+                        <span className="text-xs font-semibold" style={{ color: '#1c1c1c' }}>{formatCLP(d.value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
           </div>
 
           {/* Análisis comparativo */}
           <div className="rounded-2xl p-5" style={{ background: 'var(--verde-dark)' }}>
-            <p className="text-xs font-semibold mb-3" style={{ color: 'rgba(255,255,255,0.65)' }}>análisis comparativo</p>
+            <p className="text-xs font-semibold mb-3" style={{ color: 'rgba(255,255,255,0.65)' }}>Análisis comparativo</p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {(() => {
                 const [a, b] = kpis
                 const ganador = a.es_ganador ? a : b
-                const perdedor = a.es_ganador ? b : a
                 const difVol = Math.abs(a.volumen_total_comunidad - b.volumen_total_comunidad)
                 const difAporte = Math.abs(a.aporte_bolsillo_total - b.aporte_bolsillo_total)
                 return (
                   <>
                     <div>
-                      <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>diferencia de volumen</p>
+                      <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>Diferencia de volumen</p>
                       <p className="text-2xl font-bold text-white">+{difVol} uds.</p>
                       <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.5)' }}>con {ganador.proveedor.nombre}</p>
                     </div>
                     <div>
-                      <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>ahorro en aportes</p>
+                      <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>Ahorro en aportes</p>
                       <p className="text-2xl font-bold text-white">{formatCLP(difAporte)}</p>
                       <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.5)' }}>menos bolsillo con {ganador.proveedor.nombre}</p>
                     </div>
                     <div>
-                      <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>recomendación</p>
+                      <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>Recomendación</p>
                       <p className="text-sm font-bold text-white mt-1">
                         {difVol > 0
                           ? `${ganador.proveedor.nombre} logra ${difVol} unidades más para la comunidad.`
                           : 'Ambos proveedores entregan el mismo volumen.'}
                       </p>
-                      {perdedor.socios_con_error > 0 && (
-                        <p className="text-xs mt-1" style={{ color: '#fca5a5' }}>
-                          {perdedor.proveedor.nombre}: {perdedor.socios_con_error} socios sin datos completos.
-                        </p>
-                      )}
                     </div>
                   </>
                 )
@@ -282,28 +328,10 @@ export default function SimuladorPage() {
   )
 }
 
-type DesgloseItem = { nombre: string; total: number; unidad: string }
-
-function getDesglose(resultados: ResultadoSimulacion[]): DesgloseItem[] {
+function KPICard({ kpi }: { kpi: KPISimulacion }) {
+  const { proveedor, resultados, volumen_total_comunidad, aporte_bolsillo_total, es_ganador } = kpi
   const exitosos = resultados.filter(r => r.error === null)
-  const map = new Map<string, DesgloseItem>()
-  for (const r of exitosos) {
-    if (r.insumo_base_id && r.insumo_base_nombre) {
-      const existing = map.get(r.insumo_base_id)
-      if (existing) existing.total += r.insumo_base_cantidad
-      else map.set(r.insumo_base_id, { nombre: r.insumo_base_nombre, total: r.insumo_base_cantidad, unidad: r.insumo_base_nombre.startsWith('Polietileno') ? 'm' : 'rollo(s)' })
-    }
-  }
   const totalPolines = exitosos.reduce((s, r) => s + r.polines, 0)
-  if (totalPolines > 0) map.set('__polines', { nombre: 'Polines (3 a 4 cm)', total: totalPolines, unidad: 'un.' })
-  return Array.from(map.values())
-}
-
-function KPICard({ kpi, maxPerInsumo }: { kpi: KPISimulacion; maxPerInsumo: Record<string, number> }) {
-  const { proveedor, resultados, volumen_total_comunidad, aporte_bolsillo_total, socios_con_error, es_ganador } = kpi
-  const exitosos = resultados.filter(r => r.error === null)
-  const desglose = getDesglose(resultados)
-  const accentColor = es_ganador ? VERDE : CAFE
 
   return (
     <div className="rounded-2xl p-5 space-y-4 transition-all" style={es_ganador ? {
@@ -316,62 +344,25 @@ function KPICard({ kpi, maxPerInsumo }: { kpi: KPISimulacion; maxPerInsumo: Reco
       border: '1px solid rgba(255,255,255,0.55)',
       backdropFilter: 'blur(14px)',
     }}>
-      {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="font-bold" style={{ color: '#1c1c1c' }}>{proveedor.nombre}</h3>
         {es_ganador && (
           <span className="flex items-center gap-1 text-xs font-bold text-white px-2.5 py-1 rounded-full" style={{ background: 'var(--verde)' }}>
-            🏆 mejor opción
+            🏆 Mejor opción
           </span>
         )}
       </div>
 
-      {/* Alerta amarilla: precios faltantes */}
-      {socios_con_error > 0 && (
-        <div className="rounded-xl p-3 text-xs" style={{ background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.3)', color: '#92400e' }}>
-          <p className="font-semibold">Atención: Faltan precios para {socios_con_error} socio(s)</p>
-          <p className="mt-0.5" style={{ color: 'rgba(146,64,14,0.75)' }}>
-            Se calcularon los {exitosos.length} socios con datos completos. Los demás fueron omitidos.
-          </p>
-        </div>
-      )}
-
-      {/* Métricas resumen */}
       <div className="grid grid-cols-2 gap-3">
         <Metric label="Volumen total" value={String(volumen_total_comunidad)} sub="unidades comunidad" highlight={es_ganador} icon={TrendingUp} />
         <Metric label="Aporte de bolsillo" value={formatCLP(aporte_bolsillo_total)} sub="total comunidad" danger={aporte_bolsillo_total > 0} icon={Wallet} />
+        <Metric label="Polines totales" value={String(totalPolines)} sub="comunidad completa" highlight={es_ganador} icon={Package} />
         <Metric label="Socios calculados" value={String(exitosos.length)} sub={`de ${resultados.length}`} icon={Users} />
-        <Metric label="Insumos distintos" value={String(desglose.length)} sub="tipos en desglose" icon={Package} />
       </div>
 
-      {/* Desglose por insumo con barras */}
-      {desglose.length > 0 && (
-        <div className="rounded-xl p-3 space-y-3" style={{ background: 'rgba(0,0,0,0.04)' }}>
-          <p className="text-xs font-semibold" style={{ color: 'rgba(0,0,0,0.45)' }}>desglose comunidad completa</p>
-          {desglose.map(item => {
-            const max = maxPerInsumo[item.nombre] ?? item.total
-            const pct = max > 0 ? Math.round((item.total / max) * 100) : 100
-            return (
-              <div key={item.nombre}>
-                <div className="flex justify-between items-baseline mb-1">
-                  <span className="text-xs truncate max-w-[70%]" style={{ color: 'rgba(0,0,0,0.6)' }}>{item.nombre}</span>
-                  <span className="text-xs font-bold shrink-0 ml-2" style={{ color: accentColor }}>
-                    {item.total} {item.unidad}
-                  </span>
-                </div>
-                <div className="w-full rounded-full overflow-hidden" style={{ height: 5, background: 'rgba(0,0,0,0.08)' }}>
-                  <div style={{ width: `${pct}%`, height: '100%', background: accentColor, borderRadius: 9999, transition: 'width 0.4s ease' }} />
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* Detalle por socio */}
       <details className="text-xs">
         <summary className="cursor-pointer font-semibold" style={{ color: 'var(--cafe)' }}>
-          ver detalle por socio ({exitosos.length} calculados)
+          Ver detalle por socio ({exitosos.length} calculados)
         </summary>
         <div className="mt-2 max-h-48 overflow-y-auto space-y-1">
           {exitosos.map(r => (

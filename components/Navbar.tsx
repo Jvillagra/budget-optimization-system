@@ -5,9 +5,9 @@ import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 
 const links = [
-  { href: '/beneficiarios', label: 'beneficiarios' },
-  { href: '/precios', label: 'maestro de precios' },
-  { href: '/simulador', label: 'simulador' },
+  { href: '/beneficiarios', label: 'Beneficiarios' },
+  { href: '/precios', label: 'Maestro de precios' },
+  { href: '/simulador', label: 'Simulador' },
 ]
 
 export default function Navbar() {
