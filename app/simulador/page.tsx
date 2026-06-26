@@ -56,6 +56,7 @@ export default function SimuladorPage() {
   const [precioMaps, setPrecioMaps] = useState<Record<string, Map<string, number | null>>>({})
   const [provA, setProvA] = useState('')
   const [provB, setProvB] = useState('')
+  const [provC, setProvC] = useState('')
   const [kpis, setKpis] = useState<KPISimulacion[]>([])
   const [loading, setLoading] = useState(true)
   const [simulado, setSimulado] = useState(false)
@@ -73,6 +74,7 @@ export default function SimuladorPage() {
         setProveedores(provs as Proveedor[])
         if (provs.length >= 1) setProvA(provs[0].id)
         if (provs.length >= 2) setProvB(provs[1].id)
+        if (provs.length >= 3) setProvC(provs[2].id)
       }
       if (bens) setBeneficiarios(bens as Beneficiario[])
       if (ins) setInsumos(ins as CatalogoInsumo[])
@@ -98,46 +100,41 @@ export default function SimuladorPage() {
 
   function simular() {
     if (!provA || !provB) return
-    const provAObj = proveedores.find(p => p.id === provA)
-    const provBObj = proveedores.find(p => p.id === provB)
-    if (!provAObj || !provBObj) return
-
-    const kpiA = calcularKPI(provAObj, beneficiarios, precioMaps[provA] ?? new Map(), insumos, ayudaMemoriaPorBen)
-    const kpiB = calcularKPI(provBObj, beneficiarios, precioMaps[provB] ?? new Map(), insumos, ayudaMemoriaPorBen)
-
-    kpiA.es_ganador = kpiA.volumen_total_comunidad >= kpiB.volumen_total_comunidad
-    kpiB.es_ganador = kpiB.volumen_total_comunidad > kpiA.volumen_total_comunidad
-    setKpis([kpiA, kpiB])
+    const ids = [provA, provB, ...(provC ? [provC] : [])]
+    const objs = ids.map(id => proveedores.find(p => p.id === id)).filter(Boolean) as typeof proveedores
+    const kpisCalc = objs.map(prov =>
+      calcularKPI(prov, beneficiarios, precioMaps[prov.id] ?? new Map(), insumos, ayudaMemoriaPorBen)
+    )
+    const maxVol = Math.max(...kpisCalc.map(k => k.volumen_total_comunidad))
+    kpisCalc.forEach(k => { k.es_ganador = k.volumen_total_comunidad === maxVol })
+    setKpis(kpisCalc)
     setSimulado(true)
   }
 
-  // Datos para gráfico de Polines (la métrica clave que varía por proveedor)
-  const polinesData = simulado && kpis.length === 2 ? kpis.map(kpi => ({
-    proveedor: kpi.proveedor.nombre,
+  // Datos para gráfico de Polines (varía por precio de cada proveedor)
+  const polinesData = simulado && kpis.length > 0 ? kpis.map(kpi => ({
+    proveedor: kpi.proveedor.nombre.split(' ').slice(-1)[0], // ciudad: "Pucón", "Villarrica"
+    nombreCompleto: kpi.proveedor.nombre,
     polines: kpi.resultados.filter(r => !r.error).reduce((s, r) => s + r.polines, 0),
     es_ganador: kpi.es_ganador,
   })) : []
 
-  // Scorecard: todos los insumos con ambos proveedores para comparar
+  // Scorecard: todos los insumos con N proveedores
   const scorecardData = (() => {
-    if (!simulado || kpis.length !== 2) return []
-    const a = getDesglose(kpis[0].resultados)
-    const b = getDesglose(kpis[1].resultados)
-    const nombresSet = new Set([...a.map(i => i.nombre), ...b.map(i => i.nombre)])
+    if (!simulado || kpis.length === 0) return []
+    const desgloses = kpis.map(k => getDesglose(k.resultados))
+    const nombresSet = new Set(desgloses.flatMap(d => d.map(i => i.nombre)))
     return Array.from(nombresSet).map(nombre => {
-      const ai = a.find(i => i.nombre === nombre)
-      const bi = b.find(i => i.nombre === nombre)
-      const va = ai?.total ?? 0
-      const vb = bi?.total ?? 0
+      const items = desgloses.map(d => d.find(i => i.nombre === nombre))
+      const totales = items.map(i => i?.total ?? 0)
+      const maxTotal = Math.max(...totales)
       return {
         nombre,
-        corto: ai?.corto ?? bi?.corto ?? nombre,
-        unidad: ai?.unidad ?? bi?.unidad ?? '',
-        [kpis[0].proveedor.nombre]: va,
-        [kpis[1].proveedor.nombre]: vb,
-        aGana: va > vb,
-        bGana: vb > va,
-        igual: va === vb,
+        corto: items.find(Boolean)?.corto ?? nombre,
+        unidad: items.find(Boolean)?.unidad ?? '',
+        totales,
+        esGanador: totales.map(v => v === maxTotal && totales.some(x => x !== maxTotal)),
+        igual: totales.every(v => v === totales[0]),
       }
     })
   })()
@@ -172,29 +169,29 @@ export default function SimuladorPage() {
       </div>
 
       {/* Selector */}
-      <div className="rounded-2xl p-4 glass-strong flex flex-wrap items-end gap-4">
-        <div className="flex-1 min-w-[160px]">
-          <label className="text-xs font-semibold block mb-1" style={{ color: 'var(--cafe)' }}>Proveedor A</label>
-          <select value={provA} onChange={e => setProvA(e.target.value)}
-            className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
-            style={{ border: '1px solid rgba(58,125,68,0.3)', background: 'rgba(255,255,255,0.8)' }}
-          >
-            {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-          </select>
-        </div>
-        <div className="flex-1 min-w-[160px]">
-          <label className="text-xs font-semibold block mb-1" style={{ color: 'var(--cafe)' }}>Proveedor B</label>
-          <select value={provB} onChange={e => setProvB(e.target.value)}
-            className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
-            style={{ border: '1px solid rgba(127,79,36,0.3)', background: 'rgba(255,255,255,0.8)' }}
-          >
-            {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-          </select>
+      <div className="rounded-2xl p-4 glass-strong space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {[
+            { label: 'Proveedor A', val: provA, set: setProvA },
+            { label: 'Proveedor B', val: provB, set: setProvB },
+            { label: 'Proveedor C', val: provC, set: setProvC },
+          ].map(({ label, val, set }) => (
+            <div key={label}>
+              <label className="text-xs font-semibold block mb-1" style={{ color: 'var(--cafe)' }}>{label}</label>
+              <select value={val} onChange={e => set(e.target.value)}
+                className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
+                style={{ border: '1px solid rgba(58,125,68,0.3)', background: 'rgba(255,255,255,0.8)' }}
+              >
+                {label === 'Proveedor C' && <option value="">— opcional —</option>}
+                {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+              </select>
+            </div>
+          ))}
         </div>
         <button
           onClick={simular}
           disabled={!provA || !provB}
-          className="rounded-xl px-6 py-2 text-sm text-white font-bold disabled:opacity-40"
+          className="w-full rounded-xl px-6 py-2.5 text-sm text-white font-bold disabled:opacity-40"
           style={{ background: 'var(--verde)' }}
         >
           Simular
@@ -202,16 +199,16 @@ export default function SimuladorPage() {
       </div>
 
       {/* Resultados */}
-      {simulado && kpis.length === 2 && (
+      {simulado && kpis.length > 0 && (
         <>
           {/* KPI cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className={`grid grid-cols-1 gap-4 ${kpis.length === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
             {kpis.map(kpi => <KPICard key={kpi.proveedor.id} kpi={kpi} />)}
           </div>
 
-          {/* Scorecard comparativo + Polines chart */}
+          {/* Scorecard + Polines chart */}
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-            {/* Scorecard (3/5) */}
+            {/* Scorecard */}
             <div className="lg:col-span-3 rounded-2xl p-5 glass">
               <p className="text-sm font-semibold mb-0.5" style={{ color: 'var(--verde-dark)' }}>
                 Materiales que puede adquirir la comunidad
@@ -220,47 +217,42 @@ export default function SimuladorPage() {
                 Total de unidades por insumo, dado los precios de cada proveedor
               </p>
 
-              {/* Header */}
-              <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 text-xs font-semibold mb-2 px-1" style={{ color: 'rgba(0,0,0,0.4)' }}>
+              {/* Header — N columnas dinámicas */}
+              <div
+                className="text-xs font-semibold mb-2 px-1 gap-x-2"
+                style={{ display: 'grid', gridTemplateColumns: `1fr ${kpis.map(() => '64px').join(' ')}`, color: 'rgba(0,0,0,0.4)' }}
+              >
                 <span>Insumo</span>
-                <span className="text-center w-20">{kpis[0].proveedor.nombre.split(' ').slice(-1)[0]}</span>
-                <span className="text-center w-20">{kpis[1].proveedor.nombre.split(' ').slice(-1)[0]}</span>
+                {kpis.map(k => (
+                  <span key={k.proveedor.id} className="text-center">{k.proveedor.nombre.split(' ').slice(-1)[0]}</span>
+                ))}
               </div>
 
               <div className="space-y-1">
                 {scorecardData.map(row => (
                   <div
                     key={row.nombre}
-                    className="grid grid-cols-[1fr_auto_auto] gap-x-3 items-center px-3 py-2 rounded-xl"
-                    style={{ background: 'rgba(0,0,0,0.03)' }}
+                    className="items-center px-3 py-2 rounded-xl gap-x-2"
+                    style={{ display: 'grid', gridTemplateColumns: `1fr ${kpis.map(() => '64px').join(' ')}`, background: 'rgba(0,0,0,0.03)' }}
                   >
                     <span className="text-xs font-medium" style={{ color: 'rgba(0,0,0,0.65)' }}>{row.corto}</span>
-                    <div className="w-20 text-center">
-                      <span
-                        className="text-sm font-bold"
-                        style={{ color: row.aGana ? VERDE : row.igual ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.3)' }}
-                      >
-                        {(row[kpis[0].proveedor.nombre] as number).toLocaleString('es-CL')}
-                        {' '}<span className="text-xs font-normal">{row.unidad}</span>
-                      </span>
-                      {row.aGana && <div className="text-xs mt-0.5" style={{ color: VERDE }}>✓ más</div>}
-                    </div>
-                    <div className="w-20 text-center">
-                      <span
-                        className="text-sm font-bold"
-                        style={{ color: row.bGana ? CAFE : row.igual ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.3)' }}
-                      >
-                        {(row[kpis[1].proveedor.nombre] as number).toLocaleString('es-CL')}
-                        {' '}<span className="text-xs font-normal">{row.unidad}</span>
-                      </span>
-                      {row.bGana && <div className="text-xs mt-0.5" style={{ color: CAFE }}>✓ más</div>}
-                    </div>
+                    {row.totales.map((val, i) => (
+                      <div key={i} className="text-center">
+                        <span className="text-sm font-bold" style={{
+                          color: row.igual ? 'rgba(0,0,0,0.5)' : row.esGanador[i] ? VERDE : 'rgba(0,0,0,0.3)'
+                        }}>
+                          {val.toLocaleString('es-CL')}
+                        </span>
+                        <span className="text-xs" style={{ color: 'rgba(0,0,0,0.4)' }}> {row.unidad}</span>
+                        {row.esGanador[i] && <div className="text-xs" style={{ color: VERDE }}>✓</div>}
+                      </div>
+                    ))}
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Polines chart — la métrica que varía por precio (2/5) */}
+            {/* Polines chart */}
             <div className="lg:col-span-2 rounded-2xl p-5 glass flex flex-col">
               <p className="text-sm font-semibold mb-0.5" style={{ color: 'var(--verde-dark)' }}>Polines totales</p>
               <p className="text-xs mb-4" style={{ color: 'rgba(0,0,0,0.4)' }}>
@@ -272,7 +264,7 @@ export default function SimuladorPage() {
                     <XAxis dataKey="proveedor" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
                     <Tooltip
-                      formatter={(v) => [`${(v as number).toLocaleString('es-CL')} un.`, 'Polines']}
+                      formatter={(v, _name, props) => [`${(v as number).toLocaleString('es-CL')} un.`, props.payload?.nombreCompleto ?? '']}
                       contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)' }}
                     />
                     <Bar dataKey="polines" radius={[6, 6, 0, 0]} maxBarSize={80}>
@@ -288,7 +280,7 @@ export default function SimuladorPage() {
           </div>
 
           {/* Donut charts */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className={`grid grid-cols-1 gap-4 ${kpis.length === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
             {kpis.map(kpi => {
               const exitosos = kpi.resultados.filter(r => !r.error)
               const gastado = exitosos.reduce((s, r) => s + Math.min(r.gasto_total, 189000), 0)
@@ -302,24 +294,23 @@ export default function SimuladorPage() {
               return (
                 <div key={kpi.proveedor.id} className="rounded-2xl p-4 glass flex items-center gap-4">
                   <div className="shrink-0">
-                    <ResponsiveContainer width={120} height={120}>
+                    <ResponsiveContainer width={100} height={100}>
                       <PieChart>
-                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={34} outerRadius={52} dataKey="value" strokeWidth={0}>
+                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={28} outerRadius={44} dataKey="value" strokeWidth={0}>
                           {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i]} />)}
                         </Pie>
                         <Tooltip formatter={(v) => formatCLP(v as number)} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-sm font-bold" style={{ color: kpi.es_ganador ? 'var(--verde-dark)' : 'var(--cafe)' }}>
+                  <div className="space-y-1 min-w-0">
+                    <p className="text-xs font-bold truncate" style={{ color: kpi.es_ganador ? 'var(--verde-dark)' : 'var(--cafe)' }}>
                       {kpi.proveedor.nombre}
                     </p>
                     {pieData.map((d, i) => (
                       <div key={d.name} className="flex items-center gap-1.5">
                         <div className="w-2 h-2 rounded-full shrink-0" style={{ background: PIE_COLORS[i] }} />
-                        <span className="text-xs" style={{ color: 'rgba(0,0,0,0.55)' }}>{d.name}:</span>
-                        <span className="text-xs font-semibold" style={{ color: '#1c1c1c' }}>{formatCLP(d.value)}</span>
+                        <span className="text-xs truncate" style={{ color: 'rgba(0,0,0,0.55)' }}>{d.name}: <strong style={{ color: '#1c1c1c' }}>{formatCLP(d.value)}</strong></span>
                       </div>
                     ))}
                   </div>
@@ -333,28 +324,29 @@ export default function SimuladorPage() {
             <p className="text-xs font-semibold mb-3" style={{ color: 'rgba(255,255,255,0.65)' }}>Análisis comparativo</p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {(() => {
-                const [a, b] = kpis
-                const ganador = a.es_ganador ? a : b
-                const difVol = Math.abs(a.volumen_total_comunidad - b.volumen_total_comunidad)
-                const difAporte = Math.abs(a.aporte_bolsillo_total - b.aporte_bolsillo_total)
+                const ganador = kpis.reduce((best, k) => k.volumen_total_comunidad > best.volumen_total_comunidad ? k : best)
+                const resto = kpis.filter(k => k !== ganador)
+                const difVol = ganador.volumen_total_comunidad - Math.max(...resto.map(k => k.volumen_total_comunidad))
+                const minAporte = Math.min(...kpis.map(k => k.aporte_bolsillo_total))
+                const maxAporte = Math.max(...kpis.map(k => k.aporte_bolsillo_total))
                 return (
                   <>
                     <div>
-                      <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>Diferencia de volumen</p>
-                      <p className="text-2xl font-bold text-white">+{difVol.toLocaleString('es-CL')} uds.</p>
-                      <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.5)' }}>con {ganador.proveedor.nombre}</p>
+                      <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>Mayor volumen</p>
+                      <p className="text-2xl font-bold text-white">{ganador.volumen_total_comunidad.toLocaleString('es-CL')} uds.</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.5)' }}>{ganador.proveedor.nombre} (+{difVol.toLocaleString('es-CL')} sobre el resto)</p>
                     </div>
                     <div>
                       <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>Ahorro en aportes</p>
-                      <p className="text-2xl font-bold text-white">{formatCLP(difAporte)}</p>
-                      <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.5)' }}>menos bolsillo con {ganador.proveedor.nombre}</p>
+                      <p className="text-2xl font-bold text-white">{formatCLP(maxAporte - minAporte)}</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.5)' }}>diferencia entre mejor y peor opción</p>
                     </div>
                     <div>
                       <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>Recomendación</p>
                       <p className="text-sm font-bold text-white mt-1">
                         {difVol > 0
-                          ? `${ganador.proveedor.nombre} logra ${difVol.toLocaleString('es-CL')} unidades más para la comunidad.`
-                          : 'Ambos proveedores entregan el mismo volumen.'}
+                          ? `${ganador.proveedor.nombre} logra ${difVol.toLocaleString('es-CL')} unidades más que el segundo mejor.`
+                          : 'Todos los proveedores entregan el mismo volumen.'}
                       </p>
                     </div>
                   </>
@@ -368,7 +360,7 @@ export default function SimuladorPage() {
       {!simulado && (
         <div className="rounded-2xl border-2 border-dashed p-12 text-center" style={{ borderColor: 'rgba(58,125,68,0.2)' }}>
           <p className="text-sm" style={{ color: 'rgba(0,0,0,0.4)' }}>
-            Selecciona dos proveedores y presiona <strong>Simular</strong>.
+            Selecciona dos o tres proveedores y presiona <strong>Simular</strong>.
           </p>
           <p className="text-xs mt-1" style={{ color: 'rgba(0,0,0,0.3)' }}>
             La simulación usa la ayuda memoria de cada socio. No modifica el carrito real.
