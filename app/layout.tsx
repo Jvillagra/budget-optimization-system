@@ -38,22 +38,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {children}
         </main>
         <footer style={{
-          background: 'rgba(12,20,12,0.88)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          borderTop: '1px solid rgba(255,255,255,0.08)',
+          background: 'rgba(255,255,255,0.70)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          borderTop: '1px solid rgba(200,200,200,0.45)',
         }}>
-          <div className="mx-auto max-w-7xl px-4 py-6 text-center space-y-1">
-            <p className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.4)' }}>
+          <div className="mx-auto max-w-7xl px-4 py-5 text-center space-y-0.5">
+            <p className="text-xs font-medium" style={{ color: 'rgba(0,0,0,0.4)' }}>
               Comunidad Pedro Huisca
             </p>
-            <p className="text-sm font-bold" style={{
-              background: 'linear-gradient(90deg, #4ade80, #a3e635, #d97706)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-            }}>
-              Desarrollado por Neurobot Innovations
+            <p className="text-xs font-semibold" style={{ color: 'rgba(0,0,0,0.55)' }}>
+              Desarrollado por{' '}
+              <span style={{ color: 'var(--verde-dark)', fontWeight: 700 }}>Neurobot Innovations</span>
             </p>
           </div>
         </footer>

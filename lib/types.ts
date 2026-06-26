@@ -47,6 +47,9 @@ export interface Asignacion {
 export interface ResultadoSimulacion {
   beneficiario: Beneficiario
   error: string | null
+  insumo_base_id: string | null
+  insumo_base_nombre: string | null
+  insumo_base_cantidad: number
   polines: number
   volumen_total: number
   gasto_total: number

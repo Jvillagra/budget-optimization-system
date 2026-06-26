@@ -18,7 +18,7 @@ function getPrecio(map: Map<string, number | null>, provId: string, insumoId: st
 }
 
 function errorResult(beneficiario: Beneficiario, msg: string): ResultadoSimulacion {
-  return { beneficiario, error: msg, polines: 0, volumen_total: 0, gasto_total: 0, aporte_bolsillo: 0 }
+  return { beneficiario, error: msg, insumo_base_id: null, insumo_base_nombre: null, insumo_base_cantidad: 0, polines: 0, volumen_total: 0, gasto_total: 0, aporte_bolsillo: 0 }
 }
 
 export function simularBeneficiario(
@@ -48,6 +48,9 @@ export function simularBeneficiario(
 
     return {
       beneficiario, error: null,
+      insumo_base_id: poly.id,
+      insumo_base_nombre: poly.nombre,
+      insumo_base_cantidad: METROS_POLY_MIN,
       polines,
       volumen_total: METROS_POLY_MIN + polines,
       gasto_total: gastoTotal,
@@ -73,6 +76,9 @@ export function simularBeneficiario(
 
   return {
     beneficiario, error: null,
+    insumo_base_id: malla.id,
+    insumo_base_nombre: malla.nombre,
+    insumo_base_cantidad: 1,
     polines,
     volumen_total: 1 + polines,
     gasto_total: gastoTotal,

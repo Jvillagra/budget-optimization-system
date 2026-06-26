@@ -9,7 +9,7 @@ import {
   XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
 import { supabase } from '@/lib/supabase'
-import type { Proveedor, Beneficiario, CatalogoInsumo, AyudaMemoria, KPISimulacion } from '@/lib/types'
+import type { Proveedor, Beneficiario, CatalogoInsumo, AyudaMemoria, KPISimulacion, ResultadoSimulacion } from '@/lib/types'
 import { buildPrecioMap, calcularKPI, formatCLP, METROS_POLY_MIN } from '@/lib/business-logic'
 
 const VERDE = '#3a7d44'
@@ -77,6 +77,16 @@ export default function SimuladorPage() {
     kpiB.es_ganador = kpiB.volumen_total_comunidad > kpiA.volumen_total_comunidad
     setKpis([kpiA, kpiB])
     setSimulado(true)
+  }
+
+  // Desglose por insumo para barras comparativas
+  const maxPerInsumo: Record<string, number> = {}
+  if (simulado && kpis.length === 2) {
+    for (const kpi of kpis) {
+      for (const item of getDesglose(kpi.resultados)) {
+        maxPerInsumo[item.nombre] = Math.max(maxPerInsumo[item.nombre] ?? 0, item.total)
+      }
+    }
   }
 
   // Datos para gráficos (calculados desde resultados)
@@ -162,7 +172,7 @@ export default function SimuladorPage() {
         <>
           {/* KPI cards side-by-side */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {kpis.map(kpi => <KPICard key={kpi.proveedor.id} kpi={kpi} />)}
+            {kpis.map(kpi => <KPICard key={kpi.proveedor.id} kpi={kpi} maxPerInsumo={maxPerInsumo} />)}
           </div>
 
           {/* Charts */}
@@ -272,10 +282,28 @@ export default function SimuladorPage() {
   )
 }
 
-function KPICard({ kpi }: { kpi: KPISimulacion }) {
+type DesgloseItem = { nombre: string; total: number; unidad: string }
+
+function getDesglose(resultados: ResultadoSimulacion[]): DesgloseItem[] {
+  const exitosos = resultados.filter(r => r.error === null)
+  const map = new Map<string, DesgloseItem>()
+  for (const r of exitosos) {
+    if (r.insumo_base_id && r.insumo_base_nombre) {
+      const existing = map.get(r.insumo_base_id)
+      if (existing) existing.total += r.insumo_base_cantidad
+      else map.set(r.insumo_base_id, { nombre: r.insumo_base_nombre, total: r.insumo_base_cantidad, unidad: r.insumo_base_nombre.startsWith('Polietileno') ? 'm' : 'rollo(s)' })
+    }
+  }
+  const totalPolines = exitosos.reduce((s, r) => s + r.polines, 0)
+  if (totalPolines > 0) map.set('__polines', { nombre: 'Polines (3 a 4 cm)', total: totalPolines, unidad: 'un.' })
+  return Array.from(map.values())
+}
+
+function KPICard({ kpi, maxPerInsumo }: { kpi: KPISimulacion; maxPerInsumo: Record<string, number> }) {
   const { proveedor, resultados, volumen_total_comunidad, aporte_bolsillo_total, socios_con_error, es_ganador } = kpi
   const exitosos = resultados.filter(r => r.error === null)
-  const totalPolines = exitosos.reduce((s, r) => s + r.polines, 0)
+  const desglose = getDesglose(resultados)
+  const accentColor = es_ganador ? VERDE : CAFE
 
   return (
     <div className="rounded-2xl p-5 space-y-4 transition-all" style={es_ganador ? {
@@ -288,6 +316,7 @@ function KPICard({ kpi }: { kpi: KPISimulacion }) {
       border: '1px solid rgba(255,255,255,0.55)',
       backdropFilter: 'blur(14px)',
     }}>
+      {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="font-bold" style={{ color: '#1c1c1c' }}>{proveedor.nombre}</h3>
         {es_ganador && (
@@ -297,25 +326,49 @@ function KPICard({ kpi }: { kpi: KPISimulacion }) {
         )}
       </div>
 
+      {/* Alerta amarilla: precios faltantes */}
       {socios_con_error > 0 && (
-        <div className="rounded-xl p-3 text-xs" style={{ background: 'rgba(220,38,38,0.07)', border: '1px solid rgba(220,38,38,0.2)', color: '#dc2626' }}>
-          <p className="font-semibold">⚠ Precios insuficientes para simular este proveedor</p>
-          <ul className="mt-1 space-y-0.5" style={{ color: 'rgba(220,38,38,0.8)' }}>
-            {resultados.filter(r => r.error).slice(0, 4).map(r => (
-              <li key={r.beneficiario.id}>· {r.beneficiario.nombre}: {r.error}</li>
-            ))}
-            {socios_con_error > 4 && <li>· y {socios_con_error - 4} más...</li>}
-          </ul>
+        <div className="rounded-xl p-3 text-xs" style={{ background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.3)', color: '#92400e' }}>
+          <p className="font-semibold">Atención: Faltan precios para {socios_con_error} socio(s)</p>
+          <p className="mt-0.5" style={{ color: 'rgba(146,64,14,0.75)' }}>
+            Se calcularon los {exitosos.length} socios con datos completos. Los demás fueron omitidos.
+          </p>
         </div>
       )}
 
+      {/* Métricas resumen */}
       <div className="grid grid-cols-2 gap-3">
         <Metric label="Volumen total" value={String(volumen_total_comunidad)} sub="unidades comunidad" highlight={es_ganador} icon={TrendingUp} />
         <Metric label="Aporte de bolsillo" value={formatCLP(aporte_bolsillo_total)} sub="total comunidad" danger={aporte_bolsillo_total > 0} icon={Wallet} />
-        <Metric label="Polines totales" value={String(totalPolines)} sub="comunidad completa" highlight={es_ganador} icon={Package} />
         <Metric label="Socios calculados" value={String(exitosos.length)} sub={`de ${resultados.length}`} icon={Users} />
+        <Metric label="Insumos distintos" value={String(desglose.length)} sub="tipos en desglose" icon={Package} />
       </div>
 
+      {/* Desglose por insumo con barras */}
+      {desglose.length > 0 && (
+        <div className="rounded-xl p-3 space-y-3" style={{ background: 'rgba(0,0,0,0.04)' }}>
+          <p className="text-xs font-semibold" style={{ color: 'rgba(0,0,0,0.45)' }}>desglose comunidad completa</p>
+          {desglose.map(item => {
+            const max = maxPerInsumo[item.nombre] ?? item.total
+            const pct = max > 0 ? Math.round((item.total / max) * 100) : 100
+            return (
+              <div key={item.nombre}>
+                <div className="flex justify-between items-baseline mb-1">
+                  <span className="text-xs truncate max-w-[70%]" style={{ color: 'rgba(0,0,0,0.6)' }}>{item.nombre}</span>
+                  <span className="text-xs font-bold shrink-0 ml-2" style={{ color: accentColor }}>
+                    {item.total} {item.unidad}
+                  </span>
+                </div>
+                <div className="w-full rounded-full overflow-hidden" style={{ height: 5, background: 'rgba(0,0,0,0.08)' }}>
+                  <div style={{ width: `${pct}%`, height: '100%', background: accentColor, borderRadius: 9999, transition: 'width 0.4s ease' }} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Detalle por socio */}
       <details className="text-xs">
         <summary className="cursor-pointer font-semibold" style={{ color: 'var(--cafe)' }}>
           ver detalle por socio ({exitosos.length} calculados)
