@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 
 const links = [
@@ -22,8 +23,9 @@ export default function Navbar() {
     }}>
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-14 items-center justify-between">
-          <Link href="/" className="text-sm font-bold tracking-wide" style={{ color: 'var(--verde-dark)' }}>
-            Proyecto PAT
+          <Link href="/" className="flex items-center gap-2">
+            <Image src="/logo.png" alt="Proyecto PAT" width={32} height={32} className="rounded-md" />
+            <span className="text-sm font-bold tracking-wide" style={{ color: 'var(--verde-dark)' }}>Proyecto PAT</span>
           </Link>
           <nav className="flex gap-1">
             {links.map((link) => (
