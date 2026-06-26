@@ -156,7 +156,7 @@ export default function BeneficiariosPage() {
                 <span className="text-xs mt-0.5 inline-block" style={{
                   color: ben.segmento === 'Invernadero' ? 'var(--verde-dark)' : 'var(--cafe-dark)'
                 }}>
-                  {ben.segmento === 'Invernadero' ? 'Invernadero' : 'Cierre'}
+                  {ben.segmento}
                 </span>
                 {proveedorId && (
                   <>
