@@ -24,6 +24,14 @@ export default function BeneficiariosPage() {
   const [cantidadForm, setCantidadForm] = useState(1)
   const [loading, setLoading] = useState(true)
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 1024)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
 
   useEffect(() => {
     async function load() {
@@ -213,17 +221,17 @@ export default function BeneficiariosPage() {
         </div>
       </div>
 
-      {/* Bottom sheet — mobile only (lg:hidden) */}
-      {sheetOpen && benSeleccionado && (
+      {/* Bottom sheet — mobile only */}
+      {isMobile && sheetOpen && benSeleccionado && (
         <>
           {/* Overlay */}
           <div
-            className="lg:hidden fixed inset-0 z-40 bg-black/40"
+            className="fixed inset-0 z-40 bg-black/40"
             onClick={() => setSheetOpen(false)}
           />
           {/* Sheet */}
           <div
-            className="lg:hidden fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl overflow-hidden"
+            className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl overflow-hidden"
             style={{ background: '#f7f3ed', maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}
           >
             {/* Handle + header */}
