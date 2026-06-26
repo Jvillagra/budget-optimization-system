@@ -33,13 +33,13 @@ export function simularBeneficiario(
   if (!polin34) return errorResult(beneficiario, 'Catálogo incompleto')
 
   const precioPolin = getPrecio(precioMap, proveedorId, polin34.id)
-  if (precioPolin === null) return errorResult(beneficiario, `Sin precio: ${polin34.nombre}`)
+  if (!precioPolin) return errorResult(beneficiario, `Sin precio: ${polin34.nombre}`)
 
   if (beneficiario.segmento === 'Invernadero') {
     const poly = insumos.find(i => i.nombre.startsWith('Polietileno'))
     if (!poly) return errorResult(beneficiario, 'Catálogo incompleto')
     const precioPoly = getPrecio(precioMap, proveedorId, poly.id)
-    if (precioPoly === null) return errorResult(beneficiario, `Sin precio: ${poly.nombre}`)
+    if (!precioPoly) return errorResult(beneficiario, `Sin precio: ${poly.nombre}`)
 
     const costoBase = METROS_POLY_MIN * precioPoly
     const saldo = presupuesto - costoBase
@@ -81,7 +81,7 @@ export function simularBeneficiario(
 
   const malla = insumos.find(i => i.id === mallaAM.insumo_id)!
   const precioMalla = getPrecio(precioMap, proveedorId, malla.id)
-  if (precioMalla === null) return errorResult(beneficiario, `Sin precio: ${malla.nombre}`)
+  if (!precioMalla) return errorResult(beneficiario, `Sin precio: ${malla.nombre}`)
 
   const costoBase = 1 * precioMalla
   const saldo = presupuesto - costoBase
