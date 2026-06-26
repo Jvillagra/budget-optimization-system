@@ -123,6 +123,8 @@ export default function VistaResumenPage() {
   const totalRollosMalla = mallasFilas.reduce((s, f) => s + f.cantidad, 0)
   const polinFilas = filas.filter(f => f.nombre.startsWith('Polines'))
   const totalPolines = polinFilas.reduce((s, f) => s + f.cantidad, 0)
+  const poliFilas = filas.filter(f => f.nombre.startsWith('Polietileno'))
+  const totalPolietileno = poliFilas.reduce((s, f) => s + f.cantidad, 0)
   const totalGasto = filas.reduce((s, f) => f.precioUnitario ? s + f.cantidad * f.precioUnitario : s, 0)
   const hayPrecios = filas.some(f => f.precioUnitario !== null)
 
@@ -210,9 +212,10 @@ export default function VistaResumenPage() {
       ) : (
         <>
           {/* KPI Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <KPICardMallas mallas={mallasFilas} total={totalRollosMalla} />
             <KPICardPolines filas={polinFilas} total={totalPolines} combinar={combinarPolines} />
+            <KPICard label="Polietileno" value={totalPolietileno > 0 ? `${totalPolietileno} m` : '—'} />
             <KPICard label="Gasto total estimado" value={hayPrecios ? formatCLP(totalGasto) : '—'} />
           </div>
 
@@ -391,19 +394,18 @@ function KPICardPolines({ filas, total, combinar }: { filas: FilaConsolidado[]; 
       <p className="text-xs font-medium uppercase tracking-wide mb-1" style={{ color: 'rgba(0,0,0,0.4)' }}>
         Polines
       </p>
-      <p className="text-2xl font-bold" style={{ color: 'var(--verde-dark)' }}>{total}</p>
-      {!combinar && total > 0 && (
-        <div className="mt-2 space-y-0.5">
-          {cpTotal > 0 && (
-            <p className="text-xs" style={{ color: 'rgba(0,0,0,0.45)' }}>
-              Cierre Perimetral: {cpTotal}
-            </p>
-          )}
-          {invTotal > 0 && (
-            <p className="text-xs" style={{ color: 'rgba(0,0,0,0.45)' }}>
-              Invernadero: {invTotal}
-            </p>
-          )}
+      {combinar ? (
+        <p className="text-2xl font-bold" style={{ color: 'var(--verde-dark)' }}>{total}</p>
+      ) : (
+        <div className="space-y-1">
+          <div className="flex items-baseline gap-2">
+            <p className="text-2xl font-bold" style={{ color: 'var(--verde-dark)' }}>{cpTotal}</p>
+            <span className="text-xs font-semibold px-1.5 py-0.5 rounded" style={{ background: 'var(--cafe-muted)', color: 'var(--cafe-dark)' }}>CP</span>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <p className="text-2xl font-bold" style={{ color: 'var(--verde-dark)' }}>{invTotal || '—'}</p>
+            <span className="text-xs font-semibold px-1.5 py-0.5 rounded" style={{ background: 'var(--verde-muted)', color: 'var(--verde-dark)' }}>INV</span>
+          </div>
         </div>
       )}
     </div>
