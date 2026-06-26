@@ -32,22 +32,28 @@ export default function VistaResumenPage() {
   const [sinCarrito, setSinCarrito] = useState<string[]>([])
   const [combinarPolines, setCombinarPolines] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [copiado, setCopiado] = useState(false)
 
   useEffect(() => {
     async function load() {
-      const [{ data: bens }, { data: provs }, { data: asigs }, { data: precs }] = await Promise.all([
-        supabase.from('beneficiarios').select('*').order('segmento').order('nombre'),
-        supabase.from('proveedores').select('*').eq('es_activo', true).order('nombre'),
-        supabase.from('asignaciones').select('*, catalogo_insumos(*)'),
-        supabase.from('precios_proveedor').select('*'),
-      ])
-      setBaseData({
-        beneficiarios: (bens as Beneficiario[]) ?? [],
-        proveedores: (provs as Proveedor[]) ?? [],
-        asignaciones: (asigs as Asignacion[]) ?? [],
-        precios: (precs as PrecioProveedor[]) ?? [],
-      })
+      try {
+        const [{ data: bens }, { data: provs }, { data: asigs }, { data: precs }] = await Promise.all([
+          supabase.from('beneficiarios').select('*').order('segmento').order('nombre'),
+          supabase.from('proveedores').select('*').eq('es_activo', true).order('nombre'),
+          supabase.from('asignaciones').select('*, catalogo_insumos(*)'),
+          supabase.from('precios_proveedor').select('*'),
+        ])
+        setBaseData({
+          beneficiarios: (bens as Beneficiario[]) ?? [],
+          proveedores: (provs as Proveedor[]) ?? [],
+          asignaciones: (asigs as Asignacion[]) ?? [],
+          precios: (precs as PrecioProveedor[]) ?? [],
+        })
+      } catch {
+        setLoadError(true)
+        setLoading(false)
+      }
     }
     load()
   }, [])
@@ -154,6 +160,22 @@ export default function VistaResumenPage() {
         {[1, 2, 3].map(i => (
           <div key={i} className="h-24 rounded-2xl animate-pulse" style={{ background: 'rgba(255,255,255,0.4)' }} />
         ))}
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="rounded-2xl p-8 glass text-center space-y-3">
+        <p className="text-sm font-semibold" style={{ color: 'var(--cafe-dark)' }}>Error al cargar los datos</p>
+        <p className="text-xs" style={{ color: 'rgba(0,0,0,0.45)' }}>Revisa tu conexión e intenta nuevamente.</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="text-sm font-semibold px-4 py-2 rounded-lg"
+          style={{ background: 'var(--verde)', color: '#fff' }}
+        >
+          Reintentar
+        </button>
       </div>
     )
   }

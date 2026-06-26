@@ -24,6 +24,8 @@ export default function BeneficiariosPage() {
   const [insumoForm, setInsumoForm] = useState('')
   const [cantidadForm, setCantidadForm] = useState(1)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [agregando, setAgregando] = useState(false)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
 
@@ -36,43 +38,47 @@ export default function BeneficiariosPage() {
 
   useEffect(() => {
     async function load() {
-      const [{ data: bens }, { data: ins }, { data: provs }, { data: asigs }, { data: ams }, { data: precs }] = await Promise.all([
-        supabase.from('beneficiarios').select('*').order('segmento').order('nombre'),
-        supabase.from('catalogo_insumos').select('*').order('segmento').order('nombre'),
-        supabase.from('proveedores').select('*').eq('es_activo', true).order('nombre'),
-        supabase.from('asignaciones').select('*, catalogo_insumos(*)'),
-        supabase.from('ayuda_memoria').select('*, catalogo_insumos(*)'),
-        supabase.from('precios_proveedor').select('*'),
-      ])
-      if (bens) setBeneficiarios(bens as Beneficiario[])
-      if (ins) setInsumos(ins as CatalogoInsumo[])
-      if (provs) {
-        setProveedores(provs as Proveedor[])
-        // Solo inicializar si localStorage no tiene valor guardado (mismo batch que setLoading)
-        const savedId = localStorage.getItem('pat_proveedor_id')
-        const validSaved = savedId && (provs as Proveedor[]).find(p => p.id === savedId)
-        if (!validSaved && (provs as Proveedor[]).length > 0) {
-          setProveedorId((provs as Proveedor[])[0].id)
+      try {
+        const [{ data: bens }, { data: ins }, { data: provs }, { data: asigs }, { data: ams }, { data: precs }] = await Promise.all([
+          supabase.from('beneficiarios').select('*').order('segmento').order('nombre'),
+          supabase.from('catalogo_insumos').select('*').order('segmento').order('nombre'),
+          supabase.from('proveedores').select('*').eq('es_activo', true).order('nombre'),
+          supabase.from('asignaciones').select('*, catalogo_insumos(*)'),
+          supabase.from('ayuda_memoria').select('*, catalogo_insumos(*)'),
+          supabase.from('precios_proveedor').select('*'),
+        ])
+        if (bens) setBeneficiarios(bens as Beneficiario[])
+        if (ins) setInsumos(ins as CatalogoInsumo[])
+        if (provs) {
+          setProveedores(provs as Proveedor[])
+          const savedId = localStorage.getItem('pat_proveedor_id')
+          const validSaved = savedId && (provs as Proveedor[]).find(p => p.id === savedId)
+          if (!validSaved && (provs as Proveedor[]).length > 0) {
+            setProveedorId((provs as Proveedor[])[0].id)
+          }
         }
-      }
-      if (asigs) {
-        const map: Record<string, Asignacion[]> = {}
-        for (const a of asigs as Asignacion[]) {
-          if (!map[a.beneficiario_id]) map[a.beneficiario_id] = []
-          map[a.beneficiario_id].push(a)
+        if (asigs) {
+          const map: Record<string, Asignacion[]> = {}
+          for (const a of asigs as Asignacion[]) {
+            if (!map[a.beneficiario_id]) map[a.beneficiario_id] = []
+            map[a.beneficiario_id].push(a)
+          }
+          setAsignaciones(map)
         }
-        setAsignaciones(map)
-      }
-      if (ams) {
-        const map: Record<string, AyudaMemoria[]> = {}
-        for (const am of ams as AyudaMemoria[]) {
-          if (!map[am.beneficiario_id]) map[am.beneficiario_id] = []
-          map[am.beneficiario_id].push(am)
+        if (ams) {
+          const map: Record<string, AyudaMemoria[]> = {}
+          for (const am of ams as AyudaMemoria[]) {
+            if (!map[am.beneficiario_id]) map[am.beneficiario_id] = []
+            map[am.beneficiario_id].push(am)
+          }
+          setAyudaMemoria(map)
         }
-        setAyudaMemoria(map)
+        if (precs) setPrecioMap(buildPrecioMap(precs))
+      } catch {
+        setLoadError(true)
+      } finally {
+        setLoading(false)
       }
-      if (precs) setPrecioMap(buildPrecioMap(precs))
-      setLoading(false)
     }
     load()
   }, [])
@@ -92,7 +98,8 @@ export default function BeneficiariosPage() {
   const bensFiltrados = filtro === 'todos' ? beneficiarios : beneficiarios.filter(b => b.segmento === filtro)
 
   async function agregar() {
-    if (!seleccionado || !insumoForm) return
+    if (!seleccionado || !insumoForm || agregando) return
+    setAgregando(true)
     const { data } = await supabase
       .from('asignaciones')
       .insert({ beneficiario_id: seleccionado, insumo_id: insumoForm, cantidad: cantidadForm })
@@ -106,6 +113,7 @@ export default function BeneficiariosPage() {
       setInsumoForm('')
       setCantidadForm(1)
     }
+    setAgregando(false)
   }
 
   async function eliminar(asignacionId: string) {
@@ -130,12 +138,26 @@ export default function BeneficiariosPage() {
     </div>
   )
 
+  if (loadError) return (
+    <div className="rounded-2xl p-8 glass text-center space-y-3">
+      <p className="text-sm font-semibold" style={{ color: 'var(--cafe-dark)' }}>Error al cargar los datos</p>
+      <p className="text-xs" style={{ color: 'rgba(0,0,0,0.45)' }}>Revisa tu conexión e intenta nuevamente.</p>
+      <button
+        onClick={() => { setLoadError(false); setLoading(true); window.location.reload() }}
+        className="text-sm font-semibold px-4 py-2 rounded-lg"
+        style={{ background: 'var(--verde)', color: '#fff' }}
+      >
+        Reintentar
+      </button>
+    </div>
+  )
+
   const panelProps = {
     ben: benSeleccionado,
     asigsBen, ayudaBen, insumosCompatibles,
     proveedorId, proveedores, precioMap,
     total, itemsSinPrecio, aporteBolsillo, porcentaje,
-    insumoForm, cantidadForm,
+    insumoForm, cantidadForm, agregando,
     setProveedorId, setInsumoForm,
     setCantidadForm: (v: number) => setCantidadForm(v),
     agregar, eliminar,
@@ -284,6 +306,7 @@ type PanelProps = {
   porcentaje: number
   insumoForm: string
   cantidadForm: number
+  agregando: boolean
   setProveedorId: (v: string) => void
   setInsumoForm: (v: string) => void
   setCantidadForm: (v: number) => void
@@ -291,7 +314,7 @@ type PanelProps = {
   eliminar: (id: string) => void
 }
 
-function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId, proveedores, precioMap, total, itemsSinPrecio, aporteBolsillo, porcentaje, insumoForm, cantidadForm, setProveedorId, setInsumoForm, setCantidadForm, agregar, eliminar }: PanelProps) {
+function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId, proveedores, precioMap, total, itemsSinPrecio, aporteBolsillo, porcentaje, insumoForm, cantidadForm, agregando, setProveedorId, setInsumoForm, setCantidadForm, agregar, eliminar }: PanelProps) {
   return (
     <>
       {/* Selector de proveedor */}
@@ -463,11 +486,11 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
                     />
                     <button
                       onClick={agregar}
-                      disabled={!insumoForm || sinPrecio}
+                      disabled={!insumoForm || sinPrecio || agregando}
                       className="flex-1 rounded-lg text-sm text-white font-semibold py-2 disabled:opacity-40"
                       style={{ background: 'var(--verde)' }}
                     >
-                      agregar
+                      {agregando ? '...' : 'agregar'}
                     </button>
                   </div>
                 </>
