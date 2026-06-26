@@ -4,210 +4,191 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import type { Proveedor, Insumo, Beneficiario } from '@/lib/types'
-import { simularEscenario, formatCLP } from '@/lib/business-logic'
-
-interface ResultadoEscenario {
-  proveedor: Proveedor
-  insumos: Insumo[]
-  volumenTotal: number
-  aporteBolsilloTotal: number
-  gastoComunidad: number
-}
+import type { Proveedor, Beneficiario, CatalogoInsumo, Asignacion, KPISimulacion } from '@/lib/types'
+import { buildPrecioMap, calcularKPI, formatCLP } from '@/lib/business-logic'
 
 export default function SimuladorPage() {
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
-  const [insumosPorProveedor, setInsumosPorProveedor] = useState<Record<string, Insumo[]>>({})
   const [beneficiarios, setBeneficiarios] = useState<Beneficiario[]>([])
-  const [resultados, setResultados] = useState<ResultadoEscenario[]>([])
+  const [insumos, setInsumos] = useState<CatalogoInsumo[]>([])
+  const [asignacionesPorBen, setAsignacionesPorBen] = useState<Record<string, Asignacion[]>>({})
+  const [precioMaps, setPrecioMaps] = useState<Record<string, Map<string, number | null>>>({})
+  const [provA, setProvA] = useState('')
+  const [provB, setProvB] = useState('')
+  const [kpis, setKpis] = useState<KPISimulacion[]>([])
   const [loading, setLoading] = useState(true)
-  const [calculando, setCalculando] = useState(false)
+  const [simulado, setSimulado] = useState(false)
 
   useEffect(() => {
-    async function fetchData() {
-      const [{ data: provs }, { data: ins }, { data: bens }] = await Promise.all([
-        supabase.from('proveedores').select('*').order('nombre'),
-        supabase.from('insumos').select('*').order('categoria'),
-        supabase.from('beneficiarios').select('*').order('nombre'),
+    async function load() {
+      const [{ data: provs }, { data: bens }, { data: ins }, { data: asigs }, { data: precs }] = await Promise.all([
+        supabase.from('proveedores').select('*').eq('es_activo', true).order('nombre'),
+        supabase.from('beneficiarios').select('*').order('segmento').order('nombre'),
+        supabase.from('catalogo_insumos').select('*'),
+        supabase.from('asignaciones').select('*').eq('es_requerimiento_base', true),
+        supabase.from('precios_proveedor').select('*'),
       ])
 
-      if (provs) setProveedores(provs)
-      if (ins && provs) {
-        const map: Record<string, Insumo[]> = {}
-        for (const p of provs) {
-          map[p.id] = (ins as Insumo[]).filter((i) => i.proveedor_id === p.id)
-        }
-        setInsumosPorProveedor(map)
+      if (provs) {
+        setProveedores(provs as Proveedor[])
+        if (provs.length >= 1) setProvA(provs[0].id)
+        if (provs.length >= 2) setProvB(provs[1].id)
       }
       if (bens) setBeneficiarios(bens as Beneficiario[])
+      if (ins) setInsumos(ins as CatalogoInsumo[])
+      if (asigs) {
+        const map: Record<string, Asignacion[]> = {}
+        for (const a of asigs as Asignacion[]) {
+          if (!map[a.beneficiario_id]) map[a.beneficiario_id] = []
+          map[a.beneficiario_id].push(a)
+        }
+        setAsignacionesPorBen(map)
+      }
+      if (precs && provs) {
+        const maps: Record<string, Map<string, number | null>> = {}
+        for (const p of provs as Proveedor[]) {
+          maps[p.id] = buildPrecioMap((precs).filter((r: { proveedor_id: string }) => r.proveedor_id === p.id))
+        }
+        setPrecioMaps(maps)
+      }
       setLoading(false)
     }
-    fetchData()
+    load()
   }, [])
 
-  function calcular() {
-    setCalculando(true)
-    const res: ResultadoEscenario[] = proveedores.map((prov) => {
-      const insumos = insumosPorProveedor[prov.id] ?? []
-      const { volumenTotal, aporteBolsilloTotal, gastoComunidad } = simularEscenario(beneficiarios, insumos)
-      return { proveedor: prov, insumos, volumenTotal, aporteBolsilloTotal, gastoComunidad }
-    })
-    // Ordena: mayor volumen + menor aporte de bolsillo
-    res.sort((a, b) => b.volumenTotal - a.volumenTotal || a.aporteBolsilloTotal - b.aporteBolsilloTotal)
-    setResultados(res)
-    setCalculando(false)
+  function simular() {
+    if (!provA || !provB) return
+    const provAObj = proveedores.find(p => p.id === provA)
+    const provBObj = proveedores.find(p => p.id === provB)
+    if (!provAObj || !provBObj) return
+
+    const kpiA = calcularKPI(provAObj, beneficiarios, precioMaps[provA] ?? new Map(), insumos, asignacionesPorBen)
+    const kpiB = calcularKPI(provBObj, beneficiarios, precioMaps[provB] ?? new Map(), insumos, asignacionesPorBen)
+
+    // Ganador: mayor volumen total
+    kpiA.es_ganador = kpiA.volumen_total_comunidad >= kpiB.volumen_total_comunidad
+    kpiB.es_ganador = kpiB.volumen_total_comunidad > kpiA.volumen_total_comunidad
+    setKpis([kpiA, kpiB])
+    setSimulado(true)
   }
 
-  const mejorEscenario = resultados[0]
+  const invernadero = beneficiarios.filter(b => b.segmento === 'Invernadero')
+  const cierre = beneficiarios.filter(b => b.segmento === 'Cierre Perimetral')
+  const conMalla = cierre.filter(b => asignacionesPorBen[b.id]?.some(a => a.es_requerimiento_base))
 
-  // Stats de la comunidad
-  const invernadero = beneficiarios.filter((b) => b.proyecto === 'Invernadero')
-  const cierrePerimetral = beneficiarios.filter((b) => b.proyecto === 'Cierre Perimetral')
-
-  if (loading) {
-    return (
-      <div className="space-y-4">
-        <div className="h-8 bg-gray-100 rounded animate-pulse w-48" />
-        <div className="grid grid-cols-3 gap-4">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-24 bg-gray-100 rounded-xl animate-pulse" />
-          ))}
-        </div>
+  if (loading) return (
+    <div className="space-y-4">
+      <div className="h-8 rounded animate-pulse w-48" style={{ background: 'rgba(255,255,255,0.4)' }} />
+      <div className="grid grid-cols-2 gap-4">
+        {[0, 1].map(i => <div key={i} className="h-64 rounded-2xl animate-pulse" style={{ background: 'rgba(255,255,255,0.4)' }} />)}
       </div>
-    )
-  }
+    </div>
+  )
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-bold" style={{ color: 'var(--verde-dark)' }}>Simulador Comparativo</h1>
-          <p className="text-sm mt-0.5" style={{ color: 'rgba(0,0,0,0.45)' }}>
-            Compara proveedores y encuentra la mejor opción para la comunidad.
-          </p>
-        </div>
-        <button
-          onClick={calcular}
-          disabled={calculando || proveedores.length === 0}
-          className="rounded-xl px-4 py-2 text-sm text-white font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-          style={{ background: 'var(--verde)' }}
-        >
-          {calculando ? 'Calculando...' : 'Simular'}
-        </button>
+    <div className="space-y-5">
+      <div>
+        <h1 className="text-lg font-bold" style={{ color: 'var(--verde-dark)' }}>simulador comparativo</h1>
+        <p className="text-xs mt-0.5" style={{ color: 'rgba(0,0,0,0.4)' }}>
+          Compara dos proveedores y encuentra cuál maximiza el volumen de materiales.
+        </p>
       </div>
 
       {/* Stats de la comunidad */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard label="Total beneficiarios" value={beneficiarios.length.toString()} />
-        <StatCard label="Presupuesto por socio" value={formatCLP(189000)} />
-        <StatCard label="Invernadero" value={invernadero.length.toString()} accent="green" />
-        <StatCard label="Cierre Perimetral" value={cierrePerimetral.length.toString()} accent="cafe" />
+        <StatCard label="total socios" value={String(beneficiarios.length)} />
+        <StatCard label="invernadero" value={String(invernadero.length)} color="verde" />
+        <StatCard label="cierre perimetral" value={String(cierre.length)} color="cafe" />
+        <StatCard label="con malla asignada" value={`${conMalla.length}/${cierre.length}`} color={conMalla.length < cierre.length ? 'rojo' : 'verde'} />
       </div>
 
-      {/* Resultados de la simulación */}
-      {resultados.length > 0 ? (
-        <div>
-          <h2 className="text-sm font-semibold mb-3" style={{ color: 'var(--cafe)' }}>Resultados por proveedor</h2>
+      {/* Selector de proveedores */}
+      <div className="rounded-2xl p-4 glass-strong flex flex-wrap items-end gap-4">
+        <div className="flex-1 min-w-[160px]">
+          <label className="text-xs font-semibold block mb-1" style={{ color: 'var(--cafe)' }}>proveedor A</label>
+          <select value={provA} onChange={e => setProvA(e.target.value)}
+            className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
+            style={{ border: '1px solid rgba(58,125,68,0.3)', background: 'rgba(255,255,255,0.8)' }}
+          >
+            {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+          </select>
+        </div>
+        <div className="flex-1 min-w-[160px]">
+          <label className="text-xs font-semibold block mb-1" style={{ color: 'var(--cafe)' }}>proveedor B</label>
+          <select value={provB} onChange={e => setProvB(e.target.value)}
+            className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
+            style={{ border: '1px solid rgba(127,79,36,0.3)', background: 'rgba(255,255,255,0.8)' }}
+          >
+            {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+          </select>
+        </div>
+        <button
+          onClick={simular}
+          disabled={!provA || !provB}
+          className="rounded-xl px-6 py-2 text-sm text-white font-bold disabled:opacity-40"
+          style={{ background: 'var(--verde)' }}
+        >
+          simular
+        </button>
+      </div>
+
+      {/* Resultados side-by-side */}
+      {simulado && kpis.length === 2 && (
+        <>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {resultados.map((res, idx) => {
-              const esMejor = res.proveedor.id === mejorEscenario?.proveedor.id
-              return (
-                <div
-                  key={res.proveedor.id}
-                  className="rounded-2xl p-5 space-y-4 transition-all"
-                  style={esMejor ? {
-                    background: 'rgba(58,125,68,0.08)',
-                    backdropFilter: 'blur(14px)',
-                    WebkitBackdropFilter: 'blur(14px)',
-                    border: '1.5px solid var(--verde)',
-                    boxShadow: '0 4px 24px rgba(58,125,68,0.14)',
-                  } : {
-                    background: 'rgba(255,255,255,0.65)',
-                    backdropFilter: 'blur(14px)',
-                    WebkitBackdropFilter: 'blur(14px)',
-                    border: '1px solid rgba(255,255,255,0.55)',
-                    boxShadow: '0 2px 12px rgba(61,90,54,0.07)',
-                  }}
-                >
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-bold" style={{ color: '#1c1c1c' }}>{res.proveedor.nombre}</h3>
-                    {esMejor && (
-                      <span className="flex items-center gap-1 text-xs text-white px-2.5 py-0.5 rounded-full font-semibold" style={{ background: 'var(--verde)' }}>
-                        Mejor opción
-                      </span>
-                    )}
-                    {idx === resultados.length - 1 && !esMejor && (
-                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--cafe-muted)', color: 'var(--cafe)' }}>
-                        #{idx + 1}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <MetricCard label="Volumen total" value={res.volumenTotal.toString()} sublabel="unidades comunidad" highlight={esMejor} />
-                    <MetricCard label="Gasto comunidad" value={formatCLP(res.gastoComunidad)} sublabel="total 29 socios" />
-                    <MetricCard label="Aporte de bolsillo" value={formatCLP(res.aporteBolsilloTotal)} sublabel="total comunidad" danger={res.aporteBolsilloTotal > 0} />
-                    <MetricCard label="Insumos disponibles" value={res.insumos.length.toString()} sublabel="en catálogo" />
-                  </div>
-
-                  {res.insumos.length > 0 && (
-                    <div>
-                      <p className="text-xs uppercase tracking-wide mb-2" style={{ color: 'rgba(0,0,0,0.35)' }}>Catálogo</p>
-                      <div className="space-y-1">
-                        {res.insumos.map((i) => (
-                          <div key={i.id} className="flex justify-between text-xs" style={{ color: 'rgba(0,0,0,0.6)' }}>
-                            <span>{i.nombre}</span>
-                            <span className="font-semibold">{formatCLP(i.precio_unitario)} / {i.formato_venta}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+            {kpis.map(kpi => <KPICard key={kpi.proveedor.id} kpi={kpi} />)}
           </div>
 
-          {/* Resumen comparativo */}
-          {resultados.length >= 2 && (
-            <div className="mt-4 rounded-2xl p-5" style={{ background: 'var(--verde-dark)' }}>
-              <h3 className="text-sm font-semibold mb-3" style={{ color: 'rgba(255,255,255,0.7)' }}>Análisis comparativo</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {(() => {
-                  const mejor = resultados[0]
-                  const peor = resultados[resultados.length - 1]
-                  const difVolumen = mejor.volumenTotal - peor.volumenTotal
-                  const difGasto = peor.gastoComunidad - mejor.gastoComunidad
-                  return (
-                    <>
-                      <div>
-                        <p className="text-xs text-gray-400">Diferencia de volumen</p>
-                        <p className="text-xl font-bold text-emerald-400">+{difVolumen} unidades</p>
-                        <p className="text-xs text-gray-400 mt-0.5">con {mejor.proveedor.nombre}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-400">Ahorro comunitario</p>
-                        <p className="text-xl font-bold text-emerald-400">{formatCLP(difGasto > 0 ? difGasto : 0)}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">eligiendo {mejor.proveedor.nombre}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-400">Recomendación</p>
-                        <p className="text-sm font-semibold text-white mt-1">
-                          {mejor.proveedor.nombre} ofrece {difVolumen > 0 ? `${difVolumen} unidades más` : 'igual volumen'} a menor costo.
+          {/* Análisis comparativo */}
+          <div className="rounded-2xl p-5" style={{ background: 'var(--verde-dark)' }}>
+            <p className="text-xs font-semibold mb-3" style={{ color: 'rgba(255,255,255,0.65)' }}>análisis comparativo</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {(() => {
+                const [a, b] = kpis
+                const ganador = a.es_ganador ? a : b
+                const perdedor = a.es_ganador ? b : a
+                const difVol = Math.abs(a.volumen_total_comunidad - b.volumen_total_comunidad)
+                const difAporte = Math.abs(a.aporte_bolsillo_total - b.aporte_bolsillo_total)
+                return (
+                  <>
+                    <div>
+                      <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>diferencia de volumen</p>
+                      <p className="text-2xl font-bold text-white">+{difVol} uds.</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.5)' }}>con {ganador.proveedor.nombre}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>ahorro en aportes</p>
+                      <p className="text-2xl font-bold text-white">{formatCLP(difAporte)}</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.5)' }}>menos bolsillo con {ganador.proveedor.nombre}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>recomendación</p>
+                      <p className="text-sm font-bold text-white mt-1">
+                        {difVol > 0
+                          ? `${ganador.proveedor.nombre} logra ${difVol} unidades más para la comunidad.`
+                          : 'Ambos proveedores entregan el mismo volumen.'}
+                      </p>
+                      {perdedor.socios_con_error > 0 && (
+                        <p className="text-xs mt-1" style={{ color: '#fca5a5' }}>
+                          {perdedor.proveedor.nombre}: {perdedor.socios_con_error} socios sin datos completos.
                         </p>
-                      </div>
-                    </>
-                  )
-                })()}
-              </div>
+                      )}
+                    </div>
+                  </>
+                )
+              })()}
             </div>
-          )}
-        </div>
-      ) : (
+          </div>
+        </>
+      )}
+
+      {!simulado && (
         <div className="rounded-2xl border-2 border-dashed p-12 text-center" style={{ borderColor: 'rgba(58,125,68,0.2)' }}>
-          <p className="text-sm" style={{ color: 'rgba(0,0,0,0.4)' }}>Presiona &ldquo;Simular&rdquo; para comparar los proveedores.</p>
+          <p className="text-sm" style={{ color: 'rgba(0,0,0,0.4)' }}>
+            Selecciona dos proveedores y presiona <strong>simular</strong>.
+          </p>
           <p className="text-xs mt-1" style={{ color: 'rgba(0,0,0,0.3)' }}>
-            El sistema calculará automáticamente la asignación óptima para los {beneficiarios.length} beneficiarios.
+            Los socios de Cierre Perimetral deben tener una malla marcada como requerimiento base.
           </p>
         </div>
       )}
@@ -215,29 +196,91 @@ export default function SimuladorPage() {
   )
 }
 
-function StatCard({ label, value, accent }: { label: string; value: string; accent?: 'green' | 'cafe' }) {
+function KPICard({ kpi }: { kpi: KPISimulacion }) {
+  const { proveedor, resultados, volumen_total_comunidad, aporte_bolsillo_total, socios_con_error, es_ganador } = kpi
+  const exitosos = resultados.filter(r => r.error === null)
+  const totalPolines = exitosos.reduce((s, r) => s + r.polines, 0)
+  const benInv = exitosos.filter(r => r.beneficiario.segmento === 'Invernadero')
+  const totalMetros = benInv.reduce((s, r) => s + 20, 0)
+
   return (
-    <div className="rounded-2xl p-4 glass">
-      <p className="text-xs" style={{ color: 'rgba(0,0,0,0.4)' }}>{label}</p>
-      <p className="text-xl font-bold mt-0.5" style={{
-        color: accent === 'green' ? 'var(--verde)' : accent === 'cafe' ? 'var(--cafe)' : '#1c1c1c'
-      }}>{value}</p>
+    <div className="rounded-2xl p-5 space-y-4 transition-all" style={es_ganador ? {
+      background: 'rgba(58,125,68,0.1)',
+      border: '2px solid var(--verde)',
+      boxShadow: '0 0 0 4px rgba(58,125,68,0.08), 0 8px 32px rgba(58,125,68,0.15)',
+      backdropFilter: 'blur(14px)',
+    } : {
+      background: 'rgba(255,255,255,0.65)',
+      border: '1px solid rgba(255,255,255,0.55)',
+      backdropFilter: 'blur(14px)',
+    }}>
+      <div className="flex items-center justify-between">
+        <h3 className="font-bold" style={{ color: '#1c1c1c' }}>{proveedor.nombre}</h3>
+        {es_ganador && (
+          <span className="flex items-center gap-1 text-xs font-bold text-white px-2.5 py-1 rounded-full" style={{ background: 'var(--verde)' }}>
+            🏆 mejor opción
+          </span>
+        )}
+      </div>
+
+      {/* KPIs principales */}
+      <div className="grid grid-cols-2 gap-3">
+        <Metric label="volumen total" value={String(volumen_total_comunidad)} sub="unidades comunidad" highlight={es_ganador} />
+        <Metric label="aporte de bolsillo" value={formatCLP(aporte_bolsillo_total)} sub="total comunidad" danger={aporte_bolsillo_total > 0} />
+        <Metric label="metros polietileno" value={`${totalMetros}m`} sub={`${benInv.length} socios inv.`} />
+        <Metric label="polines totales" value={String(totalPolines)} sub="ambos segmentos" highlight={es_ganador} />
+      </div>
+
+      {socios_con_error > 0 && (
+        <div className="rounded-xl p-3 text-xs" style={{ background: 'rgba(220,38,38,0.07)', border: '1px solid rgba(220,38,38,0.2)', color: '#dc2626' }}>
+          <p className="font-semibold">⚠ {socios_con_error} socio{socios_con_error > 1 ? 's' : ''} con datos incompletos</p>
+          <ul className="mt-1 space-y-0.5" style={{ color: 'rgba(220,38,38,0.8)' }}>
+            {resultados.filter(r => r.error).slice(0, 4).map(r => (
+              <li key={r.beneficiario.id}>· {r.beneficiario.nombre}: {r.error}</li>
+            ))}
+            {socios_con_error > 4 && <li>· y {socios_con_error - 4} más...</li>}
+          </ul>
+        </div>
+      )}
+
+      {/* Detalle por socio (colapsado) */}
+      <details className="text-xs">
+        <summary className="cursor-pointer font-semibold" style={{ color: 'var(--cafe)' }}>
+          ver detalle por socio ({exitosos.length} calculados)
+        </summary>
+        <div className="mt-2 max-h-48 overflow-y-auto space-y-1">
+          {exitosos.map(r => (
+            <div key={r.beneficiario.id} className="flex justify-between py-0.5" style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', color: 'rgba(0,0,0,0.65)' }}>
+              <span className="truncate max-w-[140px]">{r.beneficiario.nombre}</span>
+              <span className="font-semibold shrink-0 ml-2">{r.volumen_total} uds.</span>
+            </div>
+          ))}
+        </div>
+      </details>
     </div>
   )
 }
 
-function MetricCard({ label, value, sublabel, highlight, danger }: {
-  label: string; value: string; sublabel?: string; highlight?: boolean; danger?: boolean
+function StatCard({ label, value, color }: { label: string; value: string; color?: 'verde' | 'cafe' | 'rojo' }) {
+  const colorMap = { verde: 'var(--verde)', cafe: 'var(--cafe)', rojo: '#dc2626' }
+  return (
+    <div className="rounded-2xl p-4 glass">
+      <p className="text-xs" style={{ color: 'rgba(0,0,0,0.4)' }}>{label}</p>
+      <p className="text-xl font-bold mt-0.5" style={{ color: color ? colorMap[color] : '#1c1c1c' }}>{value}</p>
+    </div>
+  )
+}
+
+function Metric({ label, value, sub, highlight, danger }: {
+  label: string; value: string; sub?: string; highlight?: boolean; danger?: boolean
 }) {
   return (
-    <div className="rounded-xl p-3" style={{
-      background: highlight ? 'rgba(58,125,68,0.1)' : 'rgba(0,0,0,0.04)',
-    }}>
+    <div className="rounded-xl p-3" style={{ background: highlight ? 'rgba(58,125,68,0.1)' : 'rgba(0,0,0,0.04)' }}>
       <p className="text-xs" style={{ color: 'rgba(0,0,0,0.45)' }}>{label}</p>
-      <p className="text-base font-bold mt-0.5" style={{
-        color: highlight ? 'var(--verde-dark)' : danger ? '#dc2626' : '#1c1c1c'
-      }}>{value}</p>
-      {sublabel && <p className="text-xs mt-0.5" style={{ color: 'rgba(0,0,0,0.35)' }}>{sublabel}</p>}
+      <p className="text-base font-bold mt-0.5" style={{ color: highlight ? 'var(--verde-dark)' : danger ? '#dc2626' : '#1c1c1c' }}>
+        {value}
+      </p>
+      {sub && <p className="text-xs mt-0.5" style={{ color: 'rgba(0,0,0,0.35)' }}>{sub}</p>}
     </div>
   )
 }

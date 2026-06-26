@@ -1,29 +1,31 @@
-export type Proyecto = 'Invernadero' | 'Cierre Perimetral'
-export type Categoria = 'Malla' | 'Polietileno' | 'Polines' | 'Otro'
+export type Segmento = 'Invernadero' | 'Cierre Perimetral'
+export type SegmentoCatalogo = 'Invernadero' | 'Cierre Perimetral' | 'Ambos'
 
 export interface Proveedor {
   id: string
   nombre: string
-  created_at?: string | null
+  es_activo: boolean
 }
 
-export interface Insumo {
+export interface CatalogoInsumo {
   id: string
-  proveedor_id: string
-  categoria: Categoria
+  segmento: SegmentoCatalogo
   nombre: string
   formato_venta: string
-  precio_unitario: number
-  created_at?: string | null
-  proveedores?: Proveedor | null
+}
+
+export interface PrecioProveedor {
+  id: string
+  proveedor_id: string
+  insumo_id: string
+  precio_unitario: number | null
 }
 
 export interface Beneficiario {
   id: string
   nombre: string
-  proyecto: Proyecto
+  segmento: Segmento
   presupuesto_base: number
-  created_at?: string | null
 }
 
 export interface Asignacion {
@@ -31,63 +33,62 @@ export interface Asignacion {
   beneficiario_id: string
   insumo_id: string
   cantidad: number
-  precio_unitario_snapshot: number
-  costo_total: number
+  es_requerimiento_base: boolean
   created_at?: string | null
-  insumos?: Insumo | null
-  beneficiarios?: Beneficiario | null
+  catalogo_insumos?: CatalogoInsumo | null
 }
 
-// Resumen de presupuesto para un beneficiario
-export interface ResumenPresupuesto {
+export interface ResultadoSimulacion {
   beneficiario: Beneficiario
-  asignaciones: Asignacion[]
-  total_gastado: number
-  saldo_disponible: number
+  error: string | null
+  polines: number
+  volumen_total: number
+  gasto_total: number
   aporte_bolsillo: number
-  tiene_aporte_bolsillo: boolean
 }
 
-// Para el simulador comparativo
-export interface EscenarioProveedor {
+export interface KPISimulacion {
   proveedor: Proveedor
-  insumos: Insumo[]
-  total_comunitario: number // suma de todos los gastos de los 29 beneficiarios
-  volumen_total_materiales: number // unidades totales obtenidas
+  resultados: ResultadoSimulacion[]
+  volumen_total_comunidad: number
   aporte_bolsillo_total: number
-  es_mejor_escenario: boolean
+  socios_con_error: number
+  es_ganador: boolean
 }
 
-// Database type para Supabase client (formato requerido por @supabase/supabase-js v2)
+// Supabase Database type
 export type Database = {
   public: {
     Tables: {
       proveedores: {
-        Row: { id: string; nombre: string; created_at: string | null }
-        Insert: { id?: string; nombre: string; created_at?: string | null }
-        Update: { id?: string; nombre?: string; created_at?: string | null }
+        Row: { id: string; nombre: string; es_activo: boolean }
+        Insert: { id?: string; nombre: string; es_activo?: boolean }
+        Update: { id?: string; nombre?: string; es_activo?: boolean }
         Relationships: []
       }
-      insumos: {
-        Row: { id: string; proveedor_id: string; categoria: string; nombre: string; formato_venta: string; precio_unitario: number; created_at: string | null }
-        Insert: { id?: string; proveedor_id: string; categoria: string; nombre: string; formato_venta: string; precio_unitario: number; created_at?: string | null }
-        Update: { id?: string; proveedor_id?: string; categoria?: string; nombre?: string; formato_venta?: string; precio_unitario?: number; created_at?: string | null }
-        Relationships: [{ foreignKeyName: 'insumos_proveedor_id_fkey'; columns: ['proveedor_id']; referencedRelation: 'proveedores'; referencedColumns: ['id'] }]
+      catalogo_insumos: {
+        Row: { id: string; segmento: string; nombre: string; formato_venta: string }
+        Insert: { id?: string; segmento: string; nombre: string; formato_venta: string }
+        Update: { id?: string; segmento?: string; nombre?: string; formato_venta?: string }
+        Relationships: []
+      }
+      precios_proveedor: {
+        Row: { id: string; proveedor_id: string; insumo_id: string; precio_unitario: number | null }
+        Insert: { id?: string; proveedor_id: string; insumo_id: string; precio_unitario?: number | null }
+        Update: { id?: string; proveedor_id?: string; insumo_id?: string; precio_unitario?: number | null }
+        Relationships: []
       }
       beneficiarios: {
-        Row: { id: string; nombre: string; proyecto: string; presupuesto_base: number; created_at: string | null }
-        Insert: { id?: string; nombre: string; proyecto: string; presupuesto_base?: number; created_at?: string | null }
-        Update: { id?: string; nombre?: string; proyecto?: string; presupuesto_base?: number; created_at?: string | null }
+        Row: { id: string; nombre: string; segmento: string; presupuesto_base: number }
+        Insert: { id?: string; nombre: string; segmento: string; presupuesto_base?: number }
+        Update: { id?: string; nombre?: string; segmento?: string; presupuesto_base?: number }
         Relationships: []
       }
       asignaciones: {
-        Row: { id: string; beneficiario_id: string; insumo_id: string; cantidad: number; precio_unitario_snapshot: number; costo_total: number; created_at: string | null }
-        Insert: { id?: string; beneficiario_id: string; insumo_id: string; cantidad: number; precio_unitario_snapshot: number; created_at?: string | null }
-        Update: { id?: string; beneficiario_id?: string; insumo_id?: string; cantidad?: number; precio_unitario_snapshot?: number; created_at?: string | null }
-        Relationships: [
-          { foreignKeyName: 'asignaciones_beneficiario_id_fkey'; columns: ['beneficiario_id']; referencedRelation: 'beneficiarios'; referencedColumns: ['id'] },
-          { foreignKeyName: 'asignaciones_insumo_id_fkey'; columns: ['insumo_id']; referencedRelation: 'insumos'; referencedColumns: ['id'] }
-        ]
+        Row: { id: string; beneficiario_id: string; insumo_id: string; cantidad: number; es_requerimiento_base: boolean; created_at: string | null }
+        Insert: { id?: string; beneficiario_id: string; insumo_id: string; cantidad: number; es_requerimiento_base?: boolean; created_at?: string | null }
+        Update: { id?: string; beneficiario_id?: string; insumo_id?: string; cantidad?: number; es_requerimiento_base?: boolean }
+        Relationships: []
       }
     }
     Views: Record<string, never>

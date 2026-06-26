@@ -2,271 +2,216 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
-import type { Insumo, Proveedor, Categoria } from '@/lib/types'
+import type { CatalogoInsumo, Proveedor } from '@/lib/types'
 import { formatCLP } from '@/lib/business-logic'
 
-const CATEGORIAS: Categoria[] = ['Malla', 'Polietileno', 'Polines', 'Otro']
-
-type InsumoForm = {
-  proveedor_id: string
-  categoria: Categoria
-  nombre: string
-  formato_venta: string
-  precio_unitario: number
-}
-
-const FORM_INICIAL: InsumoForm = {
-  proveedor_id: '',
-  categoria: 'Malla',
-  nombre: '',
-  formato_venta: '',
-  precio_unitario: 0,
-}
+type PrecioMap = Map<string, number | null> // `${provId}_${insumoId}` → precio | null
 
 export default function PreciosPage() {
-  const [insumos, setInsumos] = useState<Insumo[]>([])
+  const [insumos, setInsumos] = useState<CatalogoInsumo[]>([])
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
-  const [form, setForm] = useState<InsumoForm>(FORM_INICIAL)
-  const [editandoId, setEditandoId] = useState<string | null>(null)
+  const [precios, setPrecios] = useState<PrecioMap>(new Map())
+  const [saving, setSaving] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
-  const [filtroProveedor, setFiltroProveedor] = useState<string>('todos')
-  const [guardando, setGuardando] = useState(false)
 
   useEffect(() => {
-    fetchData()
+    async function load() {
+      const [{ data: ins }, { data: provs }, { data: precs }] = await Promise.all([
+        supabase.from('catalogo_insumos').select('*').order('segmento').order('nombre'),
+        supabase.from('proveedores').select('*').eq('es_activo', true).order('nombre'),
+        supabase.from('precios_proveedor').select('*'),
+      ])
+      if (ins) setInsumos(ins as CatalogoInsumo[])
+      if (provs) setProveedores(provs as Proveedor[])
+      if (precs) {
+        const map: PrecioMap = new Map()
+        for (const p of precs) map.set(`${p.proveedor_id}_${p.insumo_id}`, p.precio_unitario)
+        setPrecios(map)
+      }
+      setLoading(false)
+    }
+    load()
   }, [])
 
-  async function fetchData() {
-    const [{ data: ins }, { data: provs }] = await Promise.all([
-      supabase.from('insumos').select('*, proveedores(nombre)').order('categoria').order('nombre'),
-      supabase.from('proveedores').select('*').order('nombre'),
-    ])
-    if (ins) setInsumos(ins as Insumo[])
-    if (provs) {
-      setProveedores(provs as Proveedor[])
-      if (provs.length > 0 && !form.proveedor_id) {
-        setForm((f) => ({ ...f, proveedor_id: provs[0].id }))
-      }
-    }
-    setLoading(false)
+  async function handleBlur(provId: string, insumoId: string, rawValue: string) {
+    const key = `${provId}_${insumoId}`
+    const precio = rawValue.trim() === '' ? null : parseFloat(rawValue)
+    if (isNaN(precio as number) && precio !== null) return
+
+    setSaving(s => new Set(s).add(key))
+    await supabase
+      .from('precios_proveedor')
+      .upsert({ proveedor_id: provId, insumo_id: insumoId, precio_unitario: precio }, { onConflict: 'proveedor_id,insumo_id' })
+    setPrecios(prev => new Map(prev).set(key, precio))
+    setSaving(s => { const n = new Set(s); n.delete(key); return n })
   }
 
-  async function guardar() {
-    if (!form.nombre || !form.precio_unitario || !form.proveedor_id) return
-    setGuardando(true)
+  const segmentos = ['Invernadero', 'Ambos', 'Cierre Perimetral'] as const
 
-    if (editandoId) {
-      await supabase.from('insumos').update({
-        proveedor_id: form.proveedor_id,
-        categoria: form.categoria,
-        nombre: form.nombre,
-        formato_venta: form.formato_venta,
-        precio_unitario: form.precio_unitario,
-      }).eq('id', editandoId)
-    } else {
-      await supabase.from('insumos').insert({
-        proveedor_id: form.proveedor_id,
-        categoria: form.categoria,
-        nombre: form.nombre,
-        formato_venta: form.formato_venta,
-        precio_unitario: form.precio_unitario,
-      })
-    }
-
-    setForm({ ...FORM_INICIAL, proveedor_id: proveedores[0]?.id ?? '' })
-    setEditandoId(null)
-    setGuardando(false)
-    await fetchData()
-  }
-
-  async function eliminar(id: string) {
-    await supabase.from('insumos').delete().eq('id', id)
-    setInsumos((prev) => prev.filter((i) => i.id !== id))
-  }
-
-  function editar(insumo: Insumo) {
-    setEditandoId(insumo.id)
-    setForm({
-      proveedor_id: insumo.proveedor_id,
-      categoria: insumo.categoria,
-      nombre: insumo.nombre,
-      formato_venta: insumo.formato_venta,
-      precio_unitario: insumo.precio_unitario,
-    })
-  }
-
-  const insumosFiltrados =
-    filtroProveedor === 'todos' ? insumos : insumos.filter((i) => i.proveedor_id === filtroProveedor)
-
-  const insumosPorCategoria = insumosFiltrados.reduce<Record<string, Insumo[]>>((acc, i) => {
-    if (!acc[i.categoria]) acc[i.categoria] = []
-    acc[i.categoria].push(i)
-    return acc
-  }, {})
+  if (loading) return (
+    <div className="space-y-3">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="h-10 rounded-xl animate-pulse" style={{ background: 'rgba(255,255,255,0.4)' }} />
+      ))}
+    </div>
+  )
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {/* Tabla de insumos */}
-      <div className="lg:col-span-2 space-y-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-lg font-bold" style={{ color: 'var(--verde-dark)' }}>Maestro de Precios</h1>
-          <select
-            value={filtroProveedor}
-            onChange={(e) => setFiltroProveedor(e.target.value)}
-            className="text-sm rounded-lg px-3 py-1.5 focus:outline-none"
-            style={{ border: '1px solid rgba(58,125,68,0.25)', background: 'rgba(255,255,255,0.7)' }}
-          >
-            <option value="todos">Todos los proveedores</option>
-            {proveedores.map((p) => (
-              <option key={p.id} value={p.id}>{p.nombre}</option>
-            ))}
-          </select>
-        </div>
-
-        {loading ? (
-          <div className="space-y-2">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="h-12 bg-gray-100 rounded-xl animate-pulse" />
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {Object.entries(insumosPorCategoria).map(([categoria, items]) => (
-              <div key={categoria}>
-                <h2 className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--cafe)' }}>{categoria}</h2>
-                <div className="rounded-2xl overflow-hidden glass">
-                  <table className="w-full text-sm">
-                    <thead style={{ background: 'rgba(58,125,68,0.06)', borderBottom: '1px solid rgba(58,125,68,0.12)' }}>
-                      <tr>
-                        <th className="text-left px-4 py-2 text-xs font-semibold" style={{ color: 'var(--verde-dark)' }}>Nombre</th>
-                        <th className="text-left px-4 py-2 text-xs font-semibold hidden sm:table-cell" style={{ color: 'var(--verde-dark)' }}>Formato</th>
-                        <th className="text-left px-4 py-2 text-xs font-semibold hidden sm:table-cell" style={{ color: 'var(--verde-dark)' }}>Proveedor</th>
-                        <th className="text-right px-4 py-2 text-xs font-semibold" style={{ color: 'var(--verde-dark)' }}>Precio</th>
-                        <th className="px-4 py-2" />
-                      </tr>
-                    </thead>
-                    <tbody style={{ borderTop: 'none' }}>
-                      {items.map((insumo) => (
-                        <tr key={insumo.id} className="transition-colors" style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                          <td className="px-4 py-3 font-medium" style={{ color: '#1c1c1c' }}>{insumo.nombre}</td>
-                          <td className="px-4 py-3 hidden sm:table-cell" style={{ color: 'rgba(0,0,0,0.5)' }}>{insumo.formato_venta}</td>
-                          <td className="px-4 py-3 hidden sm:table-cell" style={{ color: 'rgba(0,0,0,0.5)' }}>{insumo.proveedores?.nombre}</td>
-                          <td className="px-4 py-3 text-right font-semibold" style={{ color: 'var(--verde-dark)' }}>{formatCLP(insumo.precio_unitario)}</td>
-                          <td className="px-4 py-3">
-                            <div className="flex gap-1 justify-end">
-                              <button
-                                onClick={() => editar(insumo)}
-                                className="text-xs px-2 py-1 rounded-lg transition-colors"
-                                style={{ color: 'var(--cafe)', background: 'var(--cafe-muted)' }}
-                              >
-                                Editar
-                              </button>
-                              <button
-                                onClick={() => eliminar(insumo.id)}
-                                className="text-xs px-2 py-1 rounded-lg transition-colors"
-                                style={{ color: '#dc2626', background: '#fee2e2' }}
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Formulario */}
+    <div className="space-y-4">
       <div>
-        <div className="rounded-2xl p-5 space-y-4 sticky top-20 glass-strong">
-          <h2 className="text-sm font-bold" style={{ color: 'var(--cafe-dark)' }}>
-            {editandoId ? 'Editar insumo' : 'Nuevo insumo'}
-          </h2>
-
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs font-medium block mb-1" style={{ color: 'var(--cafe)' }}>Proveedor</label>
-              <select
-                value={form.proveedor_id}
-                onChange={(e) => setForm((f) => ({ ...f, proveedor_id: e.target.value }))}
-                className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none" style={{ border: '1px solid rgba(58,125,68,0.25)', background: 'rgba(255,255,255,0.7)' }}
-              >
-                {proveedores.map((p) => (
-                  <option key={p.id} value={p.id}>{p.nombre}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-xs font-medium block mb-1" style={{ color: 'var(--cafe)' }}>Categoría</label>
-              <select
-                value={form.categoria}
-                onChange={(e) => setForm((f) => ({ ...f, categoria: e.target.value as Categoria }))}
-                className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none" style={{ border: '1px solid rgba(58,125,68,0.25)', background: 'rgba(255,255,255,0.7)' }}
-              >
-                {CATEGORIAS.map((c) => <option key={c}>{c}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-xs font-medium block mb-1" style={{ color: 'var(--cafe)' }}>Nombre</label>
-              <input
-                value={form.nombre}
-                onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
-                placeholder="Ej: Malla Ursus 80 cm"
-                className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none" style={{ border: '1px solid rgba(58,125,68,0.25)', background: 'rgba(255,255,255,0.7)' }}
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-medium block mb-1" style={{ color: 'var(--cafe)' }}>Formato de venta</label>
-              <input
-                value={form.formato_venta}
-                onChange={(e) => setForm((f) => ({ ...f, formato_venta: e.target.value }))}
-                placeholder="Ej: Rollo 100m, Metro, Unidad"
-                className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none" style={{ border: '1px solid rgba(58,125,68,0.25)', background: 'rgba(255,255,255,0.7)' }}
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-medium block mb-1" style={{ color: 'var(--cafe)' }}>Precio unitario (CLP)</label>
-              <input
-                type="number"
-                min={0}
-                value={form.precio_unitario || ''}
-                onChange={(e) => setForm((f) => ({ ...f, precio_unitario: parseFloat(e.target.value) || 0 }))}
-                placeholder="0"
-                className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none" style={{ border: '1px solid rgba(58,125,68,0.25)', background: 'rgba(255,255,255,0.7)' }}
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            {editandoId && (
-              <button
-                onClick={() => { setEditandoId(null); setForm({ ...FORM_INICIAL, proveedor_id: proveedores[0]?.id ?? '' }) }}
-                className="flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors" style={{ border: '1px solid rgba(0,0,0,0.15)', color: 'rgba(0,0,0,0.6)' }}
-              >
-                Cancelar
-              </button>
-            )}
-            <button
-              onClick={guardar}
-              disabled={guardando || !form.nombre}
-              className="flex-1 rounded-lg px-3 py-2 text-sm text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-all" style={{ background: 'var(--verde)' }}
-            >
-              {guardando ? 'Guardando...' : editandoId ? 'Actualizar' : 'Agregar'}
-            </button>
-          </div>
-        </div>
+        <h1 className="text-lg font-bold" style={{ color: 'var(--verde-dark)' }}>maestro de precios</h1>
+        <p className="text-xs mt-0.5" style={{ color: 'rgba(0,0,0,0.4)' }}>
+          Edición inline. Celda vacía = no cotizado (nunca $0).
+        </p>
       </div>
+
+      <div className="rounded-2xl overflow-x-auto glass" style={{ maxHeight: '75vh' }}>
+        <table className="w-full text-sm border-collapse">
+          <thead style={{ position: 'sticky', top: 0, zIndex: 20 }}>
+            <tr style={{ background: 'rgba(45,95,53,0.92)', backdropFilter: 'blur(8px)' }}>
+              {/* Sticky first column header */}
+              <th
+                className="text-left px-4 py-3 text-xs font-semibold text-white whitespace-nowrap"
+                style={{ position: 'sticky', left: 0, zIndex: 30, background: 'var(--verde-dark)', minWidth: '220px' }}
+              >
+                insumo
+              </th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-white whitespace-nowrap" style={{ minWidth: '100px' }}>
+                formato
+              </th>
+              {proveedores.map(p => (
+                <th key={p.id} className="text-right px-4 py-3 text-xs font-semibold text-white whitespace-nowrap" style={{ minWidth: '140px' }}>
+                  {p.nombre}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {segmentos.map(seg => {
+              const items = insumos.filter(i => i.segmento === seg)
+              if (!items.length) return null
+              return [
+                // Group header row
+                <tr key={`seg_${seg}`}>
+                  <td
+                    colSpan={2 + proveedores.length}
+                    className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wide"
+                    style={{
+                      background: seg === 'Invernadero' ? 'var(--verde-muted)' : seg === 'Cierre Perimetral' ? 'var(--cafe-muted)' : 'rgba(0,0,0,0.04)',
+                      color: seg === 'Invernadero' ? 'var(--verde-dark)' : seg === 'Cierre Perimetral' ? 'var(--cafe-dark)' : 'rgba(0,0,0,0.5)',
+                    }}
+                  >
+                    {seg}
+                  </td>
+                </tr>,
+                // Data rows
+                ...items.map(insumo => (
+                  <PrecioRow
+                    key={insumo.id}
+                    insumo={insumo}
+                    proveedores={proveedores}
+                    precios={precios}
+                    saving={saving}
+                    onBlur={handleBlur}
+                  />
+                )),
+              ]
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="text-xs" style={{ color: 'rgba(0,0,0,0.35)' }}>
+        {insumos.length} insumos · {proveedores.length} proveedores · Los precios se guardan al salir de cada celda.
+      </p>
+    </div>
+  )
+}
+
+function PrecioRow({ insumo, proveedores, precios, saving, onBlur }: {
+  insumo: CatalogoInsumo
+  proveedores: Proveedor[]
+  precios: PrecioMap
+  saving: Set<string>
+  onBlur: (provId: string, insumoId: string, value: string) => void
+}) {
+  return (
+    <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+      <td
+        className="px-4 py-2.5 font-medium whitespace-nowrap"
+        style={{
+          position: 'sticky', left: 0, zIndex: 10,
+          background: 'rgba(255,255,255,0.85)',
+          color: '#1c1c1c',
+          minWidth: '220px',
+          backdropFilter: 'blur(8px)',
+        }}
+      >
+        {insumo.nombre}
+      </td>
+      <td className="px-4 py-2.5 whitespace-nowrap text-xs" style={{ color: 'rgba(0,0,0,0.45)' }}>
+        {insumo.formato_venta}
+      </td>
+      {proveedores.map(prov => {
+        const key = `${prov.id}_${insumo.id}`
+        const precio = precios.get(key)
+        const isSaving = saving.has(key)
+        return (
+          <td key={prov.id} className="px-2 py-1.5 text-right">
+            <PrecioCell
+              initialValue={precio !== undefined ? precio : null}
+              isSaving={isSaving}
+              onBlur={(val) => onBlur(prov.id, insumo.id, val)}
+            />
+          </td>
+        )
+      })}
+    </tr>
+  )
+}
+
+function PrecioCell({ initialValue, isSaving, onBlur }: {
+  initialValue: number | null
+  isSaving: boolean
+  onBlur: (val: string) => void
+}) {
+  const [localVal, setLocalVal] = useState(initialValue !== null ? String(initialValue) : '')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // Sync if parent updates (e.g., after save)
+  useEffect(() => {
+    setLocalVal(initialValue !== null ? String(initialValue) : '')
+  }, [initialValue])
+
+  return (
+    <div className="relative flex items-center justify-end">
+      {localVal && !isSaving && (
+        <span className="absolute left-2 text-xs pointer-events-none" style={{ color: 'rgba(0,0,0,0.35)' }}>$</span>
+      )}
+      <input
+        ref={inputRef}
+        type="number"
+        min="0"
+        step="100"
+        value={localVal}
+        placeholder="—"
+        onChange={e => setLocalVal(e.target.value)}
+        onBlur={e => onBlur(e.target.value)}
+        disabled={isSaving}
+        className="w-32 text-right text-sm rounded-lg px-2 py-1 transition-all"
+        style={{
+          background: localVal ? 'rgba(58,125,68,0.07)' : 'rgba(0,0,0,0.03)',
+          border: localVal ? '1px solid rgba(58,125,68,0.25)' : '1px solid transparent',
+          color: localVal ? 'var(--verde-dark)' : 'rgba(0,0,0,0.25)',
+          fontWeight: localVal ? '600' : '400',
+          opacity: isSaving ? 0.5 : 1,
+        }}
+      />
+      {isSaving && (
+        <span className="absolute right-2 text-xs" style={{ color: 'var(--verde)' }}>...</span>
+      )}
     </div>
   )
 }

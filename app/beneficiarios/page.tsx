@@ -4,137 +4,123 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import type { Beneficiario, Asignacion, Insumo, ResumenPresupuesto } from '@/lib/types'
-import { calcularResumenPresupuesto, calcularMaxPolines, formatCLP, METROS_POLIETILENO_MINIMO } from '@/lib/business-logic'
-import BeneficiarioCard from '@/components/BeneficiarioCard'
-import PresupuestoPanel from '@/components/PresupuestoPanel'
+import type { Beneficiario, CatalogoInsumo, Asignacion, Proveedor } from '@/lib/types'
+import { buildPrecioMap, calcularCostoCarrito, formatCLP, PRESUPUESTO_BASE } from '@/lib/business-logic'
+
+type Filtro = 'todos' | 'Invernadero' | 'Cierre Perimetral'
 
 export default function BeneficiariosPage() {
   const [beneficiarios, setBeneficiarios] = useState<Beneficiario[]>([])
-  const [insumos, setInsumos] = useState<Insumo[]>([])
-  const [asignacionesPorBeneficiario, setAsignacionesPorBeneficiario] = useState<Record<string, Asignacion[]>>({})
+  const [insumos, setInsumos] = useState<CatalogoInsumo[]>([])
+  const [proveedores, setProveedores] = useState<Proveedor[]>([])
+  const [asignaciones, setAsignaciones] = useState<Record<string, Asignacion[]>>({})
+  const [precioMap, setPrecioMap] = useState(new Map<string, number | null>())
   const [seleccionado, setSeleccionado] = useState<string | null>(null)
-  const [resumen, setResumen] = useState<ResumenPresupuesto | null>(null)
-  const [cantidad, setCantidad] = useState<number>(1)
-  const [insumoSeleccionado, setInsumoSeleccionado] = useState<string>('')
+  const [proveedorId, setProveedorId] = useState<string>('')
+  const [filtro, setFiltro] = useState<Filtro>('todos')
+  const [insumoForm, setInsumoForm] = useState('')
+  const [cantidadForm, setCantidadForm] = useState(1)
+  const [esBase, setEsBase] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [filtroProyecto, setFiltroProyecto] = useState<'Todos' | 'Invernadero' | 'Cierre Perimetral'>('Todos')
 
   useEffect(() => {
-    async function fetchData() {
-      const [{ data: bens }, { data: ins }, { data: asigs }] = await Promise.all([
-        supabase.from('beneficiarios').select('*').order('nombre'),
-        supabase.from('insumos').select('*, proveedores(nombre)').order('categoria'),
-        supabase.from('asignaciones').select('*, insumos(*, proveedores(nombre))'),
+    async function load() {
+      const [{ data: bens }, { data: ins }, { data: provs }, { data: asigs }, { data: precs }] = await Promise.all([
+        supabase.from('beneficiarios').select('*').order('segmento').order('nombre'),
+        supabase.from('catalogo_insumos').select('*').order('segmento').order('nombre'),
+        supabase.from('proveedores').select('*').eq('es_activo', true).order('nombre'),
+        supabase.from('asignaciones').select('*, catalogo_insumos(*)'),
+        supabase.from('precios_proveedor').select('*'),
       ])
-
       if (bens) setBeneficiarios(bens as Beneficiario[])
-      if (ins) setInsumos(ins as Insumo[])
+      if (ins) setInsumos(ins as CatalogoInsumo[])
+      if (provs) {
+        setProveedores(provs as Proveedor[])
+        if (provs.length > 0) setProveedorId(provs[0].id)
+      }
       if (asigs) {
         const map: Record<string, Asignacion[]> = {}
         for (const a of asigs as Asignacion[]) {
           if (!map[a.beneficiario_id]) map[a.beneficiario_id] = []
           map[a.beneficiario_id].push(a)
         }
-        setAsignacionesPorBeneficiario(map)
+        setAsignaciones(map)
       }
+      if (precs) setPrecioMap(buildPrecioMap(precs))
       setLoading(false)
     }
-    fetchData()
+    load()
   }, [])
 
-  const seleccionarBeneficiario = useCallback((ben: Beneficiario) => {
-    setSeleccionado(ben.id)
-    const asigs = asignacionesPorBeneficiario[ben.id] ?? []
-    setResumen(calcularResumenPresupuesto(ben, asigs))
-    setInsumoSeleccionado('')
-    setCantidad(1)
-  }, [asignacionesPorBeneficiario])
+  const benSeleccionado = beneficiarios.find(b => b.id === seleccionado)
+  const asigsBen = seleccionado ? (asignaciones[seleccionado] ?? []) : []
 
-  async function agregarAsignacion() {
-    if (!seleccionado || !insumoSeleccionado) return
-    const insumo = insumos.find((i) => i.id === insumoSeleccionado)
-    if (!insumo) return
+  // Insumos compatibles con el segmento del beneficiario seleccionado
+  const insumosCompatibles = benSeleccionado
+    ? insumos.filter(i => i.segmento === benSeleccionado.segmento || i.segmento === 'Ambos')
+    : []
 
+  const carritoCalc = proveedorId
+    ? calcularCostoCarrito(asigsBen, proveedorId, precioMap)
+    : { total: 0, itemsConPrecio: 0, itemsSinPrecio: 0 }
+  const { total, itemsSinPrecio } = carritoCalc
+
+  const aporteBolsillo = Math.max(0, total - PRESUPUESTO_BASE)
+  const porcentaje = Math.min(100, (total / PRESUPUESTO_BASE) * 100)
+
+  const bensFiltrados = filtro === 'todos' ? beneficiarios : beneficiarios.filter(b => b.segmento === filtro)
+
+  async function agregar() {
+    if (!seleccionado || !insumoForm) return
     const { data } = await supabase
       .from('asignaciones')
-      .insert({
-        beneficiario_id: seleccionado,
-        insumo_id: insumoSeleccionado,
-        cantidad,
-        precio_unitario_snapshot: insumo.precio_unitario,
-      })
-      .select('*, insumos(*, proveedores(nombre))')
+      .insert({ beneficiario_id: seleccionado, insumo_id: insumoForm, cantidad: cantidadForm, es_requerimiento_base: esBase })
+      .select('*, catalogo_insumos(*)')
       .single()
-
     if (data) {
-      const nuevas = [...(asignacionesPorBeneficiario[seleccionado] ?? []), data as Asignacion]
-      setAsignacionesPorBeneficiario((prev) => ({ ...prev, [seleccionado]: nuevas }))
-      const ben = beneficiarios.find((b) => b.id === seleccionado)!
-      setResumen(calcularResumenPresupuesto(ben, nuevas))
-      setInsumoSeleccionado('')
-      setCantidad(1)
+      setAsignaciones(prev => ({
+        ...prev,
+        [seleccionado]: [...(prev[seleccionado] ?? []), data as Asignacion],
+      }))
+      setInsumoForm('')
+      setCantidadForm(1)
+      setEsBase(false)
     }
   }
 
-  async function eliminarAsignacion(asignacionId: string) {
+  async function eliminar(asignacionId: string) {
     await supabase.from('asignaciones').delete().eq('id', asignacionId)
-    const nuevas = (asignacionesPorBeneficiario[seleccionado!] ?? []).filter((a) => a.id !== asignacionId)
-    setAsignacionesPorBeneficiario((prev) => ({ ...prev, [seleccionado!]: nuevas }))
-    const ben = beneficiarios.find((b) => b.id === seleccionado)!
-    setResumen(calcularResumenPresupuesto(ben, nuevas))
+    setAsignaciones(prev => ({
+      ...prev,
+      [seleccionado!]: (prev[seleccionado!] ?? []).filter(a => a.id !== asignacionId),
+    }))
   }
 
-  const beneficiariosFiltrados = filtroProyecto === 'Todos'
-    ? beneficiarios
-    : beneficiarios.filter((b) => b.proyecto === filtroProyecto)
-
-  const benSeleccionado = beneficiarios.find((b) => b.id === seleccionado)
-  const insumosFiltrados = benSeleccionado
-    ? insumos.filter((i) =>
-        benSeleccionado.proyecto === 'Invernadero'
-          ? i.categoria !== 'Malla'
-          : true
-      )
-    : insumos
-
-  // Sugerencia automática para Invernadero
-  let sugerencia: string | null = null
-  if (benSeleccionado?.proyecto === 'Invernadero' && resumen) {
-    const poly = insumos.find((i) => i.categoria === 'Polietileno')
-    const polin = insumos.find((i) => i.categoria === 'Polines')
-    if (poly && polin) {
-      const { cantidadMaxPolines } = calcularMaxPolines(
-        resumen.saldo_disponible + resumen.total_gastado,
-        poly.precio_unitario,
-        polin.precio_unitario
-      )
-      sugerencia = `Mínimo: ${METROS_POLIETILENO_MINIMO}m de polietileno. Con el saldo restante puedes comprar hasta ${cantidadMaxPolines} polines.`
-    }
-  }
+  if (loading) return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {Array.from({ length: 8 }).map((_, i) => (
+        <div key={i} className="h-20 rounded-2xl animate-pulse" style={{ background: 'rgba(255,255,255,0.4)' }} />
+      ))}
+    </div>
+  )
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {/* Lista de beneficiarios */}
+      {/* Lista */}
       <div className="lg:col-span-2 space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           <h1 className="text-lg font-bold" style={{ color: 'var(--verde-dark)' }}>
-            Beneficiarios <span className="font-normal text-sm" style={{ color: 'rgba(0,0,0,0.35)' }}>({beneficiarios.length})</span>
+            beneficiarios <span className="font-normal text-sm" style={{ color: 'rgba(0,0,0,0.35)' }}>({beneficiarios.length})</span>
           </h1>
           <div className="flex gap-1">
-            {(['Todos', 'Invernadero', 'Cierre Perimetral'] as const).map((f) => (
+            {(['todos', 'Invernadero', 'Cierre Perimetral'] as const).map(f => (
               <button
                 key={f}
-                onClick={() => setFiltroProyecto(f)}
+                onClick={() => setFiltro(f)}
                 className="text-xs px-3 py-1 rounded-full border transition-all"
-                style={filtroProyecto === f ? {
-                  background: 'var(--verde)',
-                  color: '#fff',
-                  borderColor: 'var(--verde)',
-                } : {
-                  color: 'var(--cafe)',
-                  borderColor: 'rgba(127,79,36,0.3)',
-                }}
+                style={filtro === f
+                  ? { background: 'var(--verde)', color: '#fff', borderColor: 'var(--verde)' }
+                  : { color: 'var(--cafe)', borderColor: 'rgba(127,79,36,0.3)' }}
               >
                 {f}
               </button>
@@ -142,99 +128,228 @@ export default function BeneficiariosPage() {
           </div>
         </div>
 
-        {loading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="h-24 rounded-xl bg-gray-100 animate-pulse" />
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {beneficiariosFiltrados.map((ben) => {
-              const asigs = asignacionesPorBeneficiario[ben.id] ?? []
-              const total = asigs.reduce((s, a) => s + a.costo_total, 0)
-              const aporte = Math.max(0, total - ben.presupuesto_base)
-              return (
-                <BeneficiarioCard
-                  key={ben.id}
-                  beneficiario={ben}
-                  totalGastado={total}
-                  aporteBolsillo={aporte}
-                  isSelected={seleccionado === ben.id}
-                  onClick={() => seleccionarBeneficiario(ben)}
-                />
-              )
-            })}
-          </div>
-        )}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {bensFiltrados.map(ben => {
+            const asigs = asignaciones[ben.id] ?? []
+            const { total: costoTotal } = proveedorId ? calcularCostoCarrito(asigs, proveedorId, precioMap) : { total: 0 }
+            const tieneAporte = proveedorId && costoTotal > PRESUPUESTO_BASE
+            const pct = Math.min(100, (costoTotal / PRESUPUESTO_BASE) * 100)
+            const isSelected = seleccionado === ben.id
+
+            return (
+              <button
+                key={ben.id}
+                onClick={() => setSeleccionado(isSelected ? null : ben.id)}
+                className="text-left rounded-2xl p-3 transition-all"
+                style={isSelected ? {
+                  background: 'rgba(58,125,68,0.12)',
+                  border: '1.5px solid var(--verde)',
+                  boxShadow: '0 4px 16px rgba(58,125,68,0.15)',
+                  backdropFilter: 'blur(14px)',
+                } : {
+                  background: 'rgba(255,255,255,0.65)',
+                  border: '1px solid rgba(255,255,255,0.55)',
+                  backdropFilter: 'blur(14px)',
+                }}
+              >
+                <p className="font-semibold text-sm truncate" style={{ color: '#1c1c1c' }}>{ben.nombre}</p>
+                <span className="text-xs mt-0.5 inline-block" style={{
+                  color: ben.segmento === 'Invernadero' ? 'var(--verde-dark)' : 'var(--cafe-dark)'
+                }}>
+                  {ben.segmento === 'Invernadero' ? 'Invernadero' : 'Cierre'}
+                </span>
+                {proveedorId && (
+                  <>
+                    <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(0,0,0,0.08)' }}>
+                      <div className="h-full rounded-full" style={{
+                        width: `${pct}%`,
+                        background: tieneAporte ? '#dc2626' : 'var(--verde)',
+                      }} />
+                    </div>
+                    {tieneAporte && (
+                      <p className="text-xs mt-1 font-semibold" style={{ color: '#dc2626' }}>
+                        +{formatCLP(costoTotal - PRESUPUESTO_BASE)}
+                      </p>
+                    )}
+                    <p className="text-xs mt-0.5" style={{ color: 'rgba(0,0,0,0.35)' }}>
+                      {asigs.length} ítem{asigs.length !== 1 ? 's' : ''}
+                    </p>
+                  </>
+                )}
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {/* Panel lateral */}
-      <div className="space-y-4">
-        <PresupuestoPanel resumen={resumen} />
+      <div className="space-y-3">
+        {/* Selector de proveedor para costos */}
+        <div className="rounded-2xl p-4 glass">
+          <label className="text-xs font-semibold block mb-1.5" style={{ color: 'var(--cafe)' }}>
+            ver precios de
+          </label>
+          <select
+            value={proveedorId}
+            onChange={e => setProveedorId(e.target.value)}
+            className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
+            style={{ border: '1px solid rgba(58,125,68,0.25)', background: 'rgba(255,255,255,0.7)' }}
+          >
+            <option value="">— sin precios —</option>
+            {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+          </select>
+        </div>
 
-        {seleccionado && (
-          <div className="rounded-2xl p-4 space-y-3 glass">
-            <h3 className="text-sm font-semibold" style={{ color: 'var(--cafe-dark)' } as React.CSSProperties}>Agregar insumo</h3>
-
-            {sugerencia && (
-              <p className="text-xs rounded-lg p-2" style={{ background: 'var(--cafe-muted)', color: 'var(--cafe-dark)', border: '1px solid rgba(127,79,36,0.2)' }}>
-                {sugerencia}
-              </p>
-            )}
-
-            <select
-              value={insumoSeleccionado}
-              onChange={(e) => setInsumoSeleccionado(e.target.value)}
-              className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2" style={{ border: '1px solid rgba(58,125,68,0.25)', background: 'rgba(255,255,255,0.7)', focusRingColor: 'var(--verde)' } as React.CSSProperties}
-            >
-              <option value="">Seleccionar insumo...</option>
-              {insumosFiltrados.map((i) => (
-                <option key={i.id} value={i.id}>
-                  {i.nombre} — {formatCLP(i.precio_unitario)} / {i.formato_venta}
-                </option>
-              ))}
-            </select>
-
-            <div className="flex gap-2">
-              <input
-                type="number"
-                min={1}
-                value={cantidad}
-                onChange={(e) => setCantidad(Math.max(1, parseInt(e.target.value) || 1))}
-                className="w-24 rounded-lg px-3 py-2 text-sm focus:outline-none" style={{ border: '1px solid rgba(58,125,68,0.25)', background: 'rgba(255,255,255,0.7)' }}
-              />
-              <button
-                onClick={agregarAsignacion}
-                disabled={!insumoSeleccionado}
-                className="flex-1 rounded-lg px-3 py-2 text-sm text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-all" style={{ background: 'var(--verde)' }}
-              >
-                Agregar
-              </button>
+        {benSeleccionado ? (
+          <div className="rounded-2xl p-4 glass space-y-4">
+            <div>
+              <p className="font-bold text-gray-900">{benSeleccionado.nombre}</p>
+              <span className="text-xs px-2 py-0.5 rounded-full inline-block mt-0.5 font-medium" style={
+                benSeleccionado.segmento === 'Invernadero'
+                  ? { background: 'var(--verde-muted)', color: 'var(--verde-dark)' }
+                  : { background: 'var(--cafe-muted)', color: 'var(--cafe-dark)' }
+              }>
+                {benSeleccionado.segmento}
+              </span>
             </div>
 
-            {/* Lista de asignaciones con opción de eliminar */}
-            {(asignacionesPorBeneficiario[seleccionado] ?? []).length > 0 && (
+            {/* Barra de presupuesto */}
+            {proveedorId && (
               <div>
-                <p className="text-xs uppercase tracking-wide mb-2" style={{ color: 'rgba(0,0,0,0.35)' }}>Eliminar del carrito</p>
-                <ul className="space-y-1">
-                  {(asignacionesPorBeneficiario[seleccionado] ?? []).map((a) => (
-                    <li key={a.id} className="flex items-center justify-between text-xs text-gray-600 group">
-                      <span>{a.insumos?.nombre} × {a.cantidad}</span>
-                      <button
-                        onClick={() => eliminarAsignacion(a.id)}
-                        className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity ml-2"
-                      >
-                        ✕
-                      </button>
-                    </li>
-                  ))}
+                <div className="flex justify-between text-xs mb-1" style={{ color: 'rgba(0,0,0,0.45)' }}>
+                  <span>presupuesto usado</span>
+                  <span>{porcentaje.toFixed(1)}%</span>
+                </div>
+                <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(0,0,0,0.07)' }}>
+                  <div className="h-full rounded-full transition-all" style={{
+                    width: `${porcentaje}%`,
+                    background: aporteBolsillo > 0 ? '#dc2626' : 'var(--verde)',
+                  }} />
+                </div>
+                <div className="flex justify-between text-xs mt-1">
+                  <span style={{ color: 'rgba(0,0,0,0.4)' }}>{formatCLP(total)}</span>
+                  <span style={{ color: 'rgba(0,0,0,0.4)' }}>{formatCLP(PRESUPUESTO_BASE)}</span>
+                </div>
+                {itemsSinPrecio > 0 && (
+                  <p className="text-xs mt-1" style={{ color: 'var(--cafe)' }}>
+                    {itemsSinPrecio} ítem{itemsSinPrecio > 1 ? 's' : ''} sin precio cotizado
+                  </p>
+                )}
+                {aporteBolsillo > 0 && (
+                  <div className="rounded-xl p-3 mt-2" style={{ background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.2)' }}>
+                    <p className="text-xs font-bold uppercase tracking-wide" style={{ color: '#dc2626' }}>
+                      Aporte de Bolsillo Requerido
+                    </p>
+                    <p className="text-xl font-bold" style={{ color: '#dc2626' }}>{formatCLP(aporteBolsillo)}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Carrito actual */}
+            {asigsBen.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'rgba(0,0,0,0.35)' }}>
+                  carrito
+                </p>
+                <ul className="space-y-1.5">
+                  {asigsBen.map(a => {
+                    const precio = proveedorId ? (precioMap.get(`${proveedorId}_${a.insumo_id}`) ?? null) : null
+                    const costo = precio !== null ? a.cantidad * precio : null
+                    return (
+                      <li key={a.id} className="flex items-center gap-2 text-xs group">
+                        <div className="flex-1 min-w-0">
+                          <span className="font-medium truncate block" style={{ color: '#1c1c1c' }}>
+                            {a.catalogo_insumos?.nombre ?? 'Insumo'} × {a.cantidad}
+                          </span>
+                          {costo !== null && (
+                            <span style={{ color: 'var(--verde-dark)' }}>{formatCLP(costo)}</span>
+                          )}
+                          {a.es_requerimiento_base && (
+                            <span className="ml-1 text-xs" style={{ color: 'var(--cafe)' }}>★ base</span>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => eliminar(a.id)}
+                          className="shrink-0 p-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                          style={{ color: '#dc2626', background: '#fee2e2' }}
+                          title="Quitar del carrito"
+                        >
+                          <TrashIcon />
+                        </button>
+                      </li>
+                    )
+                  })}
                 </ul>
               </div>
             )}
+
+            {/* Agregar insumo */}
+            <div className="space-y-2 pt-2" style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+              <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'rgba(0,0,0,0.35)' }}>
+                agregar insumo
+              </p>
+              <select
+                value={insumoForm}
+                onChange={e => setInsumoForm(e.target.value)}
+                className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
+                style={{ border: '1px solid rgba(58,125,68,0.25)', background: 'rgba(255,255,255,0.7)' }}
+              >
+                <option value="">seleccionar...</option>
+                {insumosCompatibles.map(i => (
+                  <option key={i.id} value={i.id}>
+                    {i.nombre} ({i.formato_venta})
+                  </option>
+                ))}
+              </select>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  value={cantidadForm}
+                  onChange={e => setCantidadForm(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-20 rounded-lg px-3 py-2 text-sm focus:outline-none"
+                  style={{ border: '1px solid rgba(58,125,68,0.25)', background: 'rgba(255,255,255,0.7)' }}
+                />
+                <label className="flex items-center gap-1 text-xs cursor-pointer" style={{ color: 'var(--cafe)' }}>
+                  <input
+                    type="checkbox"
+                    checked={esBase}
+                    onChange={e => setEsBase(e.target.checked)}
+                    className="accent-green-700"
+                  />
+                  req. base
+                </label>
+                <button
+                  onClick={agregar}
+                  disabled={!insumoForm}
+                  className="flex-1 rounded-lg text-sm text-white font-semibold py-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{ background: 'var(--verde)' }}
+                >
+                  agregar
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-2xl p-6 glass text-center">
+            <p className="text-sm" style={{ color: 'rgba(0,0,0,0.35)' }}>
+              Selecciona un beneficiario para ver su carrito.
+            </p>
           </div>
         )}
       </div>
     </div>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14H6L5 6" />
+      <path d="M10 11v6M14 11v6" />
+      <path d="M9 6V4h6v2" />
+    </svg>
   )
 }
