@@ -170,26 +170,25 @@ export default function VistaResumenPage() {
         </div>
         <div className="flex items-center gap-3">
           {/* Toggle polines */}
-          <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid rgba(58,125,68,0.25)' }}>
-            <button
-              onClick={() => setCombinarPolines(false)}
-              className="px-3 py-1.5 text-xs font-semibold transition-all"
-              style={!combinarPolines
-                ? { background: 'var(--verde)', color: '#fff' }
-                : { background: 'transparent', color: 'var(--verde-dark)' }}
+          <button
+            onClick={() => setCombinarPolines(v => !v)}
+            className="flex items-center gap-2 text-xs font-semibold"
+            style={{ color: 'var(--verde-dark)' }}
+          >
+            <span>Combinar polines</span>
+            <span
+              className="relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200"
+              style={{ background: combinarPolines ? 'var(--verde)' : 'rgba(0,0,0,0.18)' }}
             >
-              Polines separados
-            </button>
-            <button
-              onClick={() => setCombinarPolines(true)}
-              className="px-3 py-1.5 text-xs font-semibold transition-all"
-              style={combinarPolines
-                ? { background: 'var(--verde)', color: '#fff' }
-                : { background: 'transparent', color: 'var(--verde-dark)' }}
-            >
-              Combinar polines
-            </button>
-          </div>
+              <span
+                className="inline-block h-4 w-4 rounded-full bg-white shadow transition-transform duration-200"
+                style={{
+                  margin: '2px',
+                  transform: combinarPolines ? 'translateX(16px)' : 'translateX(0)',
+                }}
+              />
+            </span>
+          </button>
           {proveedor && (
             <span className="text-xs font-semibold px-3 py-1.5 rounded-full" style={{
               background: 'var(--verde-muted)',
