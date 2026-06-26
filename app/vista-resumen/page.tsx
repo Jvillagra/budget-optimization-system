@@ -4,8 +4,8 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import type { Beneficiario, CatalogoInsumo, AyudaMemoria, Proveedor, PrecioProveedor } from '@/lib/types'
-import { buildPrecioMap, simularBeneficiario, formatCLP } from '@/lib/business-logic'
+import type { Beneficiario, CatalogoInsumo, Asignacion, Proveedor, PrecioProveedor } from '@/lib/types'
+import { buildPrecioMap, formatCLP } from '@/lib/business-logic'
 import { useProveedor } from '@/lib/proveedor-context'
 
 interface FilaConsolidado {
@@ -20,7 +20,7 @@ interface BaseData {
   beneficiarios: Beneficiario[]
   insumos: CatalogoInsumo[]
   proveedores: Proveedor[]
-  ayudaMap: Record<string, AyudaMemoria[]>
+  asignaciones: Asignacion[]
   precios: PrecioProveedor[]
 }
 
@@ -28,97 +28,79 @@ export default function VistaResumenPage() {
   const { proveedorId, isLoaded } = useProveedor()
   const [baseData, setBaseData] = useState<BaseData | null>(null)
   const [filas, setFilas] = useState<FilaConsolidado[]>([])
-  const [errores, setErrores] = useState<{ nombre: string; motivo: string }[]>([])
+  const [sinCarrito, setSinCarrito] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [copiado, setCopiado] = useState(false)
 
   // Fetch base data once
   useEffect(() => {
     async function load() {
-      const [{ data: bens }, { data: ins }, { data: provs }, { data: ams }, { data: precs }] = await Promise.all([
+      const [{ data: bens }, { data: ins }, { data: provs }, { data: asigs }, { data: precs }] = await Promise.all([
         supabase.from('beneficiarios').select('*').eq('segmento', 'Cierre Perimetral').order('nombre'),
         supabase.from('catalogo_insumos').select('*'),
         supabase.from('proveedores').select('*').eq('es_activo', true).order('nombre'),
-        supabase.from('ayuda_memoria').select('*, catalogo_insumos(*)'),
+        supabase.from('asignaciones').select('*, catalogo_insumos(*)'),
         supabase.from('precios_proveedor').select('*'),
       ])
-
-      const ayudaMap: Record<string, AyudaMemoria[]> = {}
-      for (const am of (ams as AyudaMemoria[]) ?? []) {
-        if (!ayudaMap[am.beneficiario_id]) ayudaMap[am.beneficiario_id] = []
-        ayudaMap[am.beneficiario_id].push(am)
-      }
 
       setBaseData({
         beneficiarios: (bens as Beneficiario[]) ?? [],
         insumos: (ins as CatalogoInsumo[]) ?? [],
         proveedores: (provs as Proveedor[]) ?? [],
-        ayudaMap,
+        asignaciones: (asigs as Asignacion[]) ?? [],
         precios: (precs as PrecioProveedor[]) ?? [],
       })
     }
     load()
   }, [])
 
-  // Recompute aggregation when proveedor or base data changes
+  // Recompute when proveedor or base data changes
   useEffect(() => {
     if (!baseData || !isLoaded) return
     setLoading(false)
     if (!proveedorId) return
 
-    const { beneficiarios, insumos, ayudaMap, precios } = baseData
+    const { beneficiarios, asignaciones, precios } = baseData
     const precioMap = buildPrecioMap(precios)
-    const polinInsumo = insumos.find(i => i.nombre === 'Polines (3 a 4 cm)')
 
-    const mallaMap = new Map<string, { nombre: string; cantidad: number; insumo_id: string }>()
-    let totalPolines = 0
-    const nuevosErrores: { nombre: string; motivo: string }[] = []
+    // Filter asignaciones to CP socios only
+    const cpIds = new Set(beneficiarios.map(b => b.id))
+    const cpAsigs = asignaciones.filter(a => cpIds.has(a.beneficiario_id))
 
-    for (const ben of beneficiarios) {
-      const result = simularBeneficiario(ben, proveedorId, precioMap, insumos, ayudaMap[ben.id] ?? [])
-      if (result.error) {
-        nuevosErrores.push({ nombre: ben.nombre, motivo: result.error })
-      } else {
-        totalPolines += result.polines
-        if (result.insumo_base_id) {
-          const existing = mallaMap.get(result.insumo_base_id)
-          mallaMap.set(result.insumo_base_id, {
-            nombre: result.insumo_base_nombre!,
-            cantidad: (existing?.cantidad ?? 0) + result.insumo_base_cantidad,
-            insumo_id: result.insumo_base_id,
-          })
-        }
-      }
-    }
-
-    const nuevasFilas: FilaConsolidado[] = []
-    const mallasArr = Array.from(mallaMap.values()).sort((a, b) => a.nombre.localeCompare(b.nombre))
-    for (const m of mallasArr) {
-      const insumo = insumos.find(i => i.id === m.insumo_id)
-      nuevasFilas.push({
-        insumo_id: m.insumo_id,
-        nombre: m.nombre,
-        cantidad: m.cantidad,
-        precioUnitario: precioMap.get(`${proveedorId}_${m.insumo_id}`) ?? null,
-        formato_venta: insumo?.formato_venta ?? '—',
+    // Aggregate by insumo — exclude Invernadero-only items (polietileno)
+    const itemMap = new Map<string, FilaConsolidado>()
+    for (const a of cpAsigs) {
+      const insumo = a.catalogo_insumos
+      if (!insumo || insumo.segmento === 'Invernadero') continue
+      const existing = itemMap.get(a.insumo_id)
+      itemMap.set(a.insumo_id, {
+        insumo_id: a.insumo_id,
+        nombre: insumo.nombre,
+        cantidad: (existing?.cantidad ?? 0) + a.cantidad,
+        precioUnitario: precioMap.get(`${proveedorId}_${a.insumo_id}`) ?? null,
+        formato_venta: insumo.formato_venta,
       })
     }
-    if (totalPolines > 0 && polinInsumo) {
-      nuevasFilas.push({
-        insumo_id: polinInsumo.id,
-        nombre: polinInsumo.nombre,
-        cantidad: totalPolines,
-        precioUnitario: precioMap.get(`${proveedorId}_${polinInsumo.id}`) ?? null,
-        formato_venta: polinInsumo.formato_venta,
-      })
-    }
+
+    // Sort: mallas first (alphabetical), polines last
+    const nuevasFilas = Array.from(itemMap.values()).sort((a, b) => {
+      const aIsPolin = a.nombre.startsWith('Polines')
+      const bIsPolin = b.nombre.startsWith('Polines')
+      if (aIsPolin !== bIsPolin) return aIsPolin ? 1 : -1
+      return a.nombre.localeCompare(b.nombre)
+    })
+
+    // Socios without any cart items
+    const cpConItems = new Set(cpAsigs.map(a => a.beneficiario_id))
+    const sinItems = beneficiarios.filter(b => !cpConItems.has(b.id)).map(b => b.nombre)
 
     setFilas(nuevasFilas)
-    setErrores(nuevosErrores)
+    setSinCarrito(sinItems)
   }, [baseData, proveedorId, isLoaded])
 
   const proveedor = baseData?.proveedores.find(p => p.id === proveedorId)
-  const totalRollosMalla = filas.filter(f => !f.nombre.startsWith('Polines')).reduce((s, f) => s + f.cantidad, 0)
+  const mallasFilas = filas.filter(f => !f.nombre.startsWith('Polines'))
+  const totalRollosMalla = mallasFilas.reduce((s, f) => s + f.cantidad, 0)
   const totalPolines = filas.find(f => f.nombre.startsWith('Polines'))?.cantidad ?? 0
   const totalGasto = filas.reduce((s, f) => f.precioUnitario ? s + f.cantidad * f.precioUnitario : s, 0)
   const hayPrecios = filas.some(f => f.precioUnitario !== null)
@@ -185,7 +167,7 @@ export default function VistaResumenPage() {
         <>
           {/* KPI Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <KPICardMallas mallas={filas.filter(f => !f.nombre.startsWith('Polines'))} total={totalRollosMalla} />
+            <KPICardMallas mallas={mallasFilas} total={totalRollosMalla} />
             <KPICard label="Polines" value={totalPolines.toLocaleString('es-CL')} />
             <KPICard label="Gasto total estimado" value={hayPrecios ? formatCLP(totalGasto) : '—'} />
           </div>
@@ -280,19 +262,27 @@ export default function VistaResumenPage() {
             </div>
           )}
 
-          {/* Socios con errores */}
-          {errores.length > 0 && (
+          {filas.length === 0 && (
+            <div className="rounded-2xl p-8 glass text-center">
+              <p className="text-sm" style={{ color: 'rgba(0,0,0,0.45)' }}>
+                Ningún socio de Cierre Perimetral tiene ítems en carrito aún.
+              </p>
+            </div>
+          )}
+
+          {/* Socios sin ítems en carrito */}
+          {sinCarrito.length > 0 && (
             <div
               className="rounded-2xl p-4"
               style={{ background: 'rgba(127,79,36,0.06)', border: '1px solid rgba(127,79,36,0.15)' }}
             >
               <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--cafe)' }}>
-                {errores.length} socio{errores.length !== 1 ? 's' : ''} sin precio cotizado
+                {sinCarrito.length} socio{sinCarrito.length !== 1 ? 's' : ''} sin ítems en carrito
               </p>
               <ul className="space-y-0.5">
-                {errores.map(e => (
-                  <li key={e.nombre} className="text-xs" style={{ color: 'rgba(0,0,0,0.55)' }}>
-                    · {e.nombre} — {e.motivo}
+                {sinCarrito.map(nombre => (
+                  <li key={nombre} className="text-xs" style={{ color: 'rgba(0,0,0,0.55)' }}>
+                    · {nombre}
                   </li>
                 ))}
               </ul>
