@@ -63,7 +63,21 @@ export function simularBeneficiario(
     const ins = insumos.find(i => i.id === am.insumo_id)
     return ins && !ins.nombre.startsWith('Polines') && !ins.nombre.startsWith('Polietileno')
   })
-  if (!mallaAM) return errorResult(beneficiario, 'Sin malla en ayuda memoria')
+  if (!mallaAM) {
+    // Socio sin malla en ayuda memoria: solo polines con presupuesto completo
+    const polines = Math.floor(presupuesto / precioPolin)
+    const gastoTotal = polines * precioPolin
+    return {
+      beneficiario, error: null,
+      insumo_base_id: null,
+      insumo_base_nombre: null,
+      insumo_base_cantidad: 0,
+      polines,
+      volumen_total: polines,
+      gasto_total: gastoTotal,
+      aporte_bolsillo: Math.max(0, gastoTotal - presupuesto),
+    }
+  }
 
   const malla = insumos.find(i => i.id === mallaAM.insumo_id)!
   const precioMalla = getPrecio(precioMap, proveedorId, malla.id)

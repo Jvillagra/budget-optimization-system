@@ -3,10 +3,10 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
-import { TrendingUp, Wallet, Package, Users } from 'lucide-react'
+import { TrendingUp, Wallet, Package, Users, Layers } from 'lucide-react'
 import {
-  BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LabelList,
+  BarChart, Bar, XAxis, YAxis, Tooltip, Cell,
+  PieChart, Pie, ResponsiveContainer, LabelList,
 } from 'recharts'
 import { supabase } from '@/lib/supabase'
 import type { Proveedor, Beneficiario, CatalogoInsumo, AyudaMemoria, KPISimulacion, ResultadoSimulacion } from '@/lib/types'
@@ -111,8 +111,15 @@ export default function SimuladorPage() {
     setSimulado(true)
   }
 
-  // Datos gráfico comparativo de materiales (barras agrupadas horizontales)
-  const desgloseData = (() => {
+  // Datos para gráfico de Polines (la métrica clave que varía por proveedor)
+  const polinesData = simulado && kpis.length === 2 ? kpis.map(kpi => ({
+    proveedor: kpi.proveedor.nombre,
+    polines: kpi.resultados.filter(r => !r.error).reduce((s, r) => s + r.polines, 0),
+    es_ganador: kpi.es_ganador,
+  })) : []
+
+  // Scorecard: todos los insumos con ambos proveedores para comparar
+  const scorecardData = (() => {
     if (!simulado || kpis.length !== 2) return []
     const a = getDesglose(kpis[0].resultados)
     const b = getDesglose(kpis[1].resultados)
@@ -120,11 +127,17 @@ export default function SimuladorPage() {
     return Array.from(nombresSet).map(nombre => {
       const ai = a.find(i => i.nombre === nombre)
       const bi = b.find(i => i.nombre === nombre)
+      const va = ai?.total ?? 0
+      const vb = bi?.total ?? 0
       return {
+        nombre,
         corto: ai?.corto ?? bi?.corto ?? nombre,
         unidad: ai?.unidad ?? bi?.unidad ?? '',
-        [kpis[0].proveedor.nombre]: ai?.total ?? 0,
-        [kpis[1].proveedor.nombre]: bi?.total ?? 0,
+        [kpis[0].proveedor.nombre]: va,
+        [kpis[1].proveedor.nombre]: vb,
+        aGana: va > vb,
+        bGana: vb > va,
+        igual: va === vb,
       }
     })
   })()
@@ -191,49 +204,87 @@ export default function SimuladorPage() {
       {/* Resultados */}
       {simulado && kpis.length === 2 && (
         <>
-          {/* KPI cards side-by-side */}
+          {/* KPI cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {kpis.map(kpi => <KPICard key={kpi.proveedor.id} kpi={kpi} />)}
           </div>
 
-          {/* Gráfico comparativo de materiales */}
-          <div className="rounded-2xl p-5 glass">
-            <p className="text-sm font-semibold mb-1" style={{ color: 'var(--verde-dark)' }}>
-              Materiales que puede adquirir la comunidad
-            </p>
-            <p className="text-xs mb-4" style={{ color: 'rgba(0,0,0,0.4)' }}>
-              Total de unidades por insumo dado los precios de cada proveedor
-            </p>
-            <ResponsiveContainer width="100%" height={desgloseData.length * 52 + 40}>
-              <BarChart
-                data={desgloseData}
-                layout="vertical"
-                margin={{ top: 0, right: 48, left: 8, bottom: 0 }}
-                barCategoryGap="28%"
-                barGap={4}
-              >
-                <XAxis type="number" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
-                <YAxis
-                  type="category"
-                  dataKey="corto"
-                  tick={{ fontSize: 11, fill: 'rgba(0,0,0,0.6)' }}
-                  tickLine={false}
-                  axisLine={false}
-                  width={90}
-                />
-                <Tooltip
-                  formatter={(v, name) => [`${v} ${desgloseData.find(d => d[name as string] !== undefined)?.unidad ?? ''}`, name]}
-                  contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)' }}
-                />
-                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-                <Bar dataKey={kpis[0].proveedor.nombre} fill={VERDE} radius={[0, 4, 4, 0]}>
-                  <LabelList dataKey={kpis[0].proveedor.nombre} position="right" style={{ fontSize: 10, fill: VERDE, fontWeight: 700 }} />
-                </Bar>
-                <Bar dataKey={kpis[1].proveedor.nombre} fill={CAFE} radius={[0, 4, 4, 0]}>
-                  <LabelList dataKey={kpis[1].proveedor.nombre} position="right" style={{ fontSize: 10, fill: CAFE, fontWeight: 700 }} />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+          {/* Scorecard comparativo + Polines chart */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+            {/* Scorecard (3/5) */}
+            <div className="lg:col-span-3 rounded-2xl p-5 glass">
+              <p className="text-sm font-semibold mb-0.5" style={{ color: 'var(--verde-dark)' }}>
+                Materiales que puede adquirir la comunidad
+              </p>
+              <p className="text-xs mb-4" style={{ color: 'rgba(0,0,0,0.4)' }}>
+                Total de unidades por insumo, dado los precios de cada proveedor
+              </p>
+
+              {/* Header */}
+              <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 text-xs font-semibold mb-2 px-1" style={{ color: 'rgba(0,0,0,0.4)' }}>
+                <span>Insumo</span>
+                <span className="text-center w-20">{kpis[0].proveedor.nombre.split(' ').slice(-1)[0]}</span>
+                <span className="text-center w-20">{kpis[1].proveedor.nombre.split(' ').slice(-1)[0]}</span>
+              </div>
+
+              <div className="space-y-1">
+                {scorecardData.map(row => (
+                  <div
+                    key={row.nombre}
+                    className="grid grid-cols-[1fr_auto_auto] gap-x-3 items-center px-3 py-2 rounded-xl"
+                    style={{ background: 'rgba(0,0,0,0.03)' }}
+                  >
+                    <span className="text-xs font-medium" style={{ color: 'rgba(0,0,0,0.65)' }}>{row.corto}</span>
+                    <div className="w-20 text-center">
+                      <span
+                        className="text-sm font-bold"
+                        style={{ color: row.aGana ? VERDE : row.igual ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.3)' }}
+                      >
+                        {(row[kpis[0].proveedor.nombre] as number).toLocaleString('es-CL')}
+                        {' '}<span className="text-xs font-normal">{row.unidad}</span>
+                      </span>
+                      {row.aGana && <div className="text-xs mt-0.5" style={{ color: VERDE }}>✓ más</div>}
+                    </div>
+                    <div className="w-20 text-center">
+                      <span
+                        className="text-sm font-bold"
+                        style={{ color: row.bGana ? CAFE : row.igual ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.3)' }}
+                      >
+                        {(row[kpis[1].proveedor.nombre] as number).toLocaleString('es-CL')}
+                        {' '}<span className="text-xs font-normal">{row.unidad}</span>
+                      </span>
+                      {row.bGana && <div className="text-xs mt-0.5" style={{ color: CAFE }}>✓ más</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Polines chart — la métrica que varía por precio (2/5) */}
+            <div className="lg:col-span-2 rounded-2xl p-5 glass flex flex-col">
+              <p className="text-sm font-semibold mb-0.5" style={{ color: 'var(--verde-dark)' }}>Polines totales</p>
+              <p className="text-xs mb-4" style={{ color: 'rgba(0,0,0,0.4)' }}>
+                El precio del polin define cuántos puede comprar cada socio con su saldo
+              </p>
+              <div className="flex-1 flex items-end">
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={polinesData} margin={{ top: 20, right: 20, left: 0, bottom: 0 }}>
+                    <XAxis dataKey="proveedor" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                    <Tooltip
+                      formatter={(v) => [`${(v as number).toLocaleString('es-CL')} un.`, 'Polines']}
+                      contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)' }}
+                    />
+                    <Bar dataKey="polines" radius={[6, 6, 0, 0]} maxBarSize={80}>
+                      <LabelList dataKey="polines" position="top" style={{ fontSize: 13, fontWeight: 700 }} formatter={(v: unknown) => typeof v === 'number' ? v.toLocaleString('es-CL') : String(v)} />
+                      {polinesData.map((entry, i) => (
+                        <Cell key={i} fill={entry.es_ganador ? VERDE : CAFE} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
           </div>
 
           {/* Donut charts */}
@@ -290,7 +341,7 @@ export default function SimuladorPage() {
                   <>
                     <div>
                       <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>Diferencia de volumen</p>
-                      <p className="text-2xl font-bold text-white">+{difVol} uds.</p>
+                      <p className="text-2xl font-bold text-white">+{difVol.toLocaleString('es-CL')} uds.</p>
                       <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.5)' }}>con {ganador.proveedor.nombre}</p>
                     </div>
                     <div>
@@ -302,7 +353,7 @@ export default function SimuladorPage() {
                       <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>Recomendación</p>
                       <p className="text-sm font-bold text-white mt-1">
                         {difVol > 0
-                          ? `${ganador.proveedor.nombre} logra ${difVol} unidades más para la comunidad.`
+                          ? `${ganador.proveedor.nombre} logra ${difVol.toLocaleString('es-CL')} unidades más para la comunidad.`
                           : 'Ambos proveedores entregan el mismo volumen.'}
                       </p>
                     </div>
@@ -332,6 +383,8 @@ function KPICard({ kpi }: { kpi: KPISimulacion }) {
   const { proveedor, resultados, volumen_total_comunidad, aporte_bolsillo_total, es_ganador } = kpi
   const exitosos = resultados.filter(r => r.error === null)
   const totalPolines = exitosos.reduce((s, r) => s + r.polines, 0)
+  const totalMallas = exitosos.filter(r => r.insumo_base_id !== null && !r.insumo_base_nombre?.startsWith('Polietileno')).length
+  const totalPoly = exitosos.filter(r => r.insumo_base_nombre?.startsWith('Polietileno')).reduce((s, r) => s + r.insumo_base_cantidad, 0)
 
   return (
     <div className="rounded-2xl p-5 space-y-4 transition-all" style={es_ganador ? {
@@ -354,10 +407,12 @@ function KPICard({ kpi }: { kpi: KPISimulacion }) {
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <Metric label="Volumen total" value={String(volumen_total_comunidad)} sub="unidades comunidad" highlight={es_ganador} icon={TrendingUp} />
+        <Metric label="Volumen total" value={volumen_total_comunidad.toLocaleString('es-CL')} sub="unidades comunidad" highlight={es_ganador} icon={TrendingUp} />
         <Metric label="Aporte de bolsillo" value={formatCLP(aporte_bolsillo_total)} sub="total comunidad" danger={aporte_bolsillo_total > 0} icon={Wallet} />
-        <Metric label="Polines totales" value={String(totalPolines)} sub="comunidad completa" highlight={es_ganador} icon={Package} />
+        <Metric label="Polines totales" value={totalPolines.toLocaleString('es-CL')} sub="unidades" highlight={es_ganador} icon={Package} />
         <Metric label="Socios calculados" value={String(exitosos.length)} sub={`de ${resultados.length}`} icon={Users} />
+        <Metric label="Mallas" value={String(totalMallas)} sub="rollos" icon={Layers} />
+        <Metric label="Polietileno" value={`${totalPoly} m`} sub={`${exitosos.filter(r => r.insumo_base_nombre?.startsWith('Polietileno')).length} socios`} icon={Package} />
       </div>
 
       <details className="text-xs">
