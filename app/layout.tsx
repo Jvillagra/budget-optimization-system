@@ -37,6 +37,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <main className="flex-1 mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
           {children}
         </main>
+        <footer className="py-4 text-center" style={{ borderTop: '1px solid rgba(0,0,0,0.07)' }}>
+          <p className="text-xs" style={{ color: 'rgba(0,0,0,0.35)' }}>
+            Comunidad Pedro Huisca — Desarrollado por{' '}
+            <span style={{ color: 'var(--cafe)', fontWeight: 600 }}>Neurobot Innovations</span>
+          </p>
+        </footer>
       </body>
     </html>
   )

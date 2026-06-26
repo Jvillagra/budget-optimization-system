@@ -1,4 +1,4 @@
-import type { Beneficiario, CatalogoInsumo, Asignacion, ResultadoSimulacion, KPISimulacion, PrecioProveedor, Proveedor } from './types'
+import type { Beneficiario, CatalogoInsumo, Asignacion, AyudaMemoria, ResultadoSimulacion, KPISimulacion, PrecioProveedor, Proveedor } from './types'
 
 export const PRESUPUESTO_BASE = 189000
 export const METROS_POLY_MIN = 20
@@ -7,7 +7,6 @@ export function formatCLP(amount: number): string {
   return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', minimumFractionDigits: 0 }).format(amount)
 }
 
-// Construye un mapa flat: `${provId}_${insumoId}` → precio | null
 export function buildPrecioMap(precios: PrecioProveedor[]): Map<string, number | null> {
   const map = new Map<string, number | null>()
   for (const p of precios) map.set(`${p.proveedor_id}_${p.insumo_id}`, p.precio_unitario)
@@ -27,8 +26,7 @@ export function simularBeneficiario(
   proveedorId: string,
   precioMap: Map<string, number | null>,
   insumos: CatalogoInsumo[],
-  // Base requirements for this beneficiary (es_requerimiento_base = true)
-  asignacionesBase: Asignacion[]
+  ayudaMemoria: AyudaMemoria[]
 ): ResultadoSimulacion {
   const presupuesto = beneficiario.presupuesto_base
   const polin34 = insumos.find(i => i.nombre === 'Polines (3 a 4 cm)')
@@ -57,17 +55,18 @@ export function simularBeneficiario(
     }
   }
 
-  // Cierre Perimetral: necesita malla base asignada
-  const malaAsig = asignacionesBase.find(a => a.es_requerimiento_base)
-  if (!malaAsig) return errorResult(beneficiario, 'Sin malla asignada')
+  // Cierre Perimetral: busca malla en ayuda_memoria (1 rollo siempre)
+  const mallaAM = ayudaMemoria.find(am => {
+    const ins = insumos.find(i => i.id === am.insumo_id)
+    return ins && !ins.nombre.startsWith('Polines') && !ins.nombre.startsWith('Polietileno')
+  })
+  if (!mallaAM) return errorResult(beneficiario, 'Sin malla en ayuda memoria')
 
-  const malla = insumos.find(i => i.id === malaAsig.insumo_id)
-  if (!malla) return errorResult(beneficiario, 'Malla no en catálogo')
-
+  const malla = insumos.find(i => i.id === mallaAM.insumo_id)!
   const precioMalla = getPrecio(precioMap, proveedorId, malla.id)
   if (precioMalla === null) return errorResult(beneficiario, `Sin precio: ${malla.nombre}`)
 
-  const costoBase = malaAsig.cantidad * precioMalla
+  const costoBase = 1 * precioMalla
   const saldo = presupuesto - costoBase
   const polines = saldo > 0 ? Math.floor(saldo / precioPolin) : 0
   const gastoTotal = costoBase + polines * precioPolin
@@ -75,7 +74,7 @@ export function simularBeneficiario(
   return {
     beneficiario, error: null,
     polines,
-    volumen_total: malaAsig.cantidad + polines,
+    volumen_total: 1 + polines,
     gasto_total: gastoTotal,
     aporte_bolsillo: Math.max(0, gastoTotal - presupuesto),
   }
@@ -86,10 +85,10 @@ export function calcularKPI(
   beneficiarios: Beneficiario[],
   precioMap: Map<string, number | null>,
   insumos: CatalogoInsumo[],
-  asignacionesPorBen: Record<string, Asignacion[]>
+  ayudaMemoriaPorBen: Record<string, AyudaMemoria[]>
 ): KPISimulacion {
   const resultados = beneficiarios.map(ben =>
-    simularBeneficiario(ben, proveedor.id, precioMap, insumos, asignacionesPorBen[ben.id] ?? [])
+    simularBeneficiario(ben, proveedor.id, precioMap, insumos, ayudaMemoriaPorBen[ben.id] ?? [])
   )
   const exitosos = resultados.filter(r => r.error === null)
   return {
@@ -98,11 +97,10 @@ export function calcularKPI(
     volumen_total_comunidad: exitosos.reduce((s, r) => s + r.volumen_total, 0),
     aporte_bolsillo_total: resultados.reduce((s, r) => s + r.aporte_bolsillo, 0),
     socios_con_error: resultados.filter(r => r.error !== null).length,
-    es_ganador: false, // se calcula después comparando KPIs
+    es_ganador: false,
   }
 }
 
-// Calcula costos de un carrito con los precios de un proveedor
 export function calcularCostoCarrito(
   asignaciones: Asignacion[],
   proveedorId: string,

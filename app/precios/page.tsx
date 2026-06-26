@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase'
 import type { CatalogoInsumo, Proveedor } from '@/lib/types'
 import { formatCLP } from '@/lib/business-logic'
 
-type PrecioMap = Map<string, number | null> // `${provId}_${insumoId}` → precio | null
+type PrecioMap = Map<string, number | null>
 
 export default function PreciosPage() {
   const [insumos, setInsumos] = useState<CatalogoInsumo[]>([])
@@ -15,6 +15,10 @@ export default function PreciosPage() {
   const [precios, setPrecios] = useState<PrecioMap>(new Map())
   const [saving, setSaving] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
+  const [nuevoNombre, setNuevoNombre] = useState('')
+  const [addingProv, setAddingProv] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editNombre, setEditNombre] = useState('')
 
   useEffect(() => {
     async function load() {
@@ -48,6 +52,32 @@ export default function PreciosPage() {
     setSaving(s => { const n = new Set(s); n.delete(key); return n })
   }
 
+  async function agregarProveedor() {
+    const nombre = nuevoNombre.trim()
+    if (!nombre) return
+    const { data } = await supabase.from('proveedores').insert({ nombre, es_activo: true }).select().single()
+    if (data) {
+      setProveedores(prev => [...prev, data as Proveedor].sort((a, b) => a.nombre.localeCompare(b.nombre)))
+      setNuevoNombre('')
+      setAddingProv(false)
+    }
+  }
+
+  async function guardarNombreProveedor(id: string) {
+    const nombre = editNombre.trim()
+    if (!nombre) { setEditingId(null); return }
+    await supabase.from('proveedores').update({ nombre }).eq('id', id)
+    setProveedores(prev => prev.map(p => p.id === id ? { ...p, nombre } : p))
+    setEditingId(null)
+  }
+
+  function hayPreciosIncompletos(provId: string): boolean {
+    return insumos.some(i => {
+      const p = precios.get(`${provId}_${i.id}`)
+      return p === undefined || p === null
+    })
+  }
+
   const segmentos = ['Invernadero', 'Ambos', 'Cierre Perimetral'] as const
 
   if (loading) return (
@@ -60,18 +90,59 @@ export default function PreciosPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-lg font-bold" style={{ color: 'var(--verde-dark)' }}>maestro de precios</h1>
-        <p className="text-xs mt-0.5" style={{ color: 'rgba(0,0,0,0.4)' }}>
-          Edición inline. Celda vacía = no cotizado (nunca $0).
-        </p>
+      {/* Cabecera con gestión de proveedores */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-lg font-bold" style={{ color: 'var(--verde-dark)' }}>maestro de precios</h1>
+          <p className="text-xs mt-0.5" style={{ color: 'rgba(0,0,0,0.4)' }}>
+            Edición inline. Celda vacía = no cotizado. ⚠ indica precios incompletos.
+          </p>
+        </div>
+        <button
+          onClick={() => setAddingProv(v => !v)}
+          className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white"
+          style={{ background: 'var(--verde)' }}
+        >
+          + nuevo proveedor
+        </button>
       </div>
 
+      {/* Formulario nuevo proveedor */}
+      {addingProv && (
+        <div className="rounded-xl p-3 flex gap-2 glass-strong">
+          <input
+            autoFocus
+            type="text"
+            placeholder="Nombre del proveedor"
+            value={nuevoNombre}
+            onChange={e => setNuevoNombre(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && agregarProveedor()}
+            className="flex-1 rounded-lg px-3 py-1.5 text-sm focus:outline-none"
+            style={{ border: '1px solid rgba(58,125,68,0.3)', background: 'rgba(255,255,255,0.8)' }}
+          />
+          <button
+            onClick={agregarProveedor}
+            disabled={!nuevoNombre.trim()}
+            className="px-4 py-1.5 rounded-lg text-sm text-white font-semibold disabled:opacity-40"
+            style={{ background: 'var(--verde)' }}
+          >
+            guardar
+          </button>
+          <button
+            onClick={() => { setAddingProv(false); setNuevoNombre('') }}
+            className="px-3 py-1.5 rounded-lg text-sm"
+            style={{ color: 'rgba(0,0,0,0.45)' }}
+          >
+            cancelar
+          </button>
+        </div>
+      )}
+
+      {/* Matriz de precios */}
       <div className="rounded-2xl overflow-x-auto glass" style={{ maxHeight: '75vh' }}>
         <table className="w-full text-sm border-collapse">
           <thead style={{ position: 'sticky', top: 0, zIndex: 20 }}>
             <tr style={{ background: 'rgba(45,95,53,0.92)', backdropFilter: 'blur(8px)' }}>
-              {/* Sticky first column header */}
               <th
                 className="text-left px-4 py-3 text-xs font-semibold text-white whitespace-nowrap"
                 style={{ position: 'sticky', left: 0, zIndex: 30, background: 'var(--verde-dark)', minWidth: '220px' }}
@@ -81,11 +152,38 @@ export default function PreciosPage() {
               <th className="text-left px-4 py-3 text-xs font-semibold text-white whitespace-nowrap" style={{ minWidth: '100px' }}>
                 formato
               </th>
-              {proveedores.map(p => (
-                <th key={p.id} className="text-right px-4 py-3 text-xs font-semibold text-white whitespace-nowrap" style={{ minWidth: '140px' }}>
-                  {p.nombre}
-                </th>
-              ))}
+              {proveedores.map(p => {
+                const incompleto = hayPreciosIncompletos(p.id)
+                return (
+                  <th key={p.id} className="px-4 py-3 text-xs font-semibold text-white whitespace-nowrap" style={{ minWidth: '160px' }}>
+                    <div className="flex items-center justify-end gap-1.5">
+                      {incompleto && (
+                        <span title="Precios incompletos — no apto para simulación" style={{ color: '#fca5a5', fontSize: '13px' }}>⚠</span>
+                      )}
+                      {editingId === p.id ? (
+                        <input
+                          autoFocus
+                          type="text"
+                          value={editNombre}
+                          onChange={e => setEditNombre(e.target.value)}
+                          onBlur={() => guardarNombreProveedor(p.id)}
+                          onKeyDown={e => e.key === 'Enter' && guardarNombreProveedor(p.id)}
+                          className="rounded px-2 py-0.5 text-xs text-gray-900 w-32 focus:outline-none"
+                          style={{ background: 'rgba(255,255,255,0.9)' }}
+                        />
+                      ) : (
+                        <button
+                          onClick={() => { setEditingId(p.id); setEditNombre(p.nombre) }}
+                          className="hover:underline"
+                          title="Editar nombre"
+                        >
+                          {p.nombre}
+                        </button>
+                      )}
+                    </div>
+                  </th>
+                )
+              })}
             </tr>
           </thead>
           <tbody>
@@ -93,7 +191,6 @@ export default function PreciosPage() {
               const items = insumos.filter(i => i.segmento === seg)
               if (!items.length) return null
               return [
-                // Group header row
                 <tr key={`seg_${seg}`}>
                   <td
                     colSpan={2 + proveedores.length}
@@ -106,7 +203,6 @@ export default function PreciosPage() {
                     {seg}
                   </td>
                 </tr>,
-                // Data rows
                 ...items.map(insumo => (
                   <PrecioRow
                     key={insumo.id}
@@ -124,7 +220,7 @@ export default function PreciosPage() {
       </div>
 
       <p className="text-xs" style={{ color: 'rgba(0,0,0,0.35)' }}>
-        {insumos.length} insumos · {proveedores.length} proveedores · Los precios se guardan al salir de cada celda.
+        {insumos.length} insumos · {proveedores.length} proveedores · Los precios se guardan al salir de cada celda. Haz clic en el nombre del proveedor para editarlo.
       </p>
     </div>
   )
@@ -180,7 +276,6 @@ function PrecioCell({ initialValue, isSaving, onBlur }: {
   const [localVal, setLocalVal] = useState(initialValue !== null ? String(initialValue) : '')
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Sync if parent updates (e.g., after save)
   useEffect(() => {
     setLocalVal(initialValue !== null ? String(initialValue) : '')
   }, [initialValue])

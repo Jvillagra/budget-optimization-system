@@ -4,14 +4,14 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import type { Proveedor, Beneficiario, CatalogoInsumo, Asignacion, KPISimulacion } from '@/lib/types'
+import type { Proveedor, Beneficiario, CatalogoInsumo, AyudaMemoria, KPISimulacion } from '@/lib/types'
 import { buildPrecioMap, calcularKPI, formatCLP } from '@/lib/business-logic'
 
 export default function SimuladorPage() {
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
   const [beneficiarios, setBeneficiarios] = useState<Beneficiario[]>([])
   const [insumos, setInsumos] = useState<CatalogoInsumo[]>([])
-  const [asignacionesPorBen, setAsignacionesPorBen] = useState<Record<string, Asignacion[]>>({})
+  const [ayudaMemoriaPorBen, setAyudaMemoriaPorBen] = useState<Record<string, AyudaMemoria[]>>({})
   const [precioMaps, setPrecioMaps] = useState<Record<string, Map<string, number | null>>>({})
   const [provA, setProvA] = useState('')
   const [provB, setProvB] = useState('')
@@ -21,11 +21,11 @@ export default function SimuladorPage() {
 
   useEffect(() => {
     async function load() {
-      const [{ data: provs }, { data: bens }, { data: ins }, { data: asigs }, { data: precs }] = await Promise.all([
+      const [{ data: provs }, { data: bens }, { data: ins }, { data: ams }, { data: precs }] = await Promise.all([
         supabase.from('proveedores').select('*').eq('es_activo', true).order('nombre'),
         supabase.from('beneficiarios').select('*').order('segmento').order('nombre'),
         supabase.from('catalogo_insumos').select('*'),
-        supabase.from('asignaciones').select('*').eq('es_requerimiento_base', true),
+        supabase.from('ayuda_memoria').select('*'),
         supabase.from('precios_proveedor').select('*'),
       ])
 
@@ -36,13 +36,13 @@ export default function SimuladorPage() {
       }
       if (bens) setBeneficiarios(bens as Beneficiario[])
       if (ins) setInsumos(ins as CatalogoInsumo[])
-      if (asigs) {
-        const map: Record<string, Asignacion[]> = {}
-        for (const a of asigs as Asignacion[]) {
-          if (!map[a.beneficiario_id]) map[a.beneficiario_id] = []
-          map[a.beneficiario_id].push(a)
+      if (ams) {
+        const map: Record<string, AyudaMemoria[]> = {}
+        for (const am of ams as AyudaMemoria[]) {
+          if (!map[am.beneficiario_id]) map[am.beneficiario_id] = []
+          map[am.beneficiario_id].push(am)
         }
-        setAsignacionesPorBen(map)
+        setAyudaMemoriaPorBen(map)
       }
       if (precs && provs) {
         const maps: Record<string, Map<string, number | null>> = {}
@@ -62,10 +62,9 @@ export default function SimuladorPage() {
     const provBObj = proveedores.find(p => p.id === provB)
     if (!provAObj || !provBObj) return
 
-    const kpiA = calcularKPI(provAObj, beneficiarios, precioMaps[provA] ?? new Map(), insumos, asignacionesPorBen)
-    const kpiB = calcularKPI(provBObj, beneficiarios, precioMaps[provB] ?? new Map(), insumos, asignacionesPorBen)
+    const kpiA = calcularKPI(provAObj, beneficiarios, precioMaps[provA] ?? new Map(), insumos, ayudaMemoriaPorBen)
+    const kpiB = calcularKPI(provBObj, beneficiarios, precioMaps[provB] ?? new Map(), insumos, ayudaMemoriaPorBen)
 
-    // Ganador: mayor volumen total
     kpiA.es_ganador = kpiA.volumen_total_comunidad >= kpiB.volumen_total_comunidad
     kpiB.es_ganador = kpiB.volumen_total_comunidad > kpiA.volumen_total_comunidad
     setKpis([kpiA, kpiB])
@@ -74,7 +73,7 @@ export default function SimuladorPage() {
 
   const invernadero = beneficiarios.filter(b => b.segmento === 'Invernadero')
   const cierre = beneficiarios.filter(b => b.segmento === 'Cierre Perimetral')
-  const conMalla = cierre.filter(b => asignacionesPorBen[b.id]?.some(a => a.es_requerimiento_base))
+  const conMalla = cierre.filter(b => (ayudaMemoriaPorBen[b.id] ?? []).some(am => am.insumo_id))
 
   if (loading) return (
     <div className="space-y-4">
@@ -90,7 +89,7 @@ export default function SimuladorPage() {
       <div>
         <h1 className="text-lg font-bold" style={{ color: 'var(--verde-dark)' }}>simulador comparativo</h1>
         <p className="text-xs mt-0.5" style={{ color: 'rgba(0,0,0,0.4)' }}>
-          Compara dos proveedores y encuentra cuál maximiza el volumen de materiales.
+          Compara dos proveedores en memoria. No altera el carrito real. Basado en la ayuda memoria de cada socio.
         </p>
       </div>
 
@@ -99,7 +98,7 @@ export default function SimuladorPage() {
         <StatCard label="total socios" value={String(beneficiarios.length)} />
         <StatCard label="invernadero" value={String(invernadero.length)} color="verde" />
         <StatCard label="cierre perimetral" value={String(cierre.length)} color="cafe" />
-        <StatCard label="con malla asignada" value={`${conMalla.length}/${cierre.length}`} color={conMalla.length < cierre.length ? 'rojo' : 'verde'} />
+        <StatCard label="con ayuda memoria" value={`${conMalla.length}/${cierre.length + invernadero.length}`} color="verde" />
       </div>
 
       {/* Selector de proveedores */}
@@ -132,7 +131,7 @@ export default function SimuladorPage() {
         </button>
       </div>
 
-      {/* Resultados side-by-side */}
+      {/* Resultados */}
       {simulado && kpis.length === 2 && (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -188,7 +187,7 @@ export default function SimuladorPage() {
             Selecciona dos proveedores y presiona <strong>simular</strong>.
           </p>
           <p className="text-xs mt-1" style={{ color: 'rgba(0,0,0,0.3)' }}>
-            Los socios de Cierre Perimetral deben tener una malla marcada como requerimiento base.
+            La simulación usa la ayuda memoria de cada socio. No modifica el carrito real.
           </p>
         </div>
       )}
@@ -201,7 +200,6 @@ function KPICard({ kpi }: { kpi: KPISimulacion }) {
   const exitosos = resultados.filter(r => r.error === null)
   const totalPolines = exitosos.reduce((s, r) => s + r.polines, 0)
   const benInv = exitosos.filter(r => r.beneficiario.segmento === 'Invernadero')
-  const totalMetros = benInv.reduce((s, r) => s + 20, 0)
 
   return (
     <div className="rounded-2xl p-5 space-y-4 transition-all" style={es_ganador ? {
@@ -223,17 +221,9 @@ function KPICard({ kpi }: { kpi: KPISimulacion }) {
         )}
       </div>
 
-      {/* KPIs principales */}
-      <div className="grid grid-cols-2 gap-3">
-        <Metric label="volumen total" value={String(volumen_total_comunidad)} sub="unidades comunidad" highlight={es_ganador} />
-        <Metric label="aporte de bolsillo" value={formatCLP(aporte_bolsillo_total)} sub="total comunidad" danger={aporte_bolsillo_total > 0} />
-        <Metric label="metros polietileno" value={`${totalMetros}m`} sub={`${benInv.length} socios inv.`} />
-        <Metric label="polines totales" value={String(totalPolines)} sub="ambos segmentos" highlight={es_ganador} />
-      </div>
-
       {socios_con_error > 0 && (
         <div className="rounded-xl p-3 text-xs" style={{ background: 'rgba(220,38,38,0.07)', border: '1px solid rgba(220,38,38,0.2)', color: '#dc2626' }}>
-          <p className="font-semibold">⚠ {socios_con_error} socio{socios_con_error > 1 ? 's' : ''} con datos incompletos</p>
+          <p className="font-semibold">⚠ Precios insuficientes para simular este proveedor</p>
           <ul className="mt-1 space-y-0.5" style={{ color: 'rgba(220,38,38,0.8)' }}>
             {resultados.filter(r => r.error).slice(0, 4).map(r => (
               <li key={r.beneficiario.id}>· {r.beneficiario.nombre}: {r.error}</li>
@@ -243,7 +233,13 @@ function KPICard({ kpi }: { kpi: KPISimulacion }) {
         </div>
       )}
 
-      {/* Detalle por socio (colapsado) */}
+      <div className="grid grid-cols-2 gap-3">
+        <Metric label="volumen total" value={String(volumen_total_comunidad)} sub="unidades comunidad" highlight={es_ganador} />
+        <Metric label="aporte de bolsillo" value={formatCLP(aporte_bolsillo_total)} sub="total comunidad" danger={aporte_bolsillo_total > 0} />
+        <Metric label="polines totales" value={String(totalPolines)} sub="comunidad completa" highlight={es_ganador} />
+        <Metric label="socios calculados" value={String(exitosos.length)} sub={`de ${resultados.length}`} />
+      </div>
+
       <details className="text-xs">
         <summary className="cursor-pointer font-semibold" style={{ color: 'var(--cafe)' }}>
           ver detalle por socio ({exitosos.length} calculados)

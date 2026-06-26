@@ -2,9 +2,9 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import type { Beneficiario, CatalogoInsumo, Asignacion, Proveedor } from '@/lib/types'
+import type { Beneficiario, CatalogoInsumo, Asignacion, AyudaMemoria, Proveedor } from '@/lib/types'
 import { buildPrecioMap, calcularCostoCarrito, formatCLP, PRESUPUESTO_BASE } from '@/lib/business-logic'
 
 type Filtro = 'todos' | 'Invernadero' | 'Cierre Perimetral'
@@ -14,22 +14,23 @@ export default function BeneficiariosPage() {
   const [insumos, setInsumos] = useState<CatalogoInsumo[]>([])
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
   const [asignaciones, setAsignaciones] = useState<Record<string, Asignacion[]>>({})
+  const [ayudaMemoria, setAyudaMemoria] = useState<Record<string, AyudaMemoria[]>>({})
   const [precioMap, setPrecioMap] = useState(new Map<string, number | null>())
   const [seleccionado, setSeleccionado] = useState<string | null>(null)
   const [proveedorId, setProveedorId] = useState<string>('')
   const [filtro, setFiltro] = useState<Filtro>('todos')
   const [insumoForm, setInsumoForm] = useState('')
   const [cantidadForm, setCantidadForm] = useState(1)
-  const [esBase, setEsBase] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
-      const [{ data: bens }, { data: ins }, { data: provs }, { data: asigs }, { data: precs }] = await Promise.all([
+      const [{ data: bens }, { data: ins }, { data: provs }, { data: asigs }, { data: ams }, { data: precs }] = await Promise.all([
         supabase.from('beneficiarios').select('*').order('segmento').order('nombre'),
         supabase.from('catalogo_insumos').select('*').order('segmento').order('nombre'),
         supabase.from('proveedores').select('*').eq('es_activo', true).order('nombre'),
         supabase.from('asignaciones').select('*, catalogo_insumos(*)'),
+        supabase.from('ayuda_memoria').select('*, catalogo_insumos(*)'),
         supabase.from('precios_proveedor').select('*'),
       ])
       if (bens) setBeneficiarios(bens as Beneficiario[])
@@ -46,6 +47,14 @@ export default function BeneficiariosPage() {
         }
         setAsignaciones(map)
       }
+      if (ams) {
+        const map: Record<string, AyudaMemoria[]> = {}
+        for (const am of ams as AyudaMemoria[]) {
+          if (!map[am.beneficiario_id]) map[am.beneficiario_id] = []
+          map[am.beneficiario_id].push(am)
+        }
+        setAyudaMemoria(map)
+      }
       if (precs) setPrecioMap(buildPrecioMap(precs))
       setLoading(false)
     }
@@ -54,8 +63,8 @@ export default function BeneficiariosPage() {
 
   const benSeleccionado = beneficiarios.find(b => b.id === seleccionado)
   const asigsBen = seleccionado ? (asignaciones[seleccionado] ?? []) : []
+  const ayudaBen = seleccionado ? (ayudaMemoria[seleccionado] ?? []) : []
 
-  // Insumos compatibles con el segmento del beneficiario seleccionado
   const insumosCompatibles = benSeleccionado
     ? insumos.filter(i => i.segmento === benSeleccionado.segmento || i.segmento === 'Ambos')
     : []
@@ -74,7 +83,7 @@ export default function BeneficiariosPage() {
     if (!seleccionado || !insumoForm) return
     const { data } = await supabase
       .from('asignaciones')
-      .insert({ beneficiario_id: seleccionado, insumo_id: insumoForm, cantidad: cantidadForm, es_requerimiento_base: esBase })
+      .insert({ beneficiario_id: seleccionado, insumo_id: insumoForm, cantidad: cantidadForm })
       .select('*, catalogo_insumos(*)')
       .single()
     if (data) {
@@ -84,7 +93,6 @@ export default function BeneficiariosPage() {
       }))
       setInsumoForm('')
       setCantidadForm(1)
-      setEsBase(false)
     }
   }
 
@@ -106,7 +114,7 @@ export default function BeneficiariosPage() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {/* Lista */}
+      {/* Lista de beneficiarios */}
       <div className="lg:col-span-2 space-y-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <h1 className="text-lg font-bold" style={{ color: 'var(--verde-dark)' }}>
@@ -135,6 +143,7 @@ export default function BeneficiariosPage() {
             const tieneAporte = proveedorId && costoTotal > PRESUPUESTO_BASE
             const pct = Math.min(100, (costoTotal / PRESUPUESTO_BASE) * 100)
             const isSelected = seleccionado === ben.id
+            const itemsCarrito = asigs.length
 
             return (
               <button
@@ -158,7 +167,7 @@ export default function BeneficiariosPage() {
                 }}>
                   {ben.segmento}
                 </span>
-                {proveedorId && (
+                {proveedorId && itemsCarrito > 0 && (
                   <>
                     <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(0,0,0,0.08)' }}>
                       <div className="h-full rounded-full" style={{
@@ -171,11 +180,11 @@ export default function BeneficiariosPage() {
                         +{formatCLP(costoTotal - PRESUPUESTO_BASE)}
                       </p>
                     )}
-                    <p className="text-xs mt-0.5" style={{ color: 'rgba(0,0,0,0.35)' }}>
-                      {asigs.length} ítem{asigs.length !== 1 ? 's' : ''}
-                    </p>
                   </>
                 )}
+                <p className="text-xs mt-1" style={{ color: 'rgba(0,0,0,0.35)' }}>
+                  {itemsCarrito} ítem{itemsCarrito !== 1 ? 's' : ''} en carrito
+                </p>
               </button>
             )
           })}
@@ -184,7 +193,7 @@ export default function BeneficiariosPage() {
 
       {/* Panel lateral */}
       <div className="space-y-3">
-        {/* Selector de proveedor para costos */}
+        {/* Selector de proveedor */}
         <div className="rounded-2xl p-4 glass">
           <label className="text-xs font-semibold block mb-1.5" style={{ color: 'var(--cafe)' }}>
             ver precios de
@@ -202,8 +211,9 @@ export default function BeneficiariosPage() {
 
         {benSeleccionado ? (
           <div className="rounded-2xl p-4 glass space-y-4">
+            {/* Cabecera */}
             <div>
-              <p className="font-bold text-gray-900">{benSeleccionado.nombre}</p>
+              <p className="font-bold" style={{ color: '#1c1c1c' }}>{benSeleccionado.nombre}</p>
               <span className="text-xs px-2 py-0.5 rounded-full inline-block mt-0.5 font-medium" style={
                 benSeleccionado.segmento === 'Invernadero'
                   ? { background: 'var(--verde-muted)', color: 'var(--verde-dark)' }
@@ -213,8 +223,31 @@ export default function BeneficiariosPage() {
               </span>
             </div>
 
-            {/* Barra de presupuesto */}
-            {proveedorId && (
+            {/* Ayuda Memoria */}
+            {ayudaBen.length > 0 && (
+              <div className="rounded-xl p-3 space-y-1" style={{
+                background: 'rgba(127,79,36,0.06)',
+                border: '1px solid rgba(127,79,36,0.15)',
+              }}>
+                <p className="text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: 'var(--cafe)' }}>
+                  ayuda memoria
+                </p>
+                <p className="text-xs mb-2" style={{ color: 'rgba(0,0,0,0.45)' }}>
+                  Lo que el socio solicitó originalmente:
+                </p>
+                <ul className="space-y-1">
+                  {ayudaBen.map(am => (
+                    <li key={am.id} className="flex items-start gap-1.5 text-xs" style={{ color: 'rgba(0,0,0,0.65)' }}>
+                      <span style={{ color: 'var(--cafe)', marginTop: '1px' }}>·</span>
+                      <span>{am.detalle_original ?? am.catalogo_insumos?.nombre ?? 'Insumo'}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Barra presupuesto */}
+            {proveedorId && asigsBen.length > 0 && (
               <div>
                 <div className="flex justify-between text-xs mb-1" style={{ color: 'rgba(0,0,0,0.45)' }}>
                   <span>presupuesto usado</span>
@@ -246,12 +279,16 @@ export default function BeneficiariosPage() {
               </div>
             )}
 
-            {/* Carrito actual */}
-            {asigsBen.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'rgba(0,0,0,0.35)' }}>
-                  carrito
+            {/* Carrito real */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'rgba(0,0,0,0.35)' }}>
+                carrito real
+              </p>
+              {asigsBen.length === 0 ? (
+                <p className="text-xs" style={{ color: 'rgba(0,0,0,0.35)' }}>
+                  Carrito vacío. Agrega insumos una vez definido el proveedor.
                 </p>
+              ) : (
                 <ul className="space-y-1.5">
                   {asigsBen.map(a => {
                     const precio = proveedorId ? (precioMap.get(`${proveedorId}_${a.insumo_id}`) ?? null) : null
@@ -264,9 +301,6 @@ export default function BeneficiariosPage() {
                           </span>
                           {costo !== null && (
                             <span style={{ color: 'var(--verde-dark)' }}>{formatCLP(costo)}</span>
-                          )}
-                          {a.es_requerimiento_base && (
-                            <span className="ml-1 text-xs" style={{ color: 'var(--cafe)' }}>★ base</span>
                           )}
                         </div>
                         <button
@@ -281,8 +315,8 @@ export default function BeneficiariosPage() {
                     )
                   })}
                 </ul>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Agregar insumo */}
             <div className="space-y-2 pt-2" style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
@@ -297,9 +331,7 @@ export default function BeneficiariosPage() {
               >
                 <option value="">seleccionar...</option>
                 {insumosCompatibles.map(i => (
-                  <option key={i.id} value={i.id}>
-                    {i.nombre} ({i.formato_venta})
-                  </option>
+                  <option key={i.id} value={i.id}>{i.nombre} ({i.formato_venta})</option>
                 ))}
               </select>
               <div className="flex gap-2">
@@ -311,19 +343,10 @@ export default function BeneficiariosPage() {
                   className="w-20 rounded-lg px-3 py-2 text-sm focus:outline-none"
                   style={{ border: '1px solid rgba(58,125,68,0.25)', background: 'rgba(255,255,255,0.7)' }}
                 />
-                <label className="flex items-center gap-1 text-xs cursor-pointer" style={{ color: 'var(--cafe)' }}>
-                  <input
-                    type="checkbox"
-                    checked={esBase}
-                    onChange={e => setEsBase(e.target.checked)}
-                    className="accent-green-700"
-                  />
-                  req. base
-                </label>
                 <button
                   onClick={agregar}
                   disabled={!insumoForm}
-                  className="flex-1 rounded-lg text-sm text-white font-semibold py-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex-1 rounded-lg text-sm text-white font-semibold py-2 disabled:opacity-40"
                   style={{ background: 'var(--verde)' }}
                 >
                   agregar

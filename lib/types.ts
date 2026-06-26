@@ -28,13 +28,19 @@ export interface Beneficiario {
   presupuesto_base: number
 }
 
+export interface AyudaMemoria {
+  id: string
+  beneficiario_id: string
+  insumo_id: string
+  detalle_original: string | null
+  catalogo_insumos?: CatalogoInsumo | null
+}
+
 export interface Asignacion {
   id: string
   beneficiario_id: string
   insumo_id: string
   cantidad: number
-  es_requerimiento_base: boolean
-  created_at?: string | null
   catalogo_insumos?: CatalogoInsumo | null
 }
 
@@ -56,7 +62,6 @@ export interface KPISimulacion {
   es_ganador: boolean
 }
 
-// Supabase Database type
 export type Database = {
   public: {
     Tables: {
@@ -84,10 +89,16 @@ export type Database = {
         Update: { id?: string; nombre?: string; segmento?: string; presupuesto_base?: number }
         Relationships: []
       }
+      ayuda_memoria: {
+        Row: { id: string; beneficiario_id: string; insumo_id: string; detalle_original: string | null }
+        Insert: { id?: string; beneficiario_id: string; insumo_id: string; detalle_original?: string | null }
+        Update: { id?: string; beneficiario_id?: string; insumo_id?: string; detalle_original?: string | null }
+        Relationships: []
+      }
       asignaciones: {
-        Row: { id: string; beneficiario_id: string; insumo_id: string; cantidad: number; es_requerimiento_base: boolean; created_at: string | null }
-        Insert: { id?: string; beneficiario_id: string; insumo_id: string; cantidad: number; es_requerimiento_base?: boolean; created_at?: string | null }
-        Update: { id?: string; beneficiario_id?: string; insumo_id?: string; cantidad?: number; es_requerimiento_base?: boolean }
+        Row: { id: string; beneficiario_id: string; insumo_id: string; cantidad: number }
+        Insert: { id?: string; beneficiario_id: string; insumo_id: string; cantidad: number }
+        Update: { id?: string; beneficiario_id?: string; insumo_id?: string; cantidad?: number }
         Relationships: []
       }
     }
