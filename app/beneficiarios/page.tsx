@@ -7,10 +7,12 @@ import { X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { Beneficiario, CatalogoInsumo, Asignacion, AyudaMemoria, Proveedor } from '@/lib/types'
 import { buildPrecioMap, calcularCostoCarrito, formatCLP, PRESUPUESTO_BASE } from '@/lib/business-logic'
+import { useProveedor } from '@/lib/proveedor-context'
 
 type Filtro = 'todos' | 'Invernadero' | 'Cierre Perimetral'
 
 export default function BeneficiariosPage() {
+  const { proveedorId, setProveedorId } = useProveedor()
   const [beneficiarios, setBeneficiarios] = useState<Beneficiario[]>([])
   const [insumos, setInsumos] = useState<CatalogoInsumo[]>([])
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
@@ -18,7 +20,6 @@ export default function BeneficiariosPage() {
   const [ayudaMemoria, setAyudaMemoria] = useState<Record<string, AyudaMemoria[]>>({})
   const [precioMap, setPrecioMap] = useState(new Map<string, number | null>())
   const [seleccionado, setSeleccionado] = useState<string | null>(null)
-  const [proveedorId, setProveedorId] = useState<string>('')
   const [filtro, setFiltro] = useState<Filtro>('todos')
   const [insumoForm, setInsumoForm] = useState('')
   const [cantidadForm, setCantidadForm] = useState(1)
@@ -47,7 +48,12 @@ export default function BeneficiariosPage() {
       if (ins) setInsumos(ins as CatalogoInsumo[])
       if (provs) {
         setProveedores(provs as Proveedor[])
-        if (provs.length > 0) setProveedorId(provs[0].id)
+        // Solo inicializar si localStorage no tiene valor guardado (mismo batch que setLoading)
+        const savedId = localStorage.getItem('pat_proveedor_id')
+        const validSaved = savedId && (provs as Proveedor[]).find(p => p.id === savedId)
+        if (!validSaved && (provs as Proveedor[]).length > 0) {
+          setProveedorId((provs as Proveedor[])[0].id)
+        }
       }
       if (asigs) {
         const map: Record<string, Asignacion[]> = {}
@@ -329,12 +335,24 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
                 Lo que el socio solicitó originalmente:
               </p>
               <ul className="space-y-1">
-                {ayudaBen.map(am => (
-                  <li key={am.id} className="flex items-start gap-1.5 text-xs" style={{ color: 'rgba(0,0,0,0.65)' }}>
-                    <span style={{ color: 'var(--cafe)', marginTop: '1px' }}>·</span>
-                    <span>{am.detalle_original ?? am.catalogo_insumos?.nombre ?? 'Insumo'}</span>
-                  </li>
-                ))}
+                {ayudaBen.map(am => {
+                  const sinPrecio = proveedorId && am.catalogo_insumos
+                    ? (precioMap.get(`${proveedorId}_${am.insumo_id}`) ?? null) === null
+                    : false
+                  return (
+                    <li key={am.id} className="flex items-start gap-1.5 text-xs" style={{ color: 'rgba(0,0,0,0.65)' }}>
+                      <span style={{ color: 'var(--cafe)', marginTop: '1px' }}>·</span>
+                      <span>
+                        {am.detalle_original ?? am.catalogo_insumos?.nombre ?? 'Insumo'}
+                        {sinPrecio && (
+                          <span className="ml-1.5 text-xs font-medium" style={{ color: 'var(--cafe)' }}>
+                            · sin precio en este proveedor
+                          </span>
+                        )}
+                      </span>
+                    </li>
+                  )
+                })}
               </ul>
             </div>
           )}
@@ -423,24 +441,38 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
                 <option key={i.id} value={i.id}>{i.nombre} ({i.formato_venta})</option>
               ))}
             </select>
-            <div className="flex gap-2">
-              <input
-                type="number"
-                min={1}
-                value={cantidadForm}
-                onChange={e => setCantidadForm(Math.max(1, parseInt(e.target.value) || 1))}
-                className="w-20 rounded-lg px-3 py-2 text-sm focus:outline-none"
-                style={{ border: '1px solid rgba(58,125,68,0.25)', background: 'rgba(255,255,255,0.7)' }}
-              />
-              <button
-                onClick={agregar}
-                disabled={!insumoForm}
-                className="flex-1 rounded-lg text-sm text-white font-semibold py-2 disabled:opacity-40"
-                style={{ background: 'var(--verde)' }}
-              >
-                agregar
-              </button>
-            </div>
+            {(() => {
+              const sinPrecio = insumoForm && proveedorId
+                ? (precioMap.get(`${proveedorId}_${insumoForm}`) ?? null) === null
+                : false
+              return (
+                <>
+                  {sinPrecio && (
+                    <p className="text-xs font-medium" style={{ color: 'var(--cafe)' }}>
+                      Insumo no disponible en este proveedor
+                    </p>
+                  )}
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      value={cantidadForm}
+                      onChange={e => setCantidadForm(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-20 rounded-lg px-3 py-2 text-sm focus:outline-none"
+                      style={{ border: '1px solid rgba(58,125,68,0.25)', background: 'rgba(255,255,255,0.7)' }}
+                    />
+                    <button
+                      onClick={agregar}
+                      disabled={!insumoForm || sinPrecio}
+                      className="flex-1 rounded-lg text-sm text-white font-semibold py-2 disabled:opacity-40"
+                      style={{ background: 'var(--verde)' }}
+                    >
+                      agregar
+                    </button>
+                  </div>
+                </>
+              )
+            })()}
           </div>
         </div>
       ) : (

@@ -7,9 +7,10 @@ import { useState, useEffect } from 'react'
 import { Menu, X, Download } from 'lucide-react'
 
 const links = [
-  { href: '/beneficiarios', label: 'Beneficiarios' },
-  { href: '/precios', label: 'Maestro de precios' },
-  { href: '/simulador', label: 'Simulador' },
+  { href: '/beneficiarios', label: 'beneficiarios' },
+  { href: '/precios', label: 'maestro de precios' },
+  { href: '/simulador', label: 'simulador' },
+  { href: '/vista-resumen', label: 'vista resumen' },
 ]
 
 interface BeforeInstallPromptEvent extends Event {
