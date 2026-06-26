@@ -23,7 +23,7 @@ export default function Navbar() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-14 items-center justify-between">
           <Link href="/" className="text-sm font-bold tracking-wide" style={{ color: 'var(--verde-dark)' }}>
-            Fondo Comunitario
+            Proyecto PAT
           </Link>
           <nav className="flex gap-1">
             {links.map((link) => (

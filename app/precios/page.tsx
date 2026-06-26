@@ -3,11 +3,13 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useRef } from 'react'
+import { ScanLine } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { CatalogoInsumo, Proveedor } from '@/lib/types'
 import { formatCLP } from '@/lib/business-logic'
 
 type PrecioMap = Map<string, number | null>
+type VisionItem = { nombre_insumo: string; precio_extraido: number }
 
 export default function PreciosPage() {
   const [insumos, setInsumos] = useState<CatalogoInsumo[]>([])
@@ -19,6 +21,13 @@ export default function PreciosPage() {
   const [addingProv, setAddingProv] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editNombre, setEditNombre] = useState('')
+  // IA Vision
+  const [showVision, setShowVision] = useState(false)
+  const [visionFile, setVisionFile] = useState<File | null>(null)
+  const [visionPreview, setVisionPreview] = useState<string | null>(null)
+  const [visionLoading, setVisionLoading] = useState(false)
+  const [visionData, setVisionData] = useState<VisionItem[] | null>(null)
+  const [visionProvId, setVisionProvId] = useState('')
 
   useEffect(() => {
     async function load() {
@@ -71,6 +80,47 @@ export default function PreciosPage() {
     setEditingId(null)
   }
 
+  function handleVisionFile(file: File) {
+    setVisionFile(file)
+    setVisionData(null)
+    const url = URL.createObjectURL(file)
+    setVisionPreview(url)
+  }
+
+  async function escanearCotizacion() {
+    if (!visionFile) return
+    setVisionLoading(true)
+    setVisionData(null)
+    const fd = new FormData()
+    fd.append('image', visionFile)
+    fd.append('catalogo', JSON.stringify(insumos.map(i => i.nombre)))
+    const res = await fetch('/api/vision', { method: 'POST', body: fd })
+    const json = await res.json()
+    setVisionData(json.data ?? [])
+    setVisionLoading(false)
+  }
+
+  async function aplicarPrecios() {
+    if (!visionData || !visionProvId) return
+    for (const item of visionData) {
+      const insumo = insumos.find(i =>
+        i.nombre.toLowerCase().includes(item.nombre_insumo.toLowerCase()) ||
+        item.nombre_insumo.toLowerCase().includes(i.nombre.toLowerCase())
+      )
+      if (!insumo) continue
+      const key = `${visionProvId}_${insumo.id}`
+      await supabase.from('precios_proveedor').upsert(
+        { proveedor_id: visionProvId, insumo_id: insumo.id, precio_unitario: item.precio_extraido },
+        { onConflict: 'proveedor_id,insumo_id' }
+      )
+      setPrecios(prev => new Map(prev).set(key, item.precio_extraido))
+    }
+    setShowVision(false)
+    setVisionFile(null)
+    setVisionPreview(null)
+    setVisionData(null)
+  }
+
   function hayPreciosIncompletos(provId: string): boolean {
     return insumos.some(i => {
       const p = precios.get(`${provId}_${i.id}`)
@@ -98,13 +148,22 @@ export default function PreciosPage() {
             Edición inline. Celda vacía = no cotizado. ⚠ indica precios incompletos.
           </p>
         </div>
-        <button
-          onClick={() => setAddingProv(v => !v)}
-          className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white"
-          style={{ background: 'var(--verde)' }}
-        >
-          + nuevo proveedor
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowVision(true)}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold"
+            style={{ background: 'rgba(127,79,36,0.12)', color: 'var(--cafe)', border: '1px solid rgba(127,79,36,0.25)' }}
+          >
+            <ScanLine size={13} /> Escanear Cotización (IA)
+          </button>
+          <button
+            onClick={() => setAddingProv(v => !v)}
+            className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white"
+            style={{ background: 'var(--verde)' }}
+          >
+            + nuevo proveedor
+          </button>
+        </div>
       </div>
 
       {/* Formulario nuevo proveedor */}
@@ -222,6 +281,100 @@ export default function PreciosPage() {
       <p className="text-xs" style={{ color: 'rgba(0,0,0,0.35)' }}>
         {insumos.length} insumos · {proveedores.length} proveedores · Los precios se guardan al salir de cada celda. Haz clic en el nombre del proveedor para editarlo.
       </p>
+
+      {/* Modal IA Vision */}
+      {showVision && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}>
+          <div className="rounded-2xl p-6 w-full max-w-md space-y-4 glass-strong" style={{ background: 'rgba(255,255,255,0.96)' }}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ScanLine size={18} style={{ color: 'var(--cafe)' }} />
+                <h2 className="font-bold text-sm" style={{ color: '#1c1c1c' }}>Escanear Cotización (IA)</h2>
+              </div>
+              <button onClick={() => { setShowVision(false); setVisionFile(null); setVisionPreview(null); setVisionData(null) }}
+                className="text-lg leading-none" style={{ color: 'rgba(0,0,0,0.4)' }}>✕</button>
+            </div>
+
+            {/* Proveedor destino */}
+            <div>
+              <label className="text-xs font-semibold block mb-1" style={{ color: 'var(--cafe)' }}>Aplicar precios a</label>
+              <select value={visionProvId} onChange={e => setVisionProvId(e.target.value)}
+                className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
+                style={{ border: '1px solid rgba(58,125,68,0.25)', background: 'rgba(255,255,255,0.7)' }}>
+                <option value="">Seleccionar proveedor...</option>
+                {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+              </select>
+            </div>
+
+            {/* Drop zone */}
+            {!visionPreview ? (
+              <label className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed cursor-pointer py-8 gap-2"
+                style={{ borderColor: 'rgba(127,79,36,0.3)', background: 'rgba(127,79,36,0.04)' }}>
+                <ScanLine size={28} style={{ color: 'rgba(127,79,36,0.5)' }} />
+                <span className="text-xs text-center" style={{ color: 'rgba(0,0,0,0.5)' }}>
+                  Arrastra una imagen o haz clic para seleccionar.<br />
+                  También puedes tomar una foto desde tu celular.
+                </span>
+                <input type="file" accept="image/*" capture="environment" className="hidden"
+                  onChange={e => e.target.files?.[0] && handleVisionFile(e.target.files[0])} />
+              </label>
+            ) : (
+              <div className="space-y-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={visionPreview} alt="Cotización" className="w-full rounded-xl object-contain max-h-40" />
+                {!visionData && (
+                  <button onClick={escanearCotizacion} disabled={visionLoading || !visionProvId}
+                    className="w-full rounded-xl py-2.5 text-sm text-white font-bold disabled:opacity-40 flex items-center justify-center gap-2"
+                    style={{ background: 'var(--cafe)' }}>
+                    {visionLoading ? (
+                      <>
+                        <span className="inline-block w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                        Analizando cotización...
+                      </>
+                    ) : (
+                      <><ScanLine size={15} /> Escanear</>
+                    )}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Resultados */}
+            {visionData && (
+              <div className="space-y-3">
+                {visionData.length === 0 ? (
+                  <p className="text-xs text-center" style={{ color: 'rgba(0,0,0,0.45)' }}>
+                    No se encontraron precios reconocibles en la imagen.
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-xs font-semibold" style={{ color: 'var(--verde-dark)' }}>
+                      {visionData.length} precio{visionData.length !== 1 ? 's' : ''} detectado{visionData.length !== 1 ? 's' : ''}:
+                    </p>
+                    <ul className="text-xs rounded-xl overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.07)' }}>
+                      {visionData.map((item, i) => (
+                        <li key={i} className="flex justify-between px-3 py-2" style={{ background: i % 2 === 0 ? 'rgba(58,125,68,0.04)' : 'transparent' }}>
+                          <span style={{ color: '#1c1c1c' }}>{item.nombre_insumo}</span>
+                          <span className="font-semibold" style={{ color: 'var(--verde-dark)' }}>{formatCLP(item.precio_extraido)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <button onClick={aplicarPrecios} disabled={!visionProvId}
+                      className="w-full rounded-xl py-2.5 text-sm text-white font-bold disabled:opacity-40"
+                      style={{ background: 'var(--verde)' }}>
+                      Aplicar precios a la matriz
+                    </button>
+                  </>
+                )}
+                <button onClick={() => { setVisionFile(null); setVisionPreview(null); setVisionData(null) }}
+                  className="w-full text-xs py-1.5 rounded-lg" style={{ color: 'rgba(0,0,0,0.4)' }}>
+                  Escanear otra imagen
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

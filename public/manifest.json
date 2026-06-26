@@ -1,11 +1,11 @@
 {
-  "name": "Sistema de Optimización de Presupuestos",
-  "short_name": "Fondo Comunitario",
-  "description": "Plataforma de gestión comunitaria para administrar fondos y materiales.",
+  "name": "Proyecto PAT",
+  "short_name": "PAT",
+  "description": "Programa de Acción Territorial — Comunidad Pedro Huisca",
   "start_url": "/simulador",
   "display": "standalone",
-  "background_color": "#f9fafb",
-  "theme_color": "#4f46e5",
+  "background_color": "#f7f3ed",
+  "theme_color": "#3a7d44",
   "orientation": "portrait-primary",
   "icons": [
     {

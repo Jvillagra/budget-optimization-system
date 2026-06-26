@@ -6,8 +6,8 @@ import Navbar from '@/components/Navbar'
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist' })
 
 export const metadata: Metadata = {
-  title: 'Sistema de Optimización de Presupuestos',
-  description: 'Plataforma de gestión comunitaria para administrar fondos y materiales de 29 beneficiarios.',
+  title: 'Proyecto PAT — Comunidad Pedro Huisca',
+  description: 'Programa de Acción Territorial. Plataforma de gestión comunitaria para optimizar fondos y materiales.',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
@@ -37,11 +37,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <main className="flex-1 mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
           {children}
         </main>
-        <footer className="py-4 text-center" style={{ borderTop: '1px solid rgba(0,0,0,0.07)' }}>
-          <p className="text-xs" style={{ color: 'rgba(0,0,0,0.35)' }}>
-            Comunidad Pedro Huisca — Desarrollado por{' '}
-            <span style={{ color: 'var(--cafe)', fontWeight: 600 }}>Neurobot Innovations</span>
-          </p>
+        <footer style={{
+          background: 'rgba(12,20,12,0.88)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderTop: '1px solid rgba(255,255,255,0.08)',
+        }}>
+          <div className="mx-auto max-w-7xl px-4 py-6 text-center space-y-1">
+            <p className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.4)' }}>
+              Comunidad Pedro Huisca
+            </p>
+            <p className="text-sm font-bold" style={{
+              background: 'linear-gradient(90deg, #4ade80, #a3e635, #d97706)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+            }}>
+              Desarrollado por Neurobot Innovations
+            </p>
+          </div>
         </footer>
       </body>
     </html>
