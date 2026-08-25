@@ -1,10 +1,9 @@
 'use client'
 
 import { useState, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 
 function LoginForm() {
-  const router = useRouter()
   const params = useSearchParams()
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -25,8 +24,12 @@ function LoginForm() {
       setError('Contraseña incorrecta')
       return
     }
-    router.replace(params.get('next') || '/')
-    router.refresh()
+    // Navegación dura (no router.replace/refresh): el Navbar prefetchea todas
+    // las rutas apenas se monta /login, sin sesión -- Next cachea esas
+    // respuestas (redirigidas a /login) en el router cache. Un replace()
+    // client-side las reutiliza y rebota de vuelta al login aunque la cookie
+    // ya esté seteada. window.location fuerza un request nuevo, sin caché.
+    window.location.assign(params.get('next') || '/')
   }
 
   return (
