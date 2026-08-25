@@ -3,7 +3,6 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
 import type { Beneficiario, Asignacion, Proveedor, PrecioProveedor } from '@/lib/types'
 import { buildPrecioMap, formatCLP } from '@/lib/business-logic'
 import { useProveedor } from '@/lib/proveedor-context'
@@ -38,12 +37,9 @@ export default function VistaResumenPage() {
   useEffect(() => {
     async function load() {
       try {
-        const [{ data: bens }, { data: provs }, { data: asigs }, { data: precs }] = await Promise.all([
-          supabase.from('beneficiarios').select('*').order('segmento').order('nombre'),
-          supabase.from('proveedores').select('*').eq('es_activo', true).order('nombre'),
-          supabase.from('asignaciones').select('*, catalogo_insumos(*)'),
-          supabase.from('precios_proveedor').select('*'),
-        ])
+        const res = await fetch('/api/data')
+        if (!res.ok) throw new Error('load failed')
+        const { beneficiarios: bens, proveedores: provs, asignaciones: asigs, preciosProveedor: precs } = await res.json()
         setBaseData({
           beneficiarios: (bens as Beneficiario[]) ?? [],
           proveedores: (provs as Proveedor[]) ?? [],

@@ -8,7 +8,6 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Cell,
   PieChart, Pie, ResponsiveContainer, LabelList,
 } from 'recharts'
-import { supabase } from '@/lib/supabase'
 import type { Proveedor, Beneficiario, CatalogoInsumo, AyudaMemoria, KPISimulacion, ResultadoSimulacion } from '@/lib/types'
 import { buildPrecioMap, calcularKPI, formatCLP } from '@/lib/business-logic'
 
@@ -63,13 +62,8 @@ export default function SimuladorPage() {
 
   useEffect(() => {
     async function load() {
-      const [{ data: provs }, { data: bens }, { data: ins }, { data: ams }, { data: precs }] = await Promise.all([
-        supabase.from('proveedores').select('*').eq('es_activo', true).order('nombre'),
-        supabase.from('beneficiarios').select('*').order('segmento').order('nombre'),
-        supabase.from('catalogo_insumos').select('*'),
-        supabase.from('ayuda_memoria').select('*'),
-        supabase.from('precios_proveedor').select('*'),
-      ])
+      const res = await fetch('/api/data')
+      const { proveedores: provs, beneficiarios: bens, catalogoInsumos: ins, ayudaMemoria: ams, preciosProveedor: precs } = res.ok ? await res.json() : {}
       if (provs) {
         setProveedores(provs as Proveedor[])
         if (provs.length >= 1) setProvA(provs[0].id)

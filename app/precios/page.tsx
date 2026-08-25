@@ -4,7 +4,6 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useRef } from 'react'
 import { ScanLine } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
 import type { CatalogoInsumo, Proveedor } from '@/lib/types'
 import { formatCLP } from '@/lib/business-logic'
 
@@ -31,11 +30,8 @@ export default function PreciosPage() {
 
   useEffect(() => {
     async function load() {
-      const [{ data: ins }, { data: provs }, { data: precs }] = await Promise.all([
-        supabase.from('catalogo_insumos').select('*').order('segmento').order('nombre'),
-        supabase.from('proveedores').select('*').eq('es_activo', true).order('nombre'),
-        supabase.from('precios_proveedor').select('*'),
-      ])
+      const res = await fetch('/api/data')
+      const { catalogoInsumos: ins, proveedores: provs, preciosProveedor: precs } = res.ok ? await res.json() : {}
       if (ins) setInsumos(ins as CatalogoInsumo[])
       if (provs) setProveedores(provs as Proveedor[])
       if (precs) {

@@ -4,7 +4,6 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
 import type { Beneficiario, CatalogoInsumo, Asignacion, AyudaMemoria, Proveedor } from '@/lib/types'
 import { buildPrecioMap, calcularCostoCarrito, formatCLP, PRESUPUESTO_BASE } from '@/lib/business-logic'
 import { useProveedor } from '@/lib/proveedor-context'
@@ -39,14 +38,9 @@ export default function BeneficiariosPage() {
   useEffect(() => {
     async function load() {
       try {
-        const [{ data: bens }, { data: ins }, { data: provs }, { data: asigs }, { data: ams }, { data: precs }] = await Promise.all([
-          supabase.from('beneficiarios').select('*').order('segmento').order('nombre'),
-          supabase.from('catalogo_insumos').select('*').order('segmento').order('nombre'),
-          supabase.from('proveedores').select('*').eq('es_activo', true).order('nombre'),
-          supabase.from('asignaciones').select('*, catalogo_insumos(*)'),
-          supabase.from('ayuda_memoria').select('*, catalogo_insumos(*)'),
-          supabase.from('precios_proveedor').select('*'),
-        ])
+        const res = await fetch('/api/data')
+        if (!res.ok) throw new Error('load failed')
+        const { beneficiarios: bens, catalogoInsumos: ins, proveedores: provs, asignaciones: asigs, ayudaMemoria: ams, preciosProveedor: precs } = await res.json()
         if (bens) setBeneficiarios(bens as Beneficiario[])
         if (ins) setInsumos(ins as CatalogoInsumo[])
         if (provs) {
