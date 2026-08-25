@@ -104,6 +104,12 @@ export type Database = {
         Update: { id?: string; beneficiario_id?: string; insumo_id?: string; cantidad?: number }
         Relationships: []
       }
+      audit_log: {
+        Row: { id: string; tabla: string; operacion: string; row_id: string; payload: unknown; created_at: string }
+        Insert: { id?: string; tabla: string; operacion: string; row_id: string; payload?: unknown; created_at?: string }
+        Update: { id?: string; tabla?: string; operacion?: string; row_id?: string; payload?: unknown; created_at?: string }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>

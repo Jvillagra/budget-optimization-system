@@ -100,12 +100,13 @@ export default function BeneficiariosPage() {
   async function agregar() {
     if (!seleccionado || !insumoForm || agregando) return
     setAgregando(true)
-    const { data } = await supabase
-      .from('asignaciones')
-      .insert({ beneficiario_id: seleccionado, insumo_id: insumoForm, cantidad: cantidadForm })
-      .select('*, catalogo_insumos(*)')
-      .single()
-    if (data) {
+    const res = await fetch('/api/asignaciones', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ beneficiario_id: seleccionado, insumo_id: insumoForm, cantidad: cantidadForm }),
+    })
+    const { data } = await res.json()
+    if (res.ok && data) {
       setAsignaciones(prev => ({
         ...prev,
         [seleccionado]: [...(prev[seleccionado] ?? []), data as Asignacion],
@@ -117,7 +118,8 @@ export default function BeneficiariosPage() {
   }
 
   async function eliminar(asignacionId: string) {
-    await supabase.from('asignaciones').delete().eq('id', asignacionId)
+    const res = await fetch(`/api/asignaciones?id=${encodeURIComponent(asignacionId)}`, { method: 'DELETE' })
+    if (!res.ok) return
     setAsignaciones(prev => ({
       ...prev,
       [seleccionado!]: (prev[seleccionado!] ?? []).filter(a => a.id !== asignacionId),

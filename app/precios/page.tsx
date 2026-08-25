@@ -54,18 +54,25 @@ export default function PreciosPage() {
     if (isNaN(precio as number) && precio !== null) return
 
     setSaving(s => new Set(s).add(key))
-    await supabase
-      .from('precios_proveedor')
-      .upsert({ proveedor_id: provId, insumo_id: insumoId, precio_unitario: precio }, { onConflict: 'proveedor_id,insumo_id' })
-    setPrecios(prev => new Map(prev).set(key, precio))
+    const res = await fetch('/api/precios-proveedor', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ proveedor_id: provId, insumo_id: insumoId, precio_unitario: precio }),
+    })
+    if (res.ok) setPrecios(prev => new Map(prev).set(key, precio))
     setSaving(s => { const n = new Set(s); n.delete(key); return n })
   }
 
   async function agregarProveedor() {
     const nombre = nuevoNombre.trim()
     if (!nombre) return
-    const { data } = await supabase.from('proveedores').insert({ nombre, es_activo: true }).select().single()
-    if (data) {
+    const res = await fetch('/api/proveedores', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre }),
+    })
+    const { data } = await res.json()
+    if (res.ok && data) {
       setProveedores(prev => [...prev, data as Proveedor].sort((a, b) => a.nombre.localeCompare(b.nombre)))
       setNuevoNombre('')
       setAddingProv(false)
@@ -75,8 +82,12 @@ export default function PreciosPage() {
   async function guardarNombreProveedor(id: string) {
     const nombre = editNombre.trim()
     if (!nombre) { setEditingId(null); return }
-    await supabase.from('proveedores').update({ nombre }).eq('id', id)
-    setProveedores(prev => prev.map(p => p.id === id ? { ...p, nombre } : p))
+    const res = await fetch('/api/proveedores', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, nombre }),
+    })
+    if (res.ok) setProveedores(prev => prev.map(p => p.id === id ? { ...p, nombre } : p))
     setEditingId(null)
   }
 
@@ -109,11 +120,12 @@ export default function PreciosPage() {
       )
       if (!insumo) continue
       const key = `${visionProvId}_${insumo.id}`
-      await supabase.from('precios_proveedor').upsert(
-        { proveedor_id: visionProvId, insumo_id: insumo.id, precio_unitario: item.precio_extraido },
-        { onConflict: 'proveedor_id,insumo_id' }
-      )
-      setPrecios(prev => new Map(prev).set(key, item.precio_extraido))
+      const res = await fetch('/api/precios-proveedor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proveedor_id: visionProvId, insumo_id: insumo.id, precio_unitario: item.precio_extraido }),
+      })
+      if (res.ok) setPrecios(prev => new Map(prev).set(key, item.precio_extraido))
     }
     setShowVision(false)
     setVisionFile(null)
