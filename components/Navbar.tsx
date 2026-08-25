@@ -109,13 +109,15 @@ export default function Navbar() {
                 <Download size={13} /> Instalar app
               </button>
             )}
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold"
-              style={{ color: 'var(--cafe)' }}
-            >
-              <LogOut size={13} /> Salir
-            </button>
+            {links.length > 0 && (
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold"
+                style={{ color: 'var(--cafe)' }}
+              >
+                <LogOut size={13} /> Salir
+              </button>
+            )}
           </div>
 
           {/* Mobile right-side actions */}
@@ -181,13 +183,15 @@ export default function Navbar() {
               {link.label}
             </Link>
           ))}
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium"
-            style={{ color: 'var(--cafe)', background: 'rgba(0,0,0,0.03)' }}
-          >
-            <LogOut size={15} /> Salir
-          </button>
+          {links.length > 0 && (
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium"
+              style={{ color: 'var(--cafe)', background: 'rgba(0,0,0,0.03)' }}
+            >
+              <LogOut size={15} /> Salir
+            </button>
+          )}
         </div>
       )}
     </header>
