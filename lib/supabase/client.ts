@@ -9,6 +9,16 @@ import type { Database } from '../types'
 export function getSupabaseBrowserClient() {
   return createBrowserClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      auth: {
+        // PKCE exige abrir el Magic Link en el MISMO navegador donde se
+        // pidió (requiere el code_verifier guardado localmente) -- rompe el
+        // caso normal de "pido el link y lo abro desde Gmail/el teléfono".
+        // Implicit flow no tiene esa restricción: el token de sesión viaja
+        // en el propio link del email.
+        flowType: 'implicit',
+      },
+    }
   )
 }
