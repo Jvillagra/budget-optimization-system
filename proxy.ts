@@ -6,7 +6,13 @@ import { createServerClient } from '@supabase/ssr'
 // autorización fina por rol (owner/admin/socio) vive en cada Server
 // Component/Route Handler vía lib/roles.ts, no acá, para no pegarle a la
 // base de datos en cada request de cada asset.
-const PUBLIC_PATHS = ['/login', '/auth/callback', '/manifest.json', '/favicon.ico']
+const PUBLIC_PATHS = ['/login', '/auth/callback', '/manifest.json']
+// Cualquier archivo estático de public/ (logo, favicons, manifest icons) --
+// nunca son sensibles y layout.tsx los referencia en TODAS las páginas,
+// incluida /login (sin sesión todavía). Bug real encontrado: antes solo
+// /favicon.ico e /icons/* estaban permitidos, así que /logo.png y los
+// favicon-*.png quedaban detrás del gate y se rompían en /login.
+const STATIC_ASSET_RE = /\.(png|jpg|jpeg|svg|webp|ico|gif)$/i
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
@@ -15,7 +21,8 @@ export async function proxy(req: NextRequest) {
     PUBLIC_PATHS.some(p => pathname === p) ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/icons') ||
-    pathname.startsWith('/screenshots')
+    pathname.startsWith('/screenshots') ||
+    STATIC_ASSET_RE.test(pathname)
 
   if (isPublic) return NextResponse.next()
 
