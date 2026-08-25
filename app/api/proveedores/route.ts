@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
+import { getViewerContext, isStaff } from '@/lib/roles'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { logAudit } from '@/lib/audit'
 
 export async function POST(req: NextRequest) {
-  if (!(await requireAuth(req))) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  const ctx = await getViewerContext(); if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
   const body = await req.json().catch(() => null)
   const nombre = typeof body?.nombre === 'string' ? body.nombre.trim() : ''
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  if (!(await requireAuth(req))) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  const ctx = await getViewerContext(); if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
   const body = await req.json().catch(() => null)
   const id = body?.id

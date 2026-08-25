@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth'
+import { createServerClient } from '@supabase/ssr'
 
-// Gate de contraseña compartida para toda la app (páginas + API), salvo el
-// propio login. No reemplaza RLS -- la anon key puede seguir leyendo directo
-// contra Supabase si alguien la extrae del bundle -- pero cierra el camino
-// normal de uso y protege por completo las rutas de escritura, que ya no
-// aceptan la anon key en absoluto (ver app/api/*/route.ts).
-const PUBLIC_PATHS = ['/login', '/api/auth/login', '/manifest.json', '/favicon.ico']
+// Gate de sesión para toda la app (páginas + API), salvo login/callback.
+// Solo verifica que haya una sesión válida de Supabase Auth -- la
+// autorización fina por rol (owner/admin/socio) vive en cada Server
+// Component/Route Handler vía lib/roles.ts, no acá, para no pegarle a la
+// base de datos en cada request de cada asset.
+const PUBLIC_PATHS = ['/login', '/auth/callback', '/manifest.json', '/favicon.ico']
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
@@ -19,17 +19,38 @@ export async function proxy(req: NextRequest) {
 
   if (isPublic) return NextResponse.next()
 
-  const authed = await verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value)
-  if (authed) return NextResponse.next()
+  let response = NextResponse.next({ request: req })
 
-  if (pathname.startsWith('/api')) {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return req.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          for (const { name, value } of cookiesToSet) req.cookies.set(name, value)
+          response = NextResponse.next({ request: req })
+          for (const { name, value, options } of cookiesToSet) response.cookies.set(name, value, options)
+        },
+      },
+    }
+  )
+
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    if (pathname.startsWith('/api')) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
+    const url = req.nextUrl.clone()
+    url.pathname = '/login'
+    url.searchParams.set('next', pathname)
+    return NextResponse.redirect(url)
   }
 
-  const url = req.nextUrl.clone()
-  url.pathname = '/login'
-  url.searchParams.set('next', pathname)
-  return NextResponse.redirect(url)
+  return response
 }
 
 export const config = {

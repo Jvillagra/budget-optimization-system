@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
+import { getViewerContext, isStaff } from '@/lib/roles'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { logAudit } from '@/lib/audit'
 
@@ -10,7 +10,7 @@ import { logAudit } from '@/lib/audit'
 // `check (true)` de RLS no puede hacer.
 
 export async function POST(req: NextRequest) {
-  if (!(await requireAuth(req))) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  const ctx = await getViewerContext(); if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
   const body = await req.json().catch(() => null)
   const beneficiario_id = body?.beneficiario_id
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  if (!(await requireAuth(req))) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  const ctx = await getViewerContext(); if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'id es requerido' }, { status: 400 })

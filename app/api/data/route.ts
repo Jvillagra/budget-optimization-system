@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
+import { NextResponse } from 'next/server'
+import { getViewerContext, isStaff } from '@/lib/roles'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 
 // Único punto de lectura para el cliente. Antes cada página pegaba directo a
@@ -9,8 +9,9 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin'
 // pasan por acá con service_role, detrás del mismo gate que las escrituras;
 // la anon key ya no tiene ningún uso legítimo en el cliente.
 
-export async function GET(req: NextRequest) {
-  if (!(await requireAuth(req))) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+export async function GET() {
+  const ctx = await getViewerContext()
+  if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
   const admin = getSupabaseAdmin()
 

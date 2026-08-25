@@ -26,6 +26,14 @@ export interface Beneficiario {
   nombre: string
   segmento: Segmento
   presupuesto_base: number
+  email: string | null
+}
+
+export interface FotoCompra {
+  id: string
+  beneficiario_id: string
+  r2_key: string
+  uploaded_at: string
 }
 
 export interface AyudaMemoria {
@@ -87,9 +95,21 @@ export type Database = {
         Relationships: []
       }
       beneficiarios: {
-        Row: { id: string; nombre: string; segmento: string; presupuesto_base: number }
-        Insert: { id?: string; nombre: string; segmento: string; presupuesto_base?: number }
-        Update: { id?: string; nombre?: string; segmento?: string; presupuesto_base?: number }
+        Row: { id: string; nombre: string; segmento: string; presupuesto_base: number; email: string | null }
+        Insert: { id?: string; nombre: string; segmento: string; presupuesto_base?: number; email?: string | null }
+        Update: { id?: string; nombre?: string; segmento?: string; presupuesto_base?: number; email?: string | null }
+        Relationships: []
+      }
+      app_roles: {
+        Row: { user_id: string; role: string; created_at: string }
+        Insert: { user_id: string; role: string; created_at?: string }
+        Update: { user_id?: string; role?: string; created_at?: string }
+        Relationships: []
+      }
+      fotos_compra: {
+        Row: { id: string; beneficiario_id: string; r2_key: string; uploaded_at: string }
+        Insert: { id?: string; beneficiario_id: string; r2_key: string; uploaded_at?: string }
+        Update: { id?: string; beneficiario_id?: string; r2_key?: string; uploaded_at?: string }
         Relationships: []
       }
       ayuda_memoria: {
