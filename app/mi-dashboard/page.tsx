@@ -19,12 +19,49 @@ const MAX_FOTOS = 5
 
 type Foto = { id: string; uploaded_at: string; url: string }
 
+// Foto de perfil vía Gravatar (ver app/api/mi-dashboard/route.ts) con fallback
+// a iniciales -- Gravatar responde 404 si el socio nunca configuró una, así
+// que el fallback es el camino esperado para la mayoría, no un error real.
+function iniciales(nombre: string): string {
+  const partes = nombre.trim().split(/\s+/)
+  return ((partes[0]?.[0] ?? '') + (partes[1]?.[0] ?? '')).toUpperCase()
+}
+
+function Avatar({ url, nombre }: { url: string | null; nombre: string }) {
+  const [fallo, setFallo] = useState(!url)
+  return (
+    <div
+      className="shrink-0 h-14 w-14 rounded-full p-[2px] motion-safe:animate-[scaleIn_200ms_ease-out]"
+      style={{ background: 'linear-gradient(135deg, var(--verde) 0%, var(--cafe) 100%)' }}
+    >
+      {!fallo && url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={url}
+          alt={`Foto de perfil de ${nombre}`}
+          className="h-full w-full rounded-full object-cover border-2 border-white opacity-0 transition-opacity duration-200 ease-out"
+          onLoad={e => e.currentTarget.classList.replace('opacity-0', 'opacity-100')}
+          onError={() => setFallo(true)}
+        />
+      ) : (
+        <div
+          className="h-full w-full rounded-full border-2 border-white flex items-center justify-center text-sm font-semibold"
+          style={{ background: 'var(--verde-muted)', color: 'var(--verde-dark)' }}
+        >
+          {iniciales(nombre)}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function MiDashboardPage() {
   const { proveedorId, setProveedorId } = useProveedor()
   const [beneficiario, setBeneficiario] = useState<Beneficiario | null>(null)
   const [asignaciones, setAsignaciones] = useState<Asignacion[]>([])
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
   const [precioMap, setPrecioMap] = useState(new Map<string, number | null>())
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
 
@@ -38,10 +75,11 @@ export default function MiDashboardPage() {
     async function load() {
       const res = await fetch('/api/mi-dashboard')
       if (!res.ok) { setNotFound(true); setLoading(false); return }
-      const { beneficiario: ben, asignaciones: asigs, proveedores: provs, preciosProveedor: precs } = await res.json()
+      const { beneficiario: ben, asignaciones: asigs, proveedores: provs, preciosProveedor: precs, avatarUrl: avatar } = await res.json()
       setBeneficiario(ben)
       setAsignaciones(asigs ?? [])
       setProveedores(provs ?? [])
+      setAvatarUrl(avatar ?? null)
       if (precs) setPrecioMap(buildPrecioMap(precs))
       const idsDisponibles = new Set((provs ?? []).map((p: Proveedor) => p.id))
       if ((!proveedorId || !idsDisponibles.has(proveedorId)) && provs?.length) setProveedorId(provs[0].id)
@@ -132,11 +170,14 @@ export default function MiDashboardPage() {
 
   return (
     <div className="space-y-8 max-w-2xl mx-auto">
-      <div>
-        <h1 className="text-xl font-bold" style={{ color: 'var(--verde-dark)' }}>
-          Hola, {beneficiario.nombre.split(' ')[0]}
-        </h1>
-        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{beneficiario.segmento} · Proyecto PAT</p>
+      <div className="flex items-center gap-3">
+        <Avatar url={avatarUrl} nombre={beneficiario.nombre} />
+        <div>
+          <h1 className="text-xl font-bold" style={{ color: 'var(--verde-dark)' }}>
+            Hola, {beneficiario.nombre.split(' ')[0]}
+          </h1>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{beneficiario.segmento} · Proyecto PAT</p>
+        </div>
       </div>
 
       {proveedores.length > 0 && (
@@ -161,15 +202,15 @@ export default function MiDashboardPage() {
       )}
 
       <div className="grid grid-cols-2 gap-3">
-        <Card className="p-4">
+        <Card className="p-4 motion-safe:animate-[riseIn_220ms_ease-out]">
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Presupuesto base</p>
           <p className="text-lg font-semibold" style={{ color: '#1c1c1c' }}>{formatCLP(PRESUPUESTO_BASE)}</p>
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 motion-safe:animate-[riseIn_220ms_ease-out]" style={{ animationDelay: '40ms' }}>
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Total de tu compra</p>
           <p className="text-lg font-semibold" style={{ color: '#1c1c1c' }}>{formatCLP(carrito.total)}</p>
         </Card>
-        <Card className="p-4 col-span-2">
+        <Card className="p-4 col-span-2 motion-safe:animate-[riseIn_220ms_ease-out]" style={{ animationDelay: '80ms' }}>
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Aporte de bolsillo</p>
           <p className="text-lg font-semibold" style={{ color: '#1c1c1c' }}>{formatCLP(aporteBolsillo)}</p>
         </Card>

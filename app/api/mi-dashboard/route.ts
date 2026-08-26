@@ -1,6 +1,16 @@
+import { createHash } from 'crypto'
 import { NextResponse } from 'next/server'
 import { getViewerContext } from '@/lib/roles'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
+
+// Gravatar: servicio público que asocia una foto de perfil a un email por
+// hash MD5, sin necesitar login OAuth (el proyecto solo tiene Magic Link).
+// d=404 hace que la URL falle si el socio nunca configuró una -- el cliente
+// cae a un avatar de iniciales en el onError, no hay estado "cargando" falso.
+function gravatarUrl(email: string): string {
+  const hash = createHash('md5').update(email.trim().toLowerCase()).digest('hex')
+  return `https://www.gravatar.com/avatar/${hash}?s=160&d=404`
+}
 
 // Datos propios de un socio -- nunca expone datos de otros beneficiarios.
 // Incluye proveedores/precios (info pública de catálogo, no sensible) para
@@ -34,5 +44,7 @@ export async function GET() {
     ? (proveedores ?? []).filter(p => p.id !== beneficiario.proveedor_compra_id)
     : proveedores
 
-  return NextResponse.json({ beneficiario, asignaciones, proveedores: proveedoresDisponibles, preciosProveedor })
+  const avatarUrl = beneficiario?.email ? gravatarUrl(beneficiario.email) : null
+
+  return NextResponse.json({ beneficiario, asignaciones, proveedores: proveedoresDisponibles, preciosProveedor, avatarUrl })
 }
