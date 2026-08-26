@@ -51,9 +51,23 @@ export default function AdminPage() {
     setEnviando(false)
   }
 
+  const owners = roles.filter(r => r.role === 'owner').length
+  const admins = roles.filter(r => r.role === 'admin').length
+
   return (
     <div className="max-w-xl mx-auto space-y-8">
       <h1 className="text-lg font-bold" style={{ color: 'var(--verde-dark)' }}>Administración</h1>
+
+      <Card className="p-4 grid grid-cols-2 gap-4">
+        <div>
+          <p className="text-xs font-semibold" style={{ color: 'var(--verde-dark)' }}>Owners</p>
+          <p className="text-xl font-bold mt-1" style={{ color: '#1c1c1c' }}>{loading ? '—' : owners}</p>
+        </div>
+        <div>
+          <p className="text-xs font-semibold" style={{ color: 'var(--cafe-dark)' }}>Admins</p>
+          <p className="text-xl font-bold mt-1" style={{ color: '#1c1c1c' }}>{loading ? '—' : admins}</p>
+        </div>
+      </Card>
 
       <section className="space-y-3">
         <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
