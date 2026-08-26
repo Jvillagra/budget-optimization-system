@@ -15,15 +15,29 @@ function CallbackInner() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const hashError = new URLSearchParams(window.location.hash.slice(1)).get('error_description')
+    const hashParams = new URLSearchParams(window.location.hash.slice(1))
+    const hashError = hashParams.get('error_description')
     if (hashError) {
       setError(hashError.replace(/\+/g, ' '))
       return
     }
 
     const supabase = getSupabaseBrowserClient()
-    supabase.auth.getSession().then(({ data, error: sessionError }) => {
-      if (sessionError || !data.session) {
+    const accessToken = hashParams.get('access_token')
+    const refreshToken = hashParams.get('refresh_token')
+
+    // Dos formas posibles de traer la sesión, según cómo se generó el link:
+    // 1. Tokens en el hash (#access_token=...) -- el SDK no siempre los
+    //    detecta solo; los seteamos a mano con setSession().
+    // 2. `?code=` en la URL -- lo resuelve el detectSessionInUrl automático
+    //    del SDK, alcanza con getSession().
+    const resolveSession = accessToken && refreshToken
+      ? supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+      : supabase.auth.getSession()
+
+    resolveSession.then((result) => {
+      const session = 'session' in result.data ? result.data.session : null
+      if (result.error || !session) {
         setError('El link es inválido o ya expiró.')
         return
       }
