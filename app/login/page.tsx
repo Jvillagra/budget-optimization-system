@@ -2,7 +2,9 @@
 
 import { useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
+import Image from 'next/image'
 import { getSupabaseBrowserClient } from '@/lib/supabase/client'
+import { Card, Input, Button, Alert } from '@/components/design-system'
 
 function LoginForm() {
   const params = useSearchParams()
@@ -34,43 +36,54 @@ function LoginForm() {
     setEnviado(true)
   }
 
-  if (enviado) {
-    return (
-      <div className="max-w-sm mx-auto mt-16 space-y-4 text-center">
-        <h1 className="text-xl font-semibold">Revisa tu correo</h1>
-        <p className="text-sm text-gray-500">
-          Te enviamos un link de acceso a <strong>{email}</strong>. Ábrelo desde
-          este mismo dispositivo para entrar.
-        </p>
-      </div>
-    )
-  }
-
   return (
-    <div className="max-w-sm mx-auto mt-16 space-y-4">
-      <h1 className="text-xl font-semibold text-center">Proyecto PAT</h1>
-      <p className="text-sm text-center text-gray-500">
-        Ingresa tu email y te mandamos un link de acceso — sin contraseña.
-      </p>
-      <form onSubmit={submit} className="space-y-3">
-        <input
-          type="email"
-          autoFocus
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-          className="w-full rounded-xl border border-gray-300 px-4 py-2.5"
-          placeholder="tu@email.com"
-          required
-        />
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-xl bg-indigo-600 text-white py-2.5 font-medium disabled:opacity-50"
-        >
-          {loading ? 'Enviando…' : 'Enviarme el link'}
-        </button>
-      </form>
+    <div className="min-h-[70vh] flex items-center justify-center px-4">
+      <div className="w-full max-w-sm motion-safe:animate-[fadeIn_250ms_ease-out]">
+        <Card strong className="p-8 text-center space-y-6">
+          <div className="flex flex-col items-center gap-3">
+            <Image src="/logo.png" alt="" width={48} height={48} className="rounded-xl" />
+            <div>
+              <h1 className="text-lg font-bold" style={{ color: 'var(--verde-dark)' }}>
+                Proyecto PAT
+              </h1>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                Comunidad Pedro Huisca
+              </p>
+            </div>
+          </div>
+
+          {enviado ? (
+            <div className="space-y-2 motion-safe:animate-[fadeIn_200ms_ease-out]">
+              <h2 className="text-base font-semibold" style={{ color: '#1c1c1c' }}>
+                Revisa tu correo
+              </h2>
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                Te enviamos un link de acceso a <strong>{email}</strong>. Ábrelo desde
+                este mismo dispositivo para entrar.
+              </p>
+            </div>
+          ) : (
+            <form onSubmit={submit} className="space-y-4 text-left">
+              <p className="text-sm text-center" style={{ color: 'var(--text-muted)' }}>
+                Ingresa tu email y te mandamos un link de acceso — sin contraseña.
+              </p>
+              <Input
+                type="email"
+                autoFocus
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="tu@email.com"
+                aria-label="Email"
+                required
+              />
+              {error && <Alert tone="error">{error}</Alert>}
+              <Button type="submit" disabled={loading} className="w-full">
+                {loading ? 'Enviando…' : 'Enviarme el link'}
+              </Button>
+            </form>
+          )}
+        </Card>
+      </div>
     </div>
   )
 }

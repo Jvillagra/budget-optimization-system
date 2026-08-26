@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Trash2 } from 'lucide-react'
+import { Card, Button, Input, Badge, Alert } from '@/components/design-system'
 
 interface RoleRow { user_id: string; role: string; email: string }
 
@@ -51,49 +53,67 @@ export default function AdminPage() {
 
   return (
     <div className="max-w-xl mx-auto space-y-8">
-      <h1 className="text-xl font-semibold">Administración</h1>
+      <h1 className="text-lg font-bold" style={{ color: 'var(--verde-dark)' }}>Administración</h1>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-medium text-gray-500">Owner / Admin</h2>
-        {loading ? <p className="text-sm text-gray-400">Cargando…</p> : (
-          <ul className="divide-y divide-gray-200 rounded-xl border border-gray-200 bg-white">
+        <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+          Owner / Admin
+        </h2>
+        {loading ? (
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Cargando…</p>
+        ) : (
+          <Card className="divide-y divide-black/6 overflow-hidden">
             {roles.map(r => (
-              <li key={r.user_id} className="flex items-center justify-between px-4 py-2.5 text-sm">
-                <span>{r.email} <span className="text-gray-400">· {r.role}</span></span>
+              <div key={r.user_id} className="flex items-center justify-between px-4 py-3 text-sm">
+                <span className="flex items-center gap-2" style={{ color: '#1c1c1c' }}>
+                  {r.email}
+                  <Badge tone={r.role === 'owner' ? 'verde' : 'cafe'}>{r.role}</Badge>
+                </span>
                 {r.role !== 'owner' && (
-                  <button onClick={() => quitarAdmin(r.user_id)} className="text-red-600 text-xs">quitar</button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => quitarAdmin(r.user_id)}
+                    aria-label={`Quitar a ${r.email} de admin`}
+                  >
+                    <Trash2 size={12} /> quitar
+                  </Button>
                 )}
-              </li>
+              </div>
             ))}
-          </ul>
+          </Card>
         )}
         <div className="flex gap-2">
-          <input
-            value={nuevoEmail}
-            onChange={e => setNuevoEmail(e.target.value)}
-            placeholder="email@ejemplo.com"
-            className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          />
-          <button onClick={agregarAdmin} className="px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm">Agregar admin</button>
+          <div className="flex-1">
+            <Input
+              value={nuevoEmail}
+              onChange={e => setNuevoEmail(e.target.value)}
+              placeholder="email@ejemplo.com"
+              aria-label="Email del nuevo admin"
+            />
+          </div>
+          <Button onClick={agregarAdmin}>Agregar admin</Button>
         </div>
-        {msg && <p className="text-xs text-amber-700">{msg}</p>}
+        {msg && <Alert tone="warning">{msg}</Alert>}
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-medium text-gray-500">Magic Links masivos</h2>
-        <p className="text-xs text-gray-400">Envía un link de acceso a todos los socios que tengan email cargado.</p>
-        <button
-          onClick={enviarMagicLinks}
-          disabled={enviando}
-          className="px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm disabled:opacity-50"
-        >
-          {enviando ? 'Enviando…' : 'Enviar Magic Links a todos los socios'}
-        </button>
-        {reporte && (
-          <p className="text-xs text-gray-600">
-            {reporte.enviados} enviados, {reporte.fallidos} fallidos.
+        <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+          Magic Links masivos
+        </h2>
+        <Card className="p-4 space-y-3">
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+            Envía un link de acceso a todos los socios que tengan email cargado.
           </p>
-        )}
+          <Button onClick={enviarMagicLinks} disabled={enviando}>
+            {enviando ? 'Enviando…' : 'Enviar Magic Links a todos los socios'}
+          </Button>
+          {reporte && (
+            <Alert tone="info">
+              {reporte.enviados} enviados, {reporte.fallidos} fallidos.
+            </Alert>
+          )}
+        </Card>
       </section>
     </div>
   )
