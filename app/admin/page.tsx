@@ -99,6 +99,22 @@ export default function AdminPage() {
 
       <section className="space-y-3">
         <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+          Informe para consultora
+        </h2>
+        <Card className="p-4 space-y-3">
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+            Descarga un PDF con el total general y el detalle por beneficiario
+            (proveedor de compra, total cotizado y fotos de comprobante) para
+            enviar a la empresa consultora que audita el proyecto.
+          </p>
+          <a href="/api/admin/informe-consultora">
+            <Button>Descargar informe PDF</Button>
+          </a>
+        </Card>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
           Magic Links masivos
         </h2>
         <Card className="p-4 space-y-3">
