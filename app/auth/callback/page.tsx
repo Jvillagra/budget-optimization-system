@@ -35,15 +35,20 @@ function CallbackInner() {
       ? supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
       : supabase.auth.getSession()
 
-    resolveSession.then((result) => {
+    resolveSession.then(async (result) => {
       const session = 'session' in result.data ? result.data.session : null
       if (result.error || !session) {
         setError('El link es inválido o ya expiró.')
         return
       }
+      // El `next` genérico ('/') sirve para owner/admin, pero un socio no
+      // tiene acceso a esas páginas -- lo mandamos directo a su dashboard.
+      const whoami = await fetch('/api/whoami').then(r => r.json()).catch(() => null)
+      const next = params.get('next')
+      const destino = whoami?.role === 'socio' ? '/mi-dashboard' : (next || '/')
       // Navegación dura: mismo motivo que en login/logout (proxy.ts lee la
       // cookie recién seteada, el router cache de Next podría no verla).
-      window.location.assign(params.get('next') || '/')
+      window.location.assign(destino)
     })
   }, [params])
 
