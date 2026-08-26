@@ -1,0 +1,20 @@
+{
+  "verdict": "APPROVED_WITH_NOTES",
+  "summary": "Endpoint informe-consultora PDF aprobado: isStaff check en orden, filtro QA por email exacto, cambios quirúrgicos, build exitoso. Una observación menor de defensa en profundidad en HTML: URLs de fotos deberían escaparse en atributo src.",
+  "findings": [
+    {
+      "severity": "low",
+      "description": "En template.ts línea 28, las URLs firmadas de fotos se insertan directamente en el atributo src sin HTML-escaping. Aunque el riesgo es bajo (vienen de urlFirmadaLectura server-side), es mejor práctica usar encodeURI() o HTMLAttribEscape para defensas en profundidad contra URLs con carácteres especiales inesperados.",
+      "location": "app/api/admin/informe-consultora/template.ts:28"
+    }
+  ],
+  "verified_commands": [
+    "git status --porcelain (working tree clean, sin archivos temporales commiteados)",
+    "git diff HEAD~1..HEAD --stat (7 archivos modificados: .gitignore, admin/page.tsx, 3 nuevos en app/api/admin/informe-consultora/, package-lock.json, package.json)",
+    "git ls-files | grep -i tmp (vacío — no hay archivos tmp en git)",
+    "find . -name '*tmp*' -o -name '*test-fotos*' (artifacts en .next/dev/ no commiteados)",
+    "git diff HEAD~1..HEAD | grep -i 'token|secret|key|password|eyJ' (solo 'f.r2_key' encontrado, que es un campo de DB, no un secret)",
+    "npm run build (✓ Compiled successfully, 27 static pages generated)",
+    "npm list puppeteer-core @sparticuz/chromium (ambos instalados correctamente en versiones reportadas)"
+  ]
+}

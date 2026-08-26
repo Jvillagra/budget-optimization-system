@@ -25,7 +25,7 @@ function escapeHTML(s: string): string {
 
 function renderBeneficiario(b: InformeBeneficiario): string {
   const fotosHTML = b.fotos.length
-    ? `<div class="fotos">${b.fotos.map(url => `<img src="${url}" alt="Comprobante de compra" />`).join('')}</div>`
+    ? `<div class="fotos">${b.fotos.map(url => `<img src="${encodeURI(url)}" alt="Comprobante de compra" />`).join('')}</div>`
     : `<p class="sin-fotos">Sin fotos de comprobante subidas.</p>`
 
   return `
