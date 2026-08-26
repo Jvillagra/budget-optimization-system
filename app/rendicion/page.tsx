@@ -10,11 +10,14 @@ import { FOTOS_REQUERIDAS } from '@/lib/constants'
 import { Card, Button, Badge } from '@/components/design-system'
 
 type Foto = { id: string; uploaded_at: string; url: string }
+type ProveedorOpcion = { id: string; nombre: string }
 type FilaRendicion = {
   id: string
   nombre: string
   segmento: string
   proveedorNombre: string | null
+  proveedorCompraId: string | null
+  proveedorCompraNombre: string | null
   total: number
   itemsSinPrecio: number
   fotos: Foto[]
@@ -35,6 +38,7 @@ const SEG_COLOR: Record<string, string> = {
 
 export default function RendicionPage() {
   const [filas, setFilas] = useState<FilaRendicion[]>([])
+  const [proveedores, setProveedores] = useState<ProveedorOpcion[]>([])
   const [resumen, setResumen] = useState<Resumen | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
@@ -49,14 +53,32 @@ export default function RendicionPage() {
     try {
       const res = await fetch('/api/rendicion')
       if (!res.ok) throw new Error('load failed')
-      const { beneficiarios, resumen: r } = await res.json()
+      const { beneficiarios, resumen: r, proveedores: provs } = await res.json()
       setFilas(beneficiarios ?? [])
       setResumen(r ?? null)
+      setProveedores(provs ?? [])
     } catch {
       setLoadError(true)
     } finally {
       setLoading(false)
     }
+  }
+
+  async function setProveedorCompra(id: string, proveedorId: string | null) {
+    setBusyId(id)
+    const res = await fetch(`/api/rendicion/${id}/proveedor`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ proveedorId }),
+    })
+    if (res.ok) {
+      const { data } = await res.json()
+      const nombre = proveedorId ? (proveedores.find(p => p.id === proveedorId)?.nombre ?? null) : null
+      setFilas(prev => prev.map(f => f.id === id
+        ? { ...f, proveedorCompraId: data.proveedor_compra_id, proveedorCompraNombre: nombre }
+        : f))
+    }
+    setBusyId(null)
   }
 
   async function marcarCompleto(id: string) {
@@ -168,12 +190,13 @@ export default function RendicionPage() {
       {/* Tabla */}
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[760px]">
+          <table className="w-full text-sm min-w-[900px]">
             <thead>
               <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
                 <th className="text-left font-semibold px-4 py-3" style={{ color: 'var(--text-muted)' }}>Beneficiario</th>
                 <th className="text-left font-semibold px-4 py-3" style={{ color: 'var(--text-muted)' }}>Segmento</th>
-                <th className="text-left font-semibold px-4 py-3" style={{ color: 'var(--text-muted)' }}>Proveedor</th>
+                <th className="text-left font-semibold px-4 py-3" style={{ color: 'var(--text-muted)' }}>Proveedor estimado</th>
+                <th className="text-left font-semibold px-4 py-3" style={{ color: 'var(--text-muted)' }}>Proveedor de compra</th>
                 <th className="text-left font-semibold px-4 py-3" style={{ color: 'var(--text-muted)' }}>Fotos</th>
                 <th className="text-right font-semibold px-4 py-3" style={{ color: 'var(--text-muted)' }}>Total cotizado</th>
                 <th className="text-left font-semibold px-4 py-3" style={{ color: 'var(--text-muted)' }}>Estado</th>
@@ -191,6 +214,21 @@ export default function RendicionPage() {
                     </td>
                     <td className="px-4 py-3" style={{ color: 'rgba(0,0,0,0.6)' }}>
                       {f.proveedorNombre ?? <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <select
+                        value={f.proveedorCompraId ?? ''}
+                        onChange={e => setProveedorCompra(f.id, e.target.value || null)}
+                        disabled={busyId === f.id}
+                        aria-label={`Proveedor de compra confirmado de ${f.nombre}`}
+                        className="rounded-lg border px-2 py-1.5 text-xs bg-white/70 border-black/12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[var(--verde)]"
+                        style={{ color: f.proveedorCompraId ? 'var(--verde-dark)' : 'var(--text-muted)', fontWeight: f.proveedorCompraId ? 600 : 400 }}
+                      >
+                        <option value="">Sin confirmar</option>
+                        {proveedores.map(p => (
+                          <option key={p.id} value={p.id}>{p.nombre}</option>
+                        ))}
+                      </select>
                     </td>
                     <td className="px-4 py-3">
                       {f.fotos.length === 0 ? (

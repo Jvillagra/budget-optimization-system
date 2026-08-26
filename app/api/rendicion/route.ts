@@ -9,16 +9,15 @@ import type { Asignacion, Proveedor, PrecioProveedor, FotoCompra } from '@/lib/t
 // Cuadro de mando de rendición (staff-only). Por cada beneficiario: total
 // cotizado, proveedor de referencia y fotos de comprobante.
 //
-// Nota de diseño: hoy no existe un concepto persistido de "proveedor
-// elegido" -- el que ve cada socio en /mi-dashboard es el que tiene
-// seleccionado en su sesión de simulación (localStorage, client-side, no
-// se guarda en la DB). Para /rendicion, que es una vista de staff sobre
-// TODOS los beneficiarios a la vez, no hay un único proveedor de sesión al
-// que atarse. Se calcula, por beneficiario, el "mejor proveedor
-// disponible": el que cotiza el carrito completo (sin ítems sin precio) al
-// menor total; si ninguno cotiza el 100% del carrito, se usa el que cubre
-// más ítems (y, en empate, el de menor total). Esto es una aproximación
-// razonable para efectos de reporte, no una fuente de verdad transaccional.
+// Nota de diseño: `proveedor_compra_id` (beneficiarios) es el proveedor
+// REAL con el que se compró, seteado por staff vía
+// /api/rendicion/[id]/proveedor tras validar el comprobante -- es el dato
+// de verdad. `proveedorNombre` (sin "Compra" en el nombre) sigue siendo el
+// "mejor proveedor calculado": el que cotiza el carrito completo (sin
+// ítems sin precio) al menor total; si ninguno cotiza el 100%, se usa el
+// que cubre más ítems (y, en empate, el de menor total). Es solo una
+// aproximación de reporte para cuando todavía no hay proveedor real
+// registrado -- nunca se usa como fuente de verdad transaccional.
 export async function GET() {
   const ctx = await getViewerContext()
   if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
@@ -62,6 +61,7 @@ export async function GET() {
   }
 
   const provs = (proveedores ?? []) as Proveedor[]
+  const provPorId = new Map(provs.map(p => [p.id, p]))
 
   const data = await Promise.all(
     (beneficiarios ?? []).map(async ben => {
@@ -93,6 +93,8 @@ export async function GET() {
         nombre: ben.nombre,
         segmento: ben.segmento,
         proveedorNombre: mejor.proveedor?.nombre ?? null,
+        proveedorCompraId: ben.proveedor_compra_id,
+        proveedorCompraNombre: ben.proveedor_compra_id ? (provPorId.get(ben.proveedor_compra_id)?.nombre ?? null) : null,
         total: mejor.total,
         itemsSinPrecio: mejor.itemsSinPrecio,
         fotos: fotosConUrl,
@@ -114,5 +116,5 @@ export async function GET() {
     ),
   }
 
-  return NextResponse.json({ beneficiarios: data, resumen, fotosRequeridas: FOTOS_REQUERIDAS })
+  return NextResponse.json({ beneficiarios: data, resumen, fotosRequeridas: FOTOS_REQUERIDAS, proveedores: provs })
 }

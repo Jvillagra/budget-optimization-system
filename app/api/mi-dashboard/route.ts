@@ -27,5 +27,12 @@ export async function GET() {
   const error = e1 || e2 || e3 || e4
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json({ beneficiario, asignaciones, proveedores, preciosProveedor })
+  // Si ya hay un proveedor real de compra registrado (staff lo setea en
+  // /rendicion), se excluye del selector -- ya no tiene sentido "comparar"
+  // con un proveedor con el que el socio ya no puede comprar el mismo insumo.
+  const proveedoresDisponibles = beneficiario?.proveedor_compra_id
+    ? (proveedores ?? []).filter(p => p.id !== beneficiario.proveedor_compra_id)
+    : proveedores
+
+  return NextResponse.json({ beneficiario, asignaciones, proveedores: proveedoresDisponibles, preciosProveedor })
 }

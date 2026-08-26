@@ -43,7 +43,8 @@ export default function MiDashboardPage() {
       setAsignaciones(asigs ?? [])
       setProveedores(provs ?? [])
       if (precs) setPrecioMap(buildPrecioMap(precs))
-      if (!proveedorId && provs?.length) setProveedorId(provs[0].id)
+      const idsDisponibles = new Set((provs ?? []).map((p: Proveedor) => p.id))
+      if ((!proveedorId || !idsDisponibles.has(proveedorId)) && provs?.length) setProveedorId(provs[0].id)
       setLoading(false)
     }
     load()
