@@ -102,8 +102,9 @@ Contrato: mismas props de siempre (`onClick`, `disabled`, `type`, `children`,
 
 - **`Button`** — variantes `primary` (verde sólido), `secondary` (café/verde
   muted), `danger` (rojo, para "quitar"/"revertir"), `ghost` (texto, para
-  logout/acciones terciarias). Estado `loading` incorporado. `active:scale-[0.97]`
-  + `disabled:opacity-50` heredado de `rendicion`. Focus visible con
+  logout/acciones terciarias). `active:scale-[0.97]` + `disabled:opacity-50`
+  heredado de `rendicion` (no hay estado `loading` propio; los botones usan
+  `disabled` durante operaciones async). Focus visible con
   `focus-visible:ring-2`.
 - **`Card`** — superficie `.glass` (`rounded-2xl`), con variante `strong` para
   contenido que necesita más contraste (formularios).
