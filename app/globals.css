@@ -61,6 +61,14 @@ body {
   to { opacity: 1; transform: scale(1); }
 }
 
+/* Entrada de /mi-dashboard al montar (una vez por visita, tier "occasional"):
+   mismo mecanismo que fadeIn/scaleIn, solo agrega translateY porque ninguna
+   de las dos cubre "levantarse" -- transform/opacity únicamente, <300ms. */
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* Scrollbar sutil */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
