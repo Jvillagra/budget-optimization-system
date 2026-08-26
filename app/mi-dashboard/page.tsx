@@ -7,6 +7,8 @@ import type { Beneficiario, Asignacion, Proveedor } from '@/lib/types'
 import { buildPrecioMap, calcularCostoCarrito, formatCLP, PRESUPUESTO_BASE } from '@/lib/business-logic'
 import { useProveedor } from '@/lib/proveedor-context'
 import { FOTOS_REQUERIDAS } from '@/lib/constants'
+import { Card, Alert } from '@/components/design-system'
+import { cx } from '@/components/design-system/cx'
 
 const COLORES: Record<string, string> = {
   'Invernadero': '#3a7d44',
@@ -99,13 +101,17 @@ export default function MiDashboardPage() {
     await fetch(`/api/fotos?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
   }
 
-  if (loading) return <div className="text-center py-16 text-gray-400">Cargando…</div>
+  if (loading) return (
+    <div className="text-center py-16 text-sm" style={{ color: 'var(--text-muted)' }}>Cargando…</div>
+  )
   if (notFound || !beneficiario) {
     return (
-      <div className="max-w-md mx-auto mt-16 text-center space-y-2">
-        <h1 className="text-lg font-semibold">Tu cuenta no está habilitada todavía</h1>
-        <p className="text-sm text-gray-500">Avisa a la organización del Proyecto PAT para que asocien tu email.</p>
-      </div>
+      <Card strong className="max-w-md mx-auto mt-16 p-8 text-center space-y-2">
+        <h1 className="text-lg font-semibold" style={{ color: '#1c1c1c' }}>Tu cuenta no está habilitada todavía</h1>
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+          Avisa a la organización del Proyecto PAT para que asocien tu email.
+        </p>
+      </Card>
     )
   }
 
@@ -126,8 +132,10 @@ export default function MiDashboardPage() {
   return (
     <div className="space-y-8 max-w-2xl mx-auto">
       <div>
-        <h1 className="text-xl font-semibold">Hola, {beneficiario.nombre.split(' ')[0]}</h1>
-        <p className="text-sm text-gray-500">{beneficiario.segmento} · Proyecto PAT</p>
+        <h1 className="text-xl font-bold" style={{ color: 'var(--verde-dark)' }}>
+          Hola, {beneficiario.nombre.split(' ')[0]}
+        </h1>
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{beneficiario.segmento} · Proyecto PAT</p>
       </div>
 
       {proveedores.length > 0 && (
@@ -136,7 +144,14 @@ export default function MiDashboardPage() {
             <button
               key={p.id}
               onClick={() => setProveedorId(p.id)}
-              className={`px-3 py-1.5 rounded-full text-sm border ${proveedorId === p.id ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-300 text-gray-600'}`}
+              className={cx(
+                'px-3 py-1.5 rounded-full text-sm font-medium border transition-colors',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[var(--verde)]',
+                proveedorId === p.id ? 'text-white border-transparent' : 'border-black/12'
+              )}
+              style={proveedorId === p.id
+                ? { background: 'var(--verde)' }
+                : { color: 'var(--text-muted)' }}
             >
               {p.nombre}
             </button>
@@ -145,23 +160,23 @@ export default function MiDashboardPage() {
       )}
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-2xl bg-white border border-gray-200 p-4">
-          <p className="text-xs text-gray-400">Presupuesto base</p>
-          <p className="text-lg font-semibold">{formatCLP(PRESUPUESTO_BASE)}</p>
-        </div>
-        <div className="rounded-2xl bg-white border border-gray-200 p-4">
-          <p className="text-xs text-gray-400">Total de tu compra</p>
-          <p className="text-lg font-semibold">{formatCLP(carrito.total)}</p>
-        </div>
-        <div className="rounded-2xl bg-white border border-gray-200 p-4 col-span-2">
-          <p className="text-xs text-gray-400">Aporte de bolsillo</p>
-          <p className="text-lg font-semibold">{formatCLP(aporteBolsillo)}</p>
-        </div>
+        <Card className="p-4">
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Presupuesto base</p>
+          <p className="text-lg font-semibold" style={{ color: '#1c1c1c' }}>{formatCLP(PRESUPUESTO_BASE)}</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Total de tu compra</p>
+          <p className="text-lg font-semibold" style={{ color: '#1c1c1c' }}>{formatCLP(carrito.total)}</p>
+        </Card>
+        <Card className="p-4 col-span-2">
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Aporte de bolsillo</p>
+          <p className="text-lg font-semibold" style={{ color: '#1c1c1c' }}>{formatCLP(aporteBolsillo)}</p>
+        </Card>
       </div>
 
       {chartData.length > 0 && (
-        <div className="rounded-2xl bg-white border border-gray-200 p-4">
-          <p className="text-sm font-medium mb-2">Composición de tu compra</p>
+        <Card className="p-4">
+          <p className="text-sm font-semibold mb-2" style={{ color: '#1c1c1c' }}>Composición de tu compra</p>
           <div style={{ width: '100%', height: 220 }}>
             <ResponsiveContainer>
               <PieChart>
@@ -173,28 +188,30 @@ export default function MiDashboardPage() {
               </PieChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </Card>
       )}
 
-      <div className="rounded-2xl bg-white border border-gray-200 p-4 space-y-3">
+      <Card className="p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-medium">Fotos de tu compra</p>
-          <p className="text-xs text-gray-400">{fotos.length} de {MAX_FOTOS} · mínimo {FOTOS_REQUERIDAS} para tu rendición</p>
+          <p className="text-sm font-semibold" style={{ color: '#1c1c1c' }}>Fotos de tu compra</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            {fotos.length} de {MAX_FOTOS} · mínimo {FOTOS_REQUERIDAS} para tu rendición
+          </p>
         </div>
 
-        {fotoError && <p className="text-xs text-red-600">{fotoError}</p>}
+        {fotoError && <Alert tone="error">{fotoError}</Alert>}
 
         {fotosLoading ? (
-          <p className="text-sm text-gray-400">Cargando…</p>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Cargando…</p>
         ) : (
           <div className="grid grid-cols-3 gap-2">
             {fotos.map(f => (
-              <div key={f.id} className="relative group aspect-square rounded-lg overflow-hidden bg-gray-100">
+              <div key={f.id} className="relative group aspect-square rounded-lg overflow-hidden" style={{ background: 'rgba(0,0,0,0.04)' }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={f.url} alt="Comprobante de compra" className="w-full h-full object-cover" />
                 <button
                   onClick={() => eliminarFoto(f.id)}
-                  className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1.5"
+                  className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1.5 transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                   aria-label="Eliminar foto"
                 >
                   <Trash2 size={14} />
@@ -202,7 +219,13 @@ export default function MiDashboardPage() {
               </div>
             ))}
             {fotos.length < MAX_FOTOS && (
-              <label className="aspect-square rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center gap-1 text-gray-400 cursor-pointer">
+              <label
+                className={cx(
+                  'aspect-square rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors',
+                  'hover:border-[var(--verde)] hover:text-[var(--verde-dark)] focus-within:ring-2 focus-within:ring-[var(--verde)] focus-within:ring-offset-1'
+                )}
+                style={{ borderColor: 'rgba(0,0,0,0.15)', color: 'var(--text-muted)' }}
+              >
                 <Upload size={18} />
                 <span className="text-xs">{subiendo ? 'Subiendo…' : 'Agregar'}</span>
                 <input
@@ -218,7 +241,7 @@ export default function MiDashboardPage() {
             )}
           </div>
         )}
-      </div>
+      </Card>
     </div>
   )
 }

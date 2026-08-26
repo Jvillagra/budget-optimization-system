@@ -7,6 +7,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
 import { X, ImageOff, CheckCircle2, RotateCcw } from 'lucide-react'
 import { formatCLP } from '@/lib/business-logic'
 import { FOTOS_REQUERIDAS } from '@/lib/constants'
+import { Card, Button, Badge } from '@/components/design-system'
 
 type Foto = { id: string; uploaded_at: string; url: string }
 type FilaRendicion = {
@@ -30,10 +31,6 @@ type Resumen = {
 const SEG_COLOR: Record<string, string> = {
   'Invernadero': 'var(--verde-dark)',
   'Cierre Perimetral': 'var(--cafe-dark)',
-}
-const SEG_BADGE: Record<string, { background: string; color: string }> = {
-  'Invernadero': { background: 'var(--verde-muted)', color: 'var(--verde-dark)' },
-  'Cierre Perimetral': { background: 'var(--cafe-muted)', color: 'var(--cafe-dark)' },
 }
 
 export default function RendicionPage() {
@@ -111,16 +108,10 @@ export default function RendicionPage() {
   )
 
   if (loadError) return (
-    <div className="rounded-2xl p-8 glass text-center space-y-3">
+    <Card className="p-8 text-center space-y-3">
       <p className="text-sm font-semibold" style={{ color: 'var(--cafe-dark)' }}>Error al cargar la rendición</p>
-      <button
-        onClick={cargar}
-        className="text-sm font-semibold px-4 py-2 rounded-lg transition-transform active:scale-[0.97]"
-        style={{ background: 'var(--verde)', color: '#fff' }}
-      >
-        Reintentar
-      </button>
-    </div>
+      <Button onClick={cargar}>Reintentar</Button>
+    </Card>
   )
 
   const pctCompleto = resumen && resumen.total > 0 ? (resumen.completos / resumen.total) * 100 : 0
@@ -133,14 +124,14 @@ export default function RendicionPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-lg font-bold" style={{ color: 'var(--verde-dark)' }}>Rendición</h1>
-        <p className="text-sm" style={{ color: 'rgba(0,0,0,0.45)' }}>
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
           Estado de compra por beneficiario · mínimo {FOTOS_REQUERIDAS} fotos de comprobante para marcar completo
         </p>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="rounded-2xl p-4 glass flex items-center gap-4">
+        <Card className="p-4 flex items-center gap-4">
           <div className="shrink-0">
             <ResponsiveContainer width={72} height={72}>
               <PieChart>
@@ -152,16 +143,16 @@ export default function RendicionPage() {
             </ResponsiveContainer>
           </div>
           <div>
-            <p className="text-xs" style={{ color: 'rgba(0,0,0,0.4)' }}>Progreso de rendición</p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Progreso de rendición</p>
             <p className="text-xl font-bold" style={{ color: '#1c1c1c' }}>
               {resumen?.completos ?? 0} de {resumen?.total ?? 0}
             </p>
             <p className="text-xs font-semibold" style={{ color: 'var(--verde-dark)' }}>{pctCompleto.toFixed(0)}% completo</p>
           </div>
-        </div>
+        </Card>
 
         {Object.entries(resumen?.porSegmento ?? {}).map(([seg, d]) => (
-          <div key={seg} className="rounded-2xl p-4 glass">
+          <Card key={seg} className="p-4">
             <p className="text-xs font-semibold" style={{ color: SEG_COLOR[seg] ?? 'var(--cafe)' }}>{seg}</p>
             <p className="text-xl font-bold mt-1" style={{ color: '#1c1c1c' }}>{d.completos} de {d.total}</p>
             <div className="h-1.5 rounded-full overflow-hidden mt-2" style={{ background: 'rgba(0,0,0,0.08)' }}>
@@ -170,23 +161,23 @@ export default function RendicionPage() {
                 style={{ width: `${d.total > 0 ? (d.completos / d.total) * 100 : 0}%`, background: SEG_COLOR[seg] ?? 'var(--cafe)' }}
               />
             </div>
-          </div>
+          </Card>
         ))}
       </div>
 
       {/* Tabla */}
-      <div className="rounded-2xl glass overflow-hidden">
+      <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm min-w-[760px]">
             <thead>
               <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
-                <th className="text-left font-semibold px-4 py-3" style={{ color: 'rgba(0,0,0,0.45)' }}>Beneficiario</th>
-                <th className="text-left font-semibold px-4 py-3" style={{ color: 'rgba(0,0,0,0.45)' }}>Segmento</th>
-                <th className="text-left font-semibold px-4 py-3" style={{ color: 'rgba(0,0,0,0.45)' }}>Proveedor</th>
-                <th className="text-left font-semibold px-4 py-3" style={{ color: 'rgba(0,0,0,0.45)' }}>Fotos</th>
-                <th className="text-right font-semibold px-4 py-3" style={{ color: 'rgba(0,0,0,0.45)' }}>Total cotizado</th>
-                <th className="text-left font-semibold px-4 py-3" style={{ color: 'rgba(0,0,0,0.45)' }}>Estado</th>
-                <th className="text-right font-semibold px-4 py-3" style={{ color: 'rgba(0,0,0,0.45)' }}>Acción</th>
+                <th className="text-left font-semibold px-4 py-3" style={{ color: 'var(--text-muted)' }}>Beneficiario</th>
+                <th className="text-left font-semibold px-4 py-3" style={{ color: 'var(--text-muted)' }}>Segmento</th>
+                <th className="text-left font-semibold px-4 py-3" style={{ color: 'var(--text-muted)' }}>Proveedor</th>
+                <th className="text-left font-semibold px-4 py-3" style={{ color: 'var(--text-muted)' }}>Fotos</th>
+                <th className="text-right font-semibold px-4 py-3" style={{ color: 'var(--text-muted)' }}>Total cotizado</th>
+                <th className="text-left font-semibold px-4 py-3" style={{ color: 'var(--text-muted)' }}>Estado</th>
+                <th className="text-right font-semibold px-4 py-3" style={{ color: 'var(--text-muted)' }}>Acción</th>
               </tr>
             </thead>
             <tbody>
@@ -196,16 +187,14 @@ export default function RendicionPage() {
                   <tr key={f.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
                     <td className="px-4 py-3 font-medium" style={{ color: '#1c1c1c' }}>{f.nombre}</td>
                     <td className="px-4 py-3">
-                      <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={SEG_BADGE[f.segmento] ?? {}}>
-                        {f.segmento}
-                      </span>
+                      <Badge tone={f.segmento === 'Invernadero' ? 'verde' : 'cafe'}>{f.segmento}</Badge>
                     </td>
                     <td className="px-4 py-3" style={{ color: 'rgba(0,0,0,0.6)' }}>
-                      {f.proveedorNombre ?? <span style={{ color: 'rgba(0,0,0,0.3)' }}>—</span>}
+                      {f.proveedorNombre ?? <span style={{ color: 'var(--text-muted)' }}>—</span>}
                     </td>
                     <td className="px-4 py-3">
                       {f.fotos.length === 0 ? (
-                        <span className="flex items-center gap-1 text-xs" style={{ color: 'rgba(0,0,0,0.3)' }}>
+                        <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--text-muted)' }}>
                           <ImageOff size={13} /> sin fotos
                         </span>
                       ) : (
@@ -230,36 +219,31 @@ export default function RendicionPage() {
                     </td>
                     <td className="px-4 py-3 text-right font-medium" style={{ color: '#1c1c1c' }}>{formatCLP(f.total)}</td>
                     <td className="px-4 py-3">
-                      <span
-                        className="text-xs px-2.5 py-1 rounded-full font-semibold inline-flex items-center gap-1"
-                        style={f.compraCompleta
-                          ? { background: 'var(--verde-muted)', color: 'var(--verde-dark)' }
-                          : { background: 'rgba(0,0,0,0.06)', color: 'rgba(0,0,0,0.45)' }}
-                      >
+                      <Badge tone={f.compraCompleta ? 'verde' : 'neutral'}>
                         {f.compraCompleta && <CheckCircle2 size={12} />}
                         {f.compraCompleta ? 'Completo' : 'Pendiente'}
-                      </span>
+                      </Badge>
                     </td>
                     <td className="px-4 py-3 text-right">
                       {f.compraCompleta ? (
-                        <button
+                        <Button
+                          variant="secondary"
+                          size="sm"
                           onClick={() => revertir(f.id)}
                           disabled={busyId === f.id}
-                          className="text-xs font-semibold px-3 py-1.5 rounded-lg inline-flex items-center gap-1 transition-transform active:scale-[0.97] disabled:opacity-50"
-                          style={{ color: 'var(--cafe-dark)', background: 'var(--cafe-muted)' }}
                         >
                           <RotateCcw size={12} /> Revertir
-                        </button>
+                        </Button>
                       ) : (
                         <div className="inline-block group relative">
-                          <button
+                          <Button
+                            variant="primary"
+                            size="sm"
                             onClick={() => marcarCompleto(f.id)}
                             disabled={!suficientesFotos || busyId === f.id}
-                            className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white transition-transform active:scale-[0.97] disabled:opacity-40 disabled:active:scale-100"
-                            style={{ background: 'var(--verde)' }}
                           >
                             {busyId === f.id ? '...' : 'Marcar completo'}
-                          </button>
+                          </Button>
                           {!suficientesFotos && (
                             <span
                               role="tooltip"
@@ -278,7 +262,7 @@ export default function RendicionPage() {
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
 
       {lightbox && (
         <Lightbox

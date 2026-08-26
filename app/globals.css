@@ -14,6 +14,10 @@
   --glass-bg: rgba(255, 255, 255, 0.68);
   --glass-border: rgba(255, 255, 255, 0.55);
   --glass-shadow: 0 4px 24px rgba(61, 90, 54, 0.08);
+  /* rgba(0,0,0,0.62) sobre fondo claro ≈ 6:1 -- cumple WCAG AA (>=4.5:1) para
+     texto normal. Reemplaza los tonos rgba(0,0,0,0.3-0.45) usados antes para
+     texto secundario/auxiliar, que quedaban entre 2:1 y 3.4:1. */
+  --text-muted: rgba(0, 0, 0, 0.62);
 }
 
 @theme inline {
