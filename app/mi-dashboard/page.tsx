@@ -6,6 +6,7 @@ import { Trash2, Upload } from 'lucide-react'
 import type { Beneficiario, Asignacion, Proveedor } from '@/lib/types'
 import { buildPrecioMap, calcularCostoCarrito, formatCLP, PRESUPUESTO_BASE } from '@/lib/business-logic'
 import { useProveedor } from '@/lib/proveedor-context'
+import { FOTOS_REQUERIDAS } from '@/lib/constants'
 
 const COLORES: Record<string, string> = {
   'Invernadero': '#3a7d44',
@@ -178,7 +179,7 @@ export default function MiDashboardPage() {
       <div className="rounded-2xl bg-white border border-gray-200 p-4 space-y-3">
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium">Fotos de tu compra</p>
-          <p className="text-xs text-gray-400">{fotos.length} de {MAX_FOTOS}</p>
+          <p className="text-xs text-gray-400">{fotos.length} de {MAX_FOTOS} · mínimo {FOTOS_REQUERIDAS} para tu rendición</p>
         </div>
 
         {fotoError && <p className="text-xs text-red-600">{fotoError}</p>}

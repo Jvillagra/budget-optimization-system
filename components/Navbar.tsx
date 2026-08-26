@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react'
 import { Menu, X, Download, LogOut } from 'lucide-react'
 
 const STAFF_LINKS = [
+  { href: '/rendicion', label: 'Rendición' },
   { href: '/beneficiarios', label: 'Beneficiarios' },
   { href: '/precios', label: 'Maestro de precios' },
   { href: '/simulador', label: 'Simulador' },

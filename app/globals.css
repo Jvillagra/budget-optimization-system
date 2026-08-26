@@ -46,6 +46,17 @@ body {
   box-shadow: 0 8px 32px rgba(61, 90, 54, 0.10);
 }
 
+/* Lightbox de /rendicion -- entrada rápida, solo transform/opacity, dentro
+   del presupuesto de UI (<300ms); motion-safe: ya gatea prefers-reduced-motion. */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
 /* Scrollbar sutil */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
