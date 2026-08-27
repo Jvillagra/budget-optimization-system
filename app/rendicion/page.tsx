@@ -15,6 +15,14 @@ const MAX_FOTOS_POR_SOCIO = 5
 
 type Foto = { id: string; uploaded_at: string; url: string }
 type ProveedorOpcion = { id: string; nombre: string }
+type ItemCotizacion = {
+  id: string
+  insumoNombre: string
+  formatoVenta: string | null
+  cantidad: number
+  precioUnitario: number | null
+  subtotal: number | null
+}
 type FilaRendicion = {
   id: string
   nombre: string
@@ -24,6 +32,7 @@ type FilaRendicion = {
   proveedorCompraNombre: string | null
   total: number
   itemsSinPrecio: number
+  items: ItemCotizacion[]
   fotos: Foto[]
   fotosCount: number
   compraCompleta: boolean
@@ -48,6 +57,7 @@ export default function RendicionPage() {
   const [loadError, setLoadError] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [lightbox, setLightbox] = useState<{ nombre: string; fotos: Foto[]; index: number } | null>(null)
+  const [detalle, setDetalle] = useState<FilaRendicion | null>(null)
   const [subiendoId, setSubiendoId] = useState<string | null>(null)
   const [fotoError, setFotoError] = useState<{ id: string; mensaje: string } | null>(null)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
@@ -280,6 +290,7 @@ export default function RendicionPage() {
             onRevertir={() => revertir(f.id)}
             onUploadFoto={file => subirFotoStaff(f.id, file)}
             onOpenLightbox={i => setLightbox({ nombre: f.nombre, fotos: f.fotos, index: i })}
+            onVerCotizacion={() => setDetalle(f)}
           />
         ))}
       </div>
@@ -305,7 +316,15 @@ export default function RendicionPage() {
                 const suficientesFotos = f.fotosCount >= FOTOS_REQUERIDAS
                 return (
                   <tr key={f.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                    <td className="px-4 py-3 font-medium" style={{ color: '#1c1c1c' }}>{f.nombre}</td>
+                    <td className="px-4 py-3 font-medium" style={{ color: '#1c1c1c' }}>
+                      <button
+                        onClick={() => setDetalle(f)}
+                        className="text-left hover:underline underline-offset-2"
+                        style={{ color: '#1c1c1c' }}
+                      >
+                        {f.nombre}
+                      </button>
+                    </td>
                     <td className="px-4 py-3">
                       <Badge tone={f.segmento === 'Invernadero' ? 'verde' : 'cafe'}>{f.segmento}</Badge>
                     </td>
@@ -433,6 +452,81 @@ export default function RendicionPage() {
           onNavigate={i => setLightbox(prev => prev ? { ...prev, index: i } : prev)}
         />
       )}
+
+      {detalle && (
+        <DetalleCotizacionModal f={detalle} onClose={() => setDetalle(null)} />
+      )}
+    </div>
+  )
+}
+
+function DetalleCotizacionModal({ f, onClose }: { f: FilaRendicion; onClose: () => void }) {
+  const proveedorReferencia = f.proveedorCompraNombre ?? f.proveedorNombre
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 motion-safe:animate-[fadeIn_150ms_ease-out]"
+      onClick={onClose}
+    >
+      <div
+        className="relative max-w-lg w-full rounded-2xl overflow-hidden motion-safe:animate-[scaleIn_180ms_ease-out]"
+        style={{ background: '#f7f3ed', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between px-5 pt-4 pb-3 shrink-0" style={{ borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
+          <div>
+            <p className="font-bold text-base" style={{ color: '#1c1c1c' }}>{f.nombre}</p>
+            <Badge tone={f.segmento === 'Invernadero' ? 'verde' : 'cafe'} className="mt-1 !text-xs">{f.segmento}</Badge>
+          </div>
+          <button onClick={onClose} className="rounded-full p-2" style={{ background: 'rgba(0,0,0,0.06)', color: 'rgba(0,0,0,0.5)' }} aria-label="Cerrar">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto flex-1 p-5 space-y-4">
+          <div className="flex justify-between text-sm">
+            <span style={{ color: 'var(--text-muted)' }}>Proveedor {f.proveedorCompraNombre ? 'de compra' : 'de referencia'}</span>
+            <span className="font-semibold" style={{ color: proveedorReferencia ? 'var(--verde-dark)' : 'var(--text-muted)' }}>
+              {proveedorReferencia ?? 'sin definir'}
+            </span>
+          </div>
+
+          {f.items.length === 0 ? (
+            <p className="text-sm rounded-xl p-3" style={{ background: 'rgba(220,38,38,0.08)', color: '#dc2626' }}>
+              Este beneficiario no tiene productos cargados en su carrito. Revisar en la pestaña Beneficiarios.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {f.items.map(item => (
+                <li key={item.id} className="flex items-center justify-between gap-3 text-sm rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.6)' }}>
+                  <div className="min-w-0">
+                    <p className="font-medium truncate" style={{ color: '#1c1c1c' }}>
+                      {item.insumoNombre} × {item.cantidad}
+                    </p>
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      {item.formatoVenta ?? '—'}
+                      {item.precioUnitario !== null && <> · {formatCLP(item.precioUnitario)} c/u</>}
+                    </p>
+                  </div>
+                  <span className="font-semibold shrink-0" style={{ color: item.subtotal !== null ? 'var(--verde-dark)' : 'var(--cafe)' }}>
+                    {item.subtotal !== null ? formatCLP(item.subtotal) : 'sin precio'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {f.itemsSinPrecio > 0 && (
+            <p className="text-xs" style={{ color: 'var(--cafe)' }}>
+              {f.itemsSinPrecio} ítem{f.itemsSinPrecio > 1 ? 's' : ''} sin precio cotizado en este proveedor.
+            </p>
+          )}
+
+          <div className="flex justify-between text-base pt-3" style={{ borderTop: '1px solid rgba(0,0,0,0.08)' }}>
+            <span className="font-semibold" style={{ color: 'var(--text-muted)' }}>Total cotizado</span>
+            <span className="font-bold" style={{ color: '#1c1c1c' }}>{formatCLP(f.total)}</span>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -495,7 +589,7 @@ function Lightbox({ nombre, fotos, index, onClose, onNavigate }: {
 
 function FilaCardMobile({
   f, proveedores, busy, subiendo, fotoErrorMsg, expanded,
-  onToggleExpanded, onSetProveedor, onMarcarCompleto, onRevertir, onUploadFoto, onOpenLightbox,
+  onToggleExpanded, onSetProveedor, onMarcarCompleto, onRevertir, onUploadFoto, onOpenLightbox, onVerCotizacion,
 }: {
   f: FilaRendicion
   proveedores: ProveedorOpcion[]
@@ -509,6 +603,7 @@ function FilaCardMobile({
   onRevertir: () => void
   onUploadFoto: (file: File) => void
   onOpenLightbox: (index: number) => void
+  onVerCotizacion: () => void
 }) {
   const suficientesFotos = f.fotosCount >= FOTOS_REQUERIDAS
 
@@ -529,10 +624,14 @@ function FilaCardMobile({
       </div>
 
       {/* Total cotizado */}
-      <div className="flex items-center justify-between text-base" style={{ borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: '0.75rem' }}>
-        <span style={{ color: 'var(--text-muted)' }}>Total cotizado</span>
+      <button
+        onClick={onVerCotizacion}
+        className="w-full flex items-center justify-between text-base"
+        style={{ borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: '0.75rem' }}
+      >
+        <span className="underline underline-offset-2" style={{ color: 'var(--text-muted)' }}>Total cotizado · ver detalle</span>
         <span className="font-bold" style={{ color: '#1c1c1c' }}>{formatCLP(f.total)}</span>
-      </div>
+      </button>
 
       {/* Fotos -- siempre visibles: es la acción diaria más frecuente
           (incluye admin subiendo por socios sin celular). */}

@@ -88,6 +88,22 @@ export async function GET() {
         }))
       )
 
+      // Cotización línea a línea del carrito real (asignaciones), valorizada
+      // con el proveedor de compra confirmado si existe; si no, con el
+      // "mejor" proveedor calculado arriba -- mismo criterio que `total`.
+      const proveedorParaItems = ben.proveedor_compra_id ?? mejor.proveedor?.id ?? null
+      const items = asigs.map(a => {
+        const precioUnitario = proveedorParaItems ? (precioMap.get(`${proveedorParaItems}_${a.insumo_id}`) ?? null) : null
+        return {
+          id: a.id,
+          insumoNombre: a.catalogo_insumos?.nombre ?? 'Insumo',
+          formatoVenta: a.catalogo_insumos?.formato_venta ?? null,
+          cantidad: a.cantidad,
+          precioUnitario,
+          subtotal: precioUnitario !== null ? precioUnitario * a.cantidad : null,
+        }
+      })
+
       return {
         id: ben.id,
         nombre: ben.nombre,
@@ -97,6 +113,7 @@ export async function GET() {
         proveedorCompraNombre: ben.proveedor_compra_id ? (provPorId.get(ben.proveedor_compra_id)?.nombre ?? null) : null,
         total: mejor.total,
         itemsSinPrecio: mejor.itemsSinPrecio,
+        items,
         fotos: fotosConUrl,
         fotosCount: fotosBen.length,
         compraCompleta: ben.compra_completa,
