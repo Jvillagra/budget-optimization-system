@@ -164,7 +164,7 @@ export default function VistaResumenPage() {
     return (
       <div className="rounded-2xl p-8 glass text-center space-y-3">
         <p className="text-sm font-semibold" style={{ color: 'var(--cafe-dark)' }}>Error al cargar los datos</p>
-        <p className="text-xs" style={{ color: 'rgba(0,0,0,0.45)' }}>Revisa tu conexión e intenta nuevamente.</p>
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Revisa tu conexión e intenta nuevamente.</p>
         <button
           onClick={() => window.location.reload()}
           className="text-sm font-semibold px-4 py-2 rounded-lg"
@@ -184,7 +184,7 @@ export default function VistaResumenPage() {
           <h1 className="text-lg font-bold" style={{ color: 'var(--verde-dark)' }}>
             Vista Resumen
           </h1>
-          <p className="text-xs mt-0.5" style={{ color: 'rgba(0,0,0,0.4)' }}>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>
             Consolidado de compra — ambos segmentos ({totalSocios} socios)
           </p>
         </div>
@@ -223,7 +223,7 @@ export default function VistaResumenPage() {
 
       {!proveedorId ? (
         <div className="rounded-2xl p-8 glass text-center">
-          <p className="text-sm" style={{ color: 'rgba(0,0,0,0.45)' }}>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
             Selecciona un proveedor en la página de beneficiarios para ver el consolidado.
           </p>
         </div>
@@ -261,7 +261,51 @@ export default function VistaResumenPage() {
                   {copiado ? '✓ Copiado' : 'Copiar cotización'}
                 </button>
               </div>
-              <div className="overflow-x-auto">
+              {/* Tarjetas -- mobile: la tabla de 5 columnas obligaba a texto
+                  minúsculo o scroll horizontal. Cantidad/subtotal (lo que
+                  importa para comprar) quedan grandes, precio unitario chico. */}
+              <div className="sm:hidden divide-y" style={{ borderColor: 'rgba(0,0,0,0.06)' }}>
+                {filas.map(f => {
+                  const subtotal = f.precioUnitario ? f.cantidad * f.precioUnitario : null
+                  return (
+                    <div key={f.key} className="px-5 py-4">
+                      <p className="text-base font-semibold flex items-center flex-wrap gap-1.5" style={{ color: '#1c1c1c' }}>
+                        {f.nombre}
+                        {f.tag && (
+                          <span
+                            className="text-xs font-semibold px-1.5 py-0.5 rounded"
+                            style={f.tag === 'CP'
+                              ? { background: 'var(--cafe-muted)', color: 'var(--cafe-dark)' }
+                              : { background: 'var(--verde-muted)', color: 'var(--verde-dark)' }}
+                          >
+                            {f.tag}
+                          </span>
+                        )}
+                      </p>
+                      <div className="mt-1.5 flex items-baseline justify-between">
+                        <span className="text-base" style={{ color: 'var(--text-muted)' }}>
+                          {f.cantidad} {f.formato_venta}
+                        </span>
+                        <span className="text-base font-bold tabular-nums" style={{ color: subtotal ? 'var(--verde-dark)' : 'var(--text-muted)' }}>
+                          {subtotal ? formatCLP(subtotal) : '—'}
+                        </span>
+                      </div>
+                      <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                        {f.precioUnitario ? `${formatCLP(f.precioUnitario)} c/u` : <span style={{ color: 'var(--cafe)' }}>Sin precio</span>}
+                      </p>
+                    </div>
+                  )
+                })}
+                {hayPrecios && (
+                  <div className="px-5 py-4 flex items-center justify-between" style={{ background: 'rgba(58,125,68,0.06)' }}>
+                    <p className="text-base font-bold" style={{ color: 'var(--verde-dark)' }}>Total comunidad</p>
+                    <p className="text-base font-bold tabular-nums" style={{ color: 'var(--verde-dark)' }}>{formatCLP(totalGasto)}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Tabla -- desktop / tablet */}
+              <div className="hidden sm:block overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.06)', background: 'rgba(0,0,0,0.02)' }}>
@@ -269,7 +313,7 @@ export default function VistaResumenPage() {
                         <th
                           key={h}
                           className={`px-5 py-3 text-xs font-semibold uppercase tracking-wide ${i === 0 ? 'text-left' : 'text-right'}`}
-                          style={{ color: 'rgba(0,0,0,0.4)' }}
+                          style={{ color: 'var(--text-muted)' }}
                         >
                           {h}
                         </th>
@@ -297,20 +341,20 @@ export default function VistaResumenPage() {
                               </span>
                             )}
                           </td>
-                          <td className="px-5 py-3 text-right tabular-nums" style={{ color: 'rgba(0,0,0,0.7)' }}>
+                          <td className="px-5 py-3 text-right tabular-nums" style={{ color: 'var(--text-muted)' }}>
                             {f.cantidad}
                           </td>
-                          <td className="px-5 py-3 text-right text-xs" style={{ color: 'rgba(0,0,0,0.45)' }}>
+                          <td className="px-5 py-3 text-right text-xs" style={{ color: 'var(--text-muted)' }}>
                             {f.formato_venta}
                           </td>
-                          <td className="px-5 py-3 text-right tabular-nums" style={{ color: 'rgba(0,0,0,0.5)' }}>
+                          <td className="px-5 py-3 text-right tabular-nums" style={{ color: 'var(--text-muted)' }}>
                             {f.precioUnitario
                               ? formatCLP(f.precioUnitario)
                               : <span className="text-xs" style={{ color: 'var(--cafe)' }}>Sin precio</span>}
                           </td>
                           <td
                             className="px-5 py-3 text-right tabular-nums font-semibold"
-                            style={{ color: subtotal ? 'var(--verde-dark)' : 'rgba(0,0,0,0.3)' }}
+                            style={{ color: subtotal ? 'var(--verde-dark)' : 'var(--text-muted)' }}
                           >
                             {subtotal ? formatCLP(subtotal) : '—'}
                           </td>
@@ -335,7 +379,7 @@ export default function VistaResumenPage() {
             </div>
           ) : (
             <div className="rounded-2xl p-8 glass text-center">
-              <p className="text-sm" style={{ color: 'rgba(0,0,0,0.45)' }}>
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
                 Ningún beneficiario tiene ítems en carrito aún.
               </p>
             </div>
@@ -352,7 +396,7 @@ export default function VistaResumenPage() {
               </p>
               <ul className="space-y-0.5">
                 {sinCarrito.map(nombre => (
-                  <li key={nombre} className="text-xs" style={{ color: 'rgba(0,0,0,0.55)' }}>
+                  <li key={nombre} className="text-sm" style={{ color: 'var(--text-muted)' }}>
                     · {nombre}
                   </li>
                 ))}
@@ -368,7 +412,7 @@ export default function VistaResumenPage() {
 function KPICard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl p-5 glass">
-      <p className="text-xs font-medium uppercase tracking-wide mb-1" style={{ color: 'rgba(0,0,0,0.4)' }}>
+      <p className="text-sm font-medium uppercase tracking-wide mb-1" style={{ color: 'var(--text-muted)' }}>
         {label}
       </p>
       <p className="text-2xl font-bold" style={{ color: 'var(--verde-dark)' }}>{value}</p>
@@ -379,7 +423,7 @@ function KPICard({ label, value }: { label: string; value: string }) {
 function KPICardMallas({ mallas, total }: { mallas: FilaConsolidado[]; total: number }) {
   return (
     <div className="rounded-2xl p-5 glass">
-      <p className="text-xs font-medium uppercase tracking-wide mb-1" style={{ color: 'rgba(0,0,0,0.4)' }}>
+      <p className="text-sm font-medium uppercase tracking-wide mb-1" style={{ color: 'var(--text-muted)' }}>
         Total de mallas requeridas
       </p>
       <p className="text-2xl font-bold mb-3" style={{ color: 'var(--verde-dark)' }}>
@@ -396,7 +440,7 @@ function KPICardMallas({ mallas, total }: { mallas: FilaConsolidado[]; total: nu
           </span>
         ))}
         {mallas.length === 0 && (
-          <span className="text-xs" style={{ color: 'rgba(0,0,0,0.35)' }}>Sin datos</span>
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Sin datos</span>
         )}
       </div>
     </div>
@@ -409,7 +453,7 @@ function KPICardPolines({ filas, total, combinar }: { filas: FilaConsolidado[]; 
 
   return (
     <div className="rounded-2xl p-5 glass">
-      <p className="text-xs font-medium uppercase tracking-wide mb-1" style={{ color: 'rgba(0,0,0,0.4)' }}>
+      <p className="text-sm font-medium uppercase tracking-wide mb-1" style={{ color: 'var(--text-muted)' }}>
         Polines
       </p>
       {combinar ? (

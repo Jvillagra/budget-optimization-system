@@ -60,17 +60,17 @@ export default function AdminPage() {
 
       <Card className="p-4 grid grid-cols-2 gap-4">
         <div>
-          <p className="text-xs font-semibold" style={{ color: 'var(--verde-dark)' }}>Owners</p>
+          <p className="text-sm font-semibold" style={{ color: 'var(--verde-dark)' }}>Owners</p>
           <p className="text-xl font-bold mt-1" style={{ color: '#1c1c1c' }}>{loading ? '—' : owners}</p>
         </div>
         <div>
-          <p className="text-xs font-semibold" style={{ color: 'var(--cafe-dark)' }}>Admins</p>
+          <p className="text-sm font-semibold" style={{ color: 'var(--cafe-dark)' }}>Admins</p>
           <p className="text-xl font-bold mt-1" style={{ color: '#1c1c1c' }}>{loading ? '—' : admins}</p>
         </div>
       </Card>
 
       <section className="space-y-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+        <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
           Owner / Admin
         </h2>
         {loading ? (
@@ -112,7 +112,7 @@ export default function AdminPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+        <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
           Informe para consultora
         </h2>
         <Card className="p-4 space-y-3">
@@ -128,7 +128,7 @@ export default function AdminPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+        <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
           Magic Links masivos
         </h2>
         <Card className="p-4 space-y-3">

@@ -203,15 +203,15 @@ export default function MiDashboardPage() {
 
       <div className="grid grid-cols-2 gap-3">
         <Card className="p-4 motion-safe:animate-[riseIn_220ms_ease-out]">
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Presupuesto base</p>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Presupuesto base</p>
           <p className="text-lg font-semibold" style={{ color: '#1c1c1c' }}>{formatCLP(PRESUPUESTO_BASE)}</p>
         </Card>
         <Card className="p-4 motion-safe:animate-[riseIn_220ms_ease-out]" style={{ animationDelay: '40ms' }}>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Total de tu compra</p>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Total de tu compra</p>
           <p className="text-lg font-semibold" style={{ color: '#1c1c1c' }}>{formatCLP(carrito.total)}</p>
         </Card>
         <Card className="p-4 col-span-2 motion-safe:animate-[riseIn_220ms_ease-out]" style={{ animationDelay: '80ms' }}>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Aporte de bolsillo</p>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Aporte de bolsillo</p>
           <p className="text-lg font-semibold" style={{ color: '#1c1c1c' }}>{formatCLP(aporteBolsillo)}</p>
         </Card>
       </div>
@@ -236,7 +236,7 @@ export default function MiDashboardPage() {
       <Card className="p-4 space-y-3">
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold" style={{ color: '#1c1c1c' }}>Fotos de tu compra</p>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
             {fotos.length} de {MAX_FOTOS} · mínimo {FOTOS_REQUERIDAS} para tu rendición
           </p>
         </div>

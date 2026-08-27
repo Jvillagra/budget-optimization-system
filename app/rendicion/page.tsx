@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useRef, useState } from 'react'
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
-import { X, ImageOff, CheckCircle2, RotateCcw, Upload } from 'lucide-react'
+import { X, ImageOff, CheckCircle2, RotateCcw, Upload, ChevronDown } from 'lucide-react'
 import { formatCLP } from '@/lib/business-logic'
 import { FOTOS_REQUERIDAS } from '@/lib/constants'
 import { Card, Button, Badge } from '@/components/design-system'
@@ -50,7 +50,16 @@ export default function RendicionPage() {
   const [lightbox, setLightbox] = useState<{ nombre: string; fotos: Foto[]; index: number } | null>(null)
   const [subiendoId, setSubiendoId] = useState<string | null>(null)
   const [fotoError, setFotoError] = useState<{ id: string; mensaje: string } | null>(null)
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+
+  function toggleExpanded(id: string) {
+    setExpandedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
 
   useEffect(() => { cargar() }, [])
 
@@ -159,6 +168,8 @@ export default function RendicionPage() {
       setFotoError({ id: beneficiarioId, mensaje: 'Error al subir la imagen' })
     } finally {
       setSubiendoId(null)
+      // Solo resetea el input de la fila de tabla desktop -- la tarjeta
+      // mobile resetea el suyo síncronamente en su propio onChange.
       const input = fileInputRefs.current[beneficiarioId]
       if (input) input.value = ''
     }
@@ -248,8 +259,33 @@ export default function RendicionPage() {
         ))}
       </div>
 
-      {/* Tabla */}
-      <Card className="overflow-hidden">
+      {/* Tarjetas — mobile: una fila de tabla es ilegible en pantalla chica
+          (8 columnas, min-w-[900px] forzaba scroll horizontal). Estado y
+          "Marcar completo" quedan siempre visibles porque es la acción que
+          el staff hace en terreno; proveedor estimado/de compra queda detrás
+          de "Ver detalle" por ser configuración ocasional. */}
+      <div className="sm:hidden space-y-3">
+        {filas.map(f => (
+          <FilaCardMobile
+            key={f.id}
+            f={f}
+            proveedores={proveedores}
+            busy={busyId === f.id}
+            subiendo={subiendoId === f.id}
+            fotoErrorMsg={fotoError?.id === f.id ? fotoError.mensaje : null}
+            expanded={expandedIds.has(f.id)}
+            onToggleExpanded={() => toggleExpanded(f.id)}
+            onSetProveedor={pid => setProveedorCompra(f.id, pid)}
+            onMarcarCompleto={() => marcarCompleto(f.id)}
+            onRevertir={() => revertir(f.id)}
+            onUploadFoto={file => subirFotoStaff(f.id, file)}
+            onOpenLightbox={i => setLightbox({ nombre: f.nombre, fotos: f.fotos, index: i })}
+          />
+        ))}
+      </div>
+
+      {/* Tabla — desktop / tablet */}
+      <Card className="hidden sm:block overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm min-w-[900px]">
             <thead>
@@ -273,7 +309,7 @@ export default function RendicionPage() {
                     <td className="px-4 py-3">
                       <Badge tone={f.segmento === 'Invernadero' ? 'verde' : 'cafe'}>{f.segmento}</Badge>
                     </td>
-                    <td className="px-4 py-3" style={{ color: 'rgba(0,0,0,0.6)' }}>
+                    <td className="px-4 py-3" style={{ color: 'var(--text-muted)' }}>
                       {f.proveedorNombre ?? <span style={{ color: 'var(--text-muted)' }}>—</span>}
                     </td>
                     <td className="px-4 py-3">
@@ -454,5 +490,173 @@ function Lightbox({ nombre, fotos, index, onClose, onNavigate }: {
         )}
       </div>
     </div>
+  )
+}
+
+function FilaCardMobile({
+  f, proveedores, busy, subiendo, fotoErrorMsg, expanded,
+  onToggleExpanded, onSetProveedor, onMarcarCompleto, onRevertir, onUploadFoto, onOpenLightbox,
+}: {
+  f: FilaRendicion
+  proveedores: ProveedorOpcion[]
+  busy: boolean
+  subiendo: boolean
+  fotoErrorMsg: string | null
+  expanded: boolean
+  onToggleExpanded: () => void
+  onSetProveedor: (proveedorId: string | null) => void
+  onMarcarCompleto: () => void
+  onRevertir: () => void
+  onUploadFoto: (file: File) => void
+  onOpenLightbox: (index: number) => void
+}) {
+  const suficientesFotos = f.fotosCount >= FOTOS_REQUERIDAS
+
+  return (
+    <Card className="p-4 space-y-3">
+      {/* Nombre + segmento + estado -- lo primero que el staff necesita leer */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-base font-bold truncate" style={{ color: '#1c1c1c' }}>{f.nombre}</p>
+          <Badge tone={f.segmento === 'Invernadero' ? 'verde' : 'cafe'} className="mt-1 !text-xs">
+            {f.segmento}
+          </Badge>
+        </div>
+        <Badge tone={f.compraCompleta ? 'verde' : 'neutral'} className="shrink-0 !text-sm !px-3 !py-1.5">
+          {f.compraCompleta && <CheckCircle2 size={14} />}
+          {f.compraCompleta ? 'Completo' : 'Pendiente'}
+        </Badge>
+      </div>
+
+      {/* Total cotizado */}
+      <div className="flex items-center justify-between text-base" style={{ borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: '0.75rem' }}>
+        <span style={{ color: 'var(--text-muted)' }}>Total cotizado</span>
+        <span className="font-bold" style={{ color: '#1c1c1c' }}>{formatCLP(f.total)}</span>
+      </div>
+
+      {/* Fotos -- siempre visibles: es la acción diaria más frecuente
+          (incluye admin subiendo por socios sin celular). */}
+      <div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {f.fotos.length === 0 ? (
+            <span className="flex items-center gap-1.5 text-sm" style={{ color: 'var(--text-muted)' }}>
+              <ImageOff size={16} /> sin fotos
+            </span>
+          ) : (
+            <>
+              {f.fotos.slice(0, 4).map((foto, i) => (
+                <button
+                  key={foto.id}
+                  onClick={() => onOpenLightbox(i)}
+                  className="w-11 h-11 rounded-lg overflow-hidden shrink-0 transition-transform active:scale-95"
+                  style={{ border: '1px solid rgba(0,0,0,0.1)' }}
+                  aria-label={`Ver foto ${i + 1} de ${f.nombre}`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={foto.url} alt="" className="w-full h-full object-cover" />
+                </button>
+              ))}
+              <span className="text-sm font-semibold" style={{ color: suficientesFotos ? 'var(--verde-dark)' : 'var(--cafe-dark)' }}>
+                {f.fotosCount}/{FOTOS_REQUERIDAS}
+              </span>
+            </>
+          )}
+          {f.fotosCount < MAX_FOTOS_POR_SOCIO && (
+            <label
+              className="w-11 h-11 rounded-lg border-2 border-dashed flex items-center justify-center shrink-0 cursor-pointer transition-colors hover:border-[var(--verde)] hover:text-[var(--verde-dark)] focus-within:ring-2 focus-within:ring-[var(--verde)] focus-within:ring-offset-1"
+              style={{ borderColor: 'rgba(0,0,0,0.2)', color: 'var(--text-muted)' }}
+              aria-label={`Subir foto por ${f.nombre}`}
+            >
+              <Upload size={16} />
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                className="hidden"
+                disabled={subiendo}
+                onChange={e => {
+                  const file = e.target.files?.[0]
+                  // Reset síncrono acá (no vía ref después del upload) para
+                  // permitir re-seleccionar el mismo archivo sin depender de
+                  // un ref compartido con la fila desktop.
+                  e.target.value = ''
+                  if (file) onUploadFoto(file)
+                }}
+              />
+            </label>
+          )}
+        </div>
+        {fotoErrorMsg && (
+          <p className="text-sm mt-1.5" style={{ color: 'var(--cafe-dark)' }}>{fotoErrorMsg}</p>
+        )}
+      </div>
+
+      {/* Acción principal -- botón de ancho completo, fácil de tocar */}
+      {f.compraCompleta ? (
+        <Button
+          variant="secondary"
+          className="w-full !text-base !py-3"
+          onClick={onRevertir}
+          disabled={busy}
+        >
+          <RotateCcw size={16} /> Revertir
+        </Button>
+      ) : (
+        <div className="space-y-1.5">
+          <Button
+            variant="primary"
+            className="w-full !text-base !py-3"
+            onClick={onMarcarCompleto}
+            disabled={!suficientesFotos || busy}
+          >
+            {busy ? 'Guardando…' : 'Marcar completo'}
+          </Button>
+          {!suficientesFotos && (
+            <p className="text-sm text-center" style={{ color: 'var(--cafe-dark)' }}>
+              Faltan fotos: {f.fotosCount} de {FOTOS_REQUERIDAS}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Detalle -- proveedor estimado/confirmado, configuración ocasional */}
+      <button
+        onClick={onToggleExpanded}
+        className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold py-2"
+        style={{ color: 'var(--verde-dark)' }}
+        aria-expanded={expanded}
+      >
+        {expanded ? 'Ocultar detalle' : 'Ver detalle de proveedor'}
+        <ChevronDown size={16} className={expanded ? 'rotate-180 transition-transform' : 'transition-transform'} />
+      </button>
+
+      {expanded && (
+        <div className="space-y-3 pt-1" style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+          <div>
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Proveedor estimado</p>
+            <p className="text-base font-medium" style={{ color: '#1c1c1c' }}>
+              {f.proveedorNombre ?? '—'}
+            </p>
+          </div>
+          <div>
+            <label className="text-sm font-semibold block mb-1.5" style={{ color: 'var(--text-muted)' }}>
+              Proveedor de compra confirmado
+            </label>
+            <select
+              value={f.proveedorCompraId ?? ''}
+              onChange={e => onSetProveedor(e.target.value || null)}
+              disabled={busy}
+              aria-label={`Proveedor de compra confirmado de ${f.nombre}`}
+              className="w-full rounded-lg border px-3 py-2.5 text-base bg-white/70 border-black/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[var(--verde)]"
+              style={{ color: f.proveedorCompraId ? 'var(--verde-dark)' : 'var(--text-muted)', fontWeight: f.proveedorCompraId ? 600 : 400 }}
+            >
+              <option value="">Sin confirmar</option>
+              {proveedores.map(p => (
+                <option key={p.id} value={p.id}>{p.nombre}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+    </Card>
   )
 }
