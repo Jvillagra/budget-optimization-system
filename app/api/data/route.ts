@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getViewerContext, isStaff } from '@/lib/roles'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
+import { EMAIL_QA_SOCIO } from '@/lib/constants'
 
 // Único punto de lectura para el cliente. Antes cada página pegaba directo a
 // Supabase con la anon key (visible en el bundle) -- cualquiera que la
@@ -34,9 +35,16 @@ export async function GET() {
   const error = e1 || e2 || e3 || e4 || e5 || e6
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  // Oculto de las vistas staff -- ver EMAIL_QA_SOCIO en lib/constants.ts
+  // (mismo criterio ya usado en /api/rendicion e informe-consultora). Este
+  // endpoint alimenta también app/beneficiarios/page.tsx, donde staff
+  // gestiona insumos/asignaciones -- no debe mezclarse ahí con los 29 socios
+  // reales.
+  const beneficiariosVisibles = (beneficiarios ?? []).filter(ben => ben.email !== EMAIL_QA_SOCIO)
+
   return NextResponse.json({
     proveedores,
-    beneficiarios,
+    beneficiarios: beneficiariosVisibles,
     catalogoInsumos,
     asignaciones,
     ayudaMemoria,
