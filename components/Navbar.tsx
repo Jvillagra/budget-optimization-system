@@ -4,17 +4,20 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { Menu, X, Download, LogOut } from 'lucide-react'
+import {
+  Download, LogOut, ClipboardList, Users, Tag, Calculator, BarChart3, ShieldCheck, ShoppingBag,
+} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 
 const STAFF_LINKS = [
-  { href: '/rendicion', label: 'Rendición' },
-  { href: '/beneficiarios', label: 'Beneficiarios' },
-  { href: '/precios', label: 'Maestro de precios' },
-  { href: '/simulador', label: 'Simulador' },
-  { href: '/vista-resumen', label: 'Vista resumen' },
-  { href: '/admin', label: 'Admin' },
+  { href: '/rendicion', label: 'Rendición', icon: ClipboardList },
+  { href: '/beneficiarios', label: 'Beneficiarios', icon: Users },
+  { href: '/precios', label: 'Precios', icon: Tag },
+  { href: '/simulador', label: 'Simulador', icon: Calculator },
+  { href: '/vista-resumen', label: 'Resumen', icon: BarChart3 },
+  { href: '/admin', label: 'Admin', icon: ShieldCheck },
 ]
-const SOCIO_LINKS = [{ href: '/mi-dashboard', label: 'Mi compra' }]
+const SOCIO_LINKS = [{ href: '/mi-dashboard', label: 'Mi compra', icon: ShoppingBag }]
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>
@@ -23,11 +26,10 @@ interface BeforeInstallPromptEvent extends Event {
 
 export default function Navbar() {
   const pathname = usePathname()
-  const [open, setOpen] = useState(false)
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [isIOS, setIsIOS] = useState(false)
   const [showIOSHint, setShowIOSHint] = useState(false)
-  const [links, setLinks] = useState<{ href: string; label: string }[]>([])
+  const [links, setLinks] = useState<{ href: string; label: string; icon: LucideIcon }[]>([])
 
   useEffect(() => {
     fetch('/api/whoami')
@@ -150,15 +152,17 @@ export default function Navbar() {
                 <Download size={13} />
               </button>
             )}
-            {/* Hamburger */}
-            <button
-              onClick={() => setOpen(v => !v)}
-              className="rounded-lg p-2"
-              style={{ color: 'var(--cafe)' }}
-              aria-label="Menú"
-            >
-              {open ? <X size={20} /> : <Menu size={20} />}
-            </button>
+            {/* Salir */}
+            {links.length > 0 && (
+              <button
+                onClick={handleLogout}
+                className="rounded-lg p-2"
+                style={{ color: 'var(--cafe)' }}
+                aria-label="Salir"
+              >
+                <LogOut size={18} />
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -174,34 +178,56 @@ export default function Navbar() {
           </div>
         </div>
       )}
-
-      {/* Mobile dropdown menu */}
-      {open && (
-        <div className="sm:hidden border-t px-4 py-3 space-y-1" style={{ borderColor: 'rgba(0,0,0,0.06)', background: 'rgba(255,255,255,0.97)' }}>
-          {links.map(link => (
-            <Link
-              key={link.href}
-              href={link.href}
-              onClick={() => setOpen(false)}
-              className="block rounded-xl px-4 py-3 text-sm font-medium"
-              style={pathname === link.href ? {
-                background: 'var(--verde)', color: '#fff',
-              } : { color: 'var(--cafe)', background: 'rgba(0,0,0,0.03)' }}
-            >
-              {link.label}
-            </Link>
-          ))}
-          {links.length > 0 && (
-            <button
-              onClick={handleLogout}
-              className="w-full flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium"
-              style={{ color: 'var(--cafe)', background: 'rgba(0,0,0,0.03)' }}
-            >
-              <LogOut size={15} /> Salir
-            </button>
-          )}
-        </div>
-      )}
     </header>
+  )
+}
+
+/** Barra de tabs fija en la parte inferior, solo mobile (reemplaza al menú hamburguesa). */
+export function MobileTabBar() {
+  const pathname = usePathname()
+  const [links, setLinks] = useState<{ href: string; label: string; icon: LucideIcon }[]>([])
+
+  useEffect(() => {
+    fetch('/api/whoami')
+      .then(r => r.json())
+      .then(ctx => {
+        if (ctx.role === 'socio') return setLinks(SOCIO_LINKS)
+        if (!ctx.role) return setLinks([])
+        const links = ctx.beneficiarioId ? [...STAFF_LINKS, ...SOCIO_LINKS] : STAFF_LINKS
+        setLinks(links)
+      })
+      .catch(() => {})
+  }, [])
+
+  if (links.length === 0) return null
+
+  return (
+    <nav
+      className="sm:hidden fixed inset-x-0 bottom-0 z-40 flex overflow-x-auto"
+      style={{
+        background: 'rgba(255,255,255,0.94)',
+        backdropFilter: 'blur(18px)',
+        WebkitBackdropFilter: 'blur(18px)',
+        borderTop: '1px solid rgba(0,0,0,0.06)',
+        boxShadow: '0 -2px 16px rgba(61,90,54,0.07)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+      }}
+    >
+      {links.map(link => {
+        const Icon = link.icon
+        const active = pathname === link.href
+        return (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="flex flex-col items-center justify-center gap-0.5 shrink-0 px-3 py-2 text-[10px] font-medium min-w-[64px]"
+            style={{ color: active ? 'var(--verde-dark)' : 'var(--cafe)' }}
+          >
+            <Icon size={20} strokeWidth={active ? 2.5 : 2} />
+            {link.label}
+          </Link>
+        )
+      })}
+    </nav>
   )
 }
