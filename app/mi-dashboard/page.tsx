@@ -7,7 +7,7 @@ import type { Beneficiario, Asignacion, Proveedor } from '@/lib/types'
 import { buildPrecioMap, calcularCostoCarrito, formatCLP, PRESUPUESTO_BASE } from '@/lib/business-logic'
 import { useProveedor } from '@/lib/proveedor-context'
 import { FOTOS_REQUERIDAS } from '@/lib/constants'
-import { Card, Alert } from '@/components/design-system'
+import { Card, Alert, ConfirmDialog, Skeleton } from '@/components/design-system'
 import { cx } from '@/components/design-system/cx'
 
 const COLORES: Record<string, string> = {
@@ -69,6 +69,8 @@ export default function MiDashboardPage() {
   const [fotosLoading, setFotosLoading] = useState(true)
   const [subiendo, setSubiendo] = useState(false)
   const [fotoError, setFotoError] = useState<string | null>(null)
+  const [fotoAEliminar, setFotoAEliminar] = useState<Foto | null>(null)
+  const [eliminando, setEliminando] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -135,13 +137,29 @@ export default function MiDashboardPage() {
     cargarFotos()
   }
 
-  async function eliminarFoto(id: string) {
-    setFotos(prev => prev.filter(f => f.id !== id))
+  async function confirmarEliminarFoto() {
+    if (!fotoAEliminar) return
+    setEliminando(true)
+    const id = fotoAEliminar.id
     await fetch(`/api/fotos?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+    setFotos(prev => prev.filter(f => f.id !== id))
+    setEliminando(false)
+    setFotoAEliminar(null)
   }
 
   if (loading) return (
-    <div className="text-center py-16 text-sm" style={{ color: 'var(--text-muted)' }}>Cargando…</div>
+    <div className="space-y-8 max-w-2xl mx-auto">
+      <div className="flex items-center gap-3">
+        <div className="h-14 w-14 rounded-full animate-pulse" style={{ background: 'rgba(255,255,255,0.4)' }} />
+        <Skeleton className="h-10 w-40" />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Skeleton className="h-16" />
+        <Skeleton className="h-16" />
+        <Skeleton className="h-16 col-span-2" />
+      </div>
+      <Skeleton className="h-40" />
+    </div>
   )
   if (notFound || !beneficiario) {
     return (
@@ -244,7 +262,11 @@ export default function MiDashboardPage() {
         {fotoError && <Alert tone="error">{fotoError}</Alert>}
 
         {fotosLoading ? (
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Cargando…</p>
+          <div className="grid grid-cols-3 gap-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="aspect-square !rounded-lg" />
+            ))}
+          </div>
         ) : (
           <div className="grid grid-cols-3 gap-2">
             {fotos.map(f => (
@@ -252,8 +274,8 @@ export default function MiDashboardPage() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={f.url} alt="Comprobante de compra" className="w-full h-full object-cover" />
                 <button
-                  onClick={() => eliminarFoto(f.id)}
-                  className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1.5 transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                  onClick={() => setFotoAEliminar(f)}
+                  className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-2 min-h-[36px] min-w-[36px] flex items-center justify-center transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                   aria-label="Eliminar foto"
                 >
                   <Trash2 size={14} />
@@ -284,6 +306,17 @@ export default function MiDashboardPage() {
           </div>
         )}
       </Card>
+
+      {fotoAEliminar && (
+        <ConfirmDialog
+          title="Eliminar foto"
+          description="Esta foto de comprobante se eliminará. Si es tu única foto, tu rendición volverá a quedar pendiente."
+          confirmLabel="Eliminar foto"
+          onConfirm={confirmarEliminarFoto}
+          onCancel={() => setFotoAEliminar(null)}
+          busy={eliminando}
+        />
+      )}
     </div>
   )
 }

@@ -16,7 +16,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   return (
     <div className="space-y-1.5">
       {label && (
-        <label htmlFor={inputId} className="block text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+        <label htmlFor={inputId} className="block text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
           {label}
         </label>
       )}
@@ -25,7 +25,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         id={inputId}
         aria-invalid={!!error}
         className={cx(
-          'w-full rounded-xl border px-4 py-2.5 text-sm text-[#1c1c1c] transition-colors',
+          'w-full min-h-[44px] rounded-xl border px-4 py-2.5 text-sm text-[#1c1c1c] transition-colors',
           'placeholder:text-black/35',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1',
           error

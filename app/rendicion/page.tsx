@@ -7,7 +7,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
 import { X, ImageOff, CheckCircle2, RotateCcw, Upload, ChevronDown } from 'lucide-react'
 import { formatCLP } from '@/lib/business-logic'
 import { FOTOS_REQUERIDAS } from '@/lib/constants'
-import { Card, Button, Badge } from '@/components/design-system'
+import { Card, Button, Badge, Input, Alert, Skeleton } from '@/components/design-system'
 
 // lib/r2.ts es server-only, así que se duplica la constante acá (mismo
 // patrón que ya usa app/mi-dashboard/page.tsx).
@@ -61,6 +61,7 @@ export default function RendicionPage() {
   const [subiendoId, setSubiendoId] = useState<string | null>(null)
   const [fotoError, setFotoError] = useState<{ id: string; mensaje: string } | null>(null)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+  const [busqueda, setBusqueda] = useState('')
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   function toggleExpanded(id: string) {
@@ -204,10 +205,10 @@ export default function RendicionPage() {
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="h-24 rounded-2xl animate-pulse" style={{ background: 'rgba(255,255,255,0.4)' }} />
+          <Skeleton key={i} className="h-24" />
         ))}
       </div>
-      <div className="h-96 rounded-2xl animate-pulse" style={{ background: 'rgba(255,255,255,0.4)' }} />
+      <Skeleton className="h-96" />
     </div>
   )
 
@@ -217,6 +218,10 @@ export default function RendicionPage() {
       <Button onClick={cargar}>Reintentar</Button>
     </Card>
   )
+
+  const filasFiltradas = busqueda.trim()
+    ? filas.filter(f => f.nombre.toLowerCase().includes(busqueda.trim().toLowerCase()))
+    : filas
 
   const pctCompleto = resumen && resumen.total > 0 ? (resumen.completos / resumen.total) * 100 : 0
   const donutData = resumen ? [
@@ -269,13 +274,33 @@ export default function RendicionPage() {
         ))}
       </div>
 
+      {/* Búsqueda — con 30+ beneficiarios el único mecanismo de navegación
+          antes de esto era scroll; filtra ambas vistas (mobile y desktop). */}
+      {filas.length > 8 && (
+        <Input
+          type="search"
+          value={busqueda}
+          onChange={e => setBusqueda(e.target.value)}
+          placeholder="Buscar beneficiario por nombre…"
+          aria-label="Buscar beneficiario"
+        />
+      )}
+
+      {filasFiltradas.length === 0 && (
+        <Card className="p-6 text-center">
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+            No encontramos a nadie llamado &ldquo;{busqueda}&rdquo;.
+          </p>
+        </Card>
+      )}
+
       {/* Tarjetas — mobile: una fila de tabla es ilegible en pantalla chica
           (8 columnas, min-w-[900px] forzaba scroll horizontal). Estado y
           "Marcar completo" quedan siempre visibles porque es la acción que
           el staff hace en terreno; proveedor estimado/de compra queda detrás
           de "Ver detalle" por ser configuración ocasional. */}
       <div className="sm:hidden space-y-3">
-        {filas.map(f => (
+        {filasFiltradas.map(f => (
           <FilaCardMobile
             key={f.id}
             f={f}
@@ -296,6 +321,7 @@ export default function RendicionPage() {
       </div>
 
       {/* Tabla — desktop / tablet */}
+      {filasFiltradas.length > 0 && (
       <Card className="hidden sm:block overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm min-w-[900px]">
@@ -312,15 +338,16 @@ export default function RendicionPage() {
               </tr>
             </thead>
             <tbody>
-              {filas.map(f => {
+              {filasFiltradas.map(f => {
                 const suficientesFotos = f.fotosCount >= FOTOS_REQUERIDAS
                 return (
                   <tr key={f.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                    <td className="px-4 py-3 font-medium" style={{ color: '#1c1c1c' }}>
+                    <td className="px-4 py-3 font-medium max-w-[220px]" style={{ color: '#1c1c1c' }}>
                       <button
                         onClick={() => setDetalle(f)}
-                        className="text-left hover:underline underline-offset-2"
+                        className="text-left hover:underline underline-offset-2 truncate block w-full"
                         style={{ color: '#1c1c1c' }}
+                        title={f.nombre}
                       >
                         {f.nombre}
                       </button>
@@ -442,6 +469,7 @@ export default function RendicionPage() {
           </table>
         </div>
       </Card>
+      )}
 
       {lightbox && (
         <Lightbox
@@ -491,9 +519,9 @@ function DetalleCotizacionModal({ f, onClose }: { f: FilaRendicion; onClose: () 
           </div>
 
           {f.items.length === 0 ? (
-            <p className="text-sm rounded-xl p-3" style={{ background: 'rgba(220,38,38,0.08)', color: '#dc2626' }}>
+            <Alert tone="error">
               Este beneficiario no tiene productos cargados en su carrito. Revisar en la pestaña Beneficiarios.
-            </p>
+            </Alert>
           ) : (
             <ul className="space-y-2">
               {f.items.map(item => (

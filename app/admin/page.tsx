@@ -2,30 +2,51 @@
 
 import { useEffect, useState } from 'react'
 import { Trash2 } from 'lucide-react'
-import { Card, Button, Input, Badge, Alert } from '@/components/design-system'
+import { Card, Button, Input, Badge, Alert, ConfirmDialog, Skeleton } from '@/components/design-system'
 
 interface RoleRow { user_id: string; role: string; email: string }
+
+const ROL_LABEL: Record<string, string> = {
+  owner: 'Propietario',
+  admin: 'Administrador',
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export default function AdminPage() {
   const [roles, setRoles] = useState<RoleRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [nuevoEmail, setNuevoEmail] = useState('')
   const [msg, setMsg] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
   const [reporte, setReporte] = useState<{ enviados: number; fallidos: number } | null>(null)
+  const [quitarObjetivo, setQuitarObjetivo] = useState<RoleRow | null>(null)
+  const [quitando, setQuitando] = useState(false)
 
   useEffect(() => { cargar() }, [])
 
   async function cargar() {
     setLoading(true)
-    const res = await fetch('/api/admin/roles')
-    if (res.ok) setRoles((await res.json()).roles)
-    setLoading(false)
+    setLoadError(false)
+    try {
+      const res = await fetch('/api/admin/roles')
+      if (!res.ok) throw new Error('load failed')
+      setRoles((await res.json()).roles)
+    } catch {
+      setLoadError(true)
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function agregarAdmin() {
     const email = nuevoEmail.trim()
     if (!email) return
+    if (!EMAIL_RE.test(email)) {
+      setMsg('Ese email no parece válido. Revísalo e intenta de nuevo.')
+      return
+    }
     setMsg(null)
     const res = await fetch('/api/admin/roles', {
       method: 'POST',
@@ -38,8 +59,12 @@ export default function AdminPage() {
     else setMsg(data.error ?? 'Error')
   }
 
-  async function quitarAdmin(userId: string) {
-    await fetch(`/api/admin/roles?userId=${encodeURIComponent(userId)}`, { method: 'DELETE' })
+  async function confirmarQuitarAdmin() {
+    if (!quitarObjetivo) return
+    setQuitando(true)
+    await fetch(`/api/admin/roles?userId=${encodeURIComponent(quitarObjetivo.user_id)}`, { method: 'DELETE' })
+    setQuitando(false)
+    setQuitarObjetivo(null)
     cargar()
   }
 
@@ -54,41 +79,57 @@ export default function AdminPage() {
   const owners = roles.filter(r => r.role === 'owner').length
   const admins = roles.filter(r => r.role === 'admin').length
 
+  if (loadError) return (
+    <div className="max-w-xl mx-auto">
+      <Card className="p-8 text-center space-y-3">
+        <p className="text-sm font-semibold" style={{ color: 'var(--cafe-dark)' }}>Error al cargar la administración</p>
+        <Button onClick={cargar}>Reintentar</Button>
+      </Card>
+    </div>
+  )
+
   return (
     <div className="max-w-xl mx-auto space-y-8">
       <h1 className="text-lg font-bold" style={{ color: 'var(--verde-dark)' }}>Administración</h1>
 
-      <Card className="p-4 grid grid-cols-2 gap-4">
-        <div>
-          <p className="text-sm font-semibold" style={{ color: 'var(--verde-dark)' }}>Owners</p>
-          <p className="text-xl font-bold mt-1" style={{ color: '#1c1c1c' }}>{loading ? '—' : owners}</p>
-        </div>
-        <div>
-          <p className="text-sm font-semibold" style={{ color: 'var(--cafe-dark)' }}>Admins</p>
-          <p className="text-xl font-bold mt-1" style={{ color: '#1c1c1c' }}>{loading ? '—' : admins}</p>
-        </div>
-      </Card>
+      {loading ? (
+        <Skeleton className="h-24" />
+      ) : (
+        <Card className="p-4 grid grid-cols-2 gap-4">
+          <div>
+            <p className="text-sm font-semibold" style={{ color: 'var(--verde-dark)' }}>Propietarios</p>
+            <p className="text-xl font-bold mt-1" style={{ color: '#1c1c1c' }}>{owners}</p>
+          </div>
+          <div>
+            <p className="text-sm font-semibold" style={{ color: 'var(--cafe-dark)' }}>Administradores</p>
+            <p className="text-xl font-bold mt-1" style={{ color: '#1c1c1c' }}>{admins}</p>
+          </div>
+        </Card>
+      )}
 
       <section className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
-          Owner / Admin
+          Propietarios y administradores
         </h2>
         {loading ? (
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Cargando…</p>
+          <Skeleton className="h-40" />
         ) : (
           <Card className="divide-y divide-black/6 overflow-hidden">
             {roles.map(r => (
-              <div key={r.user_id} className="flex items-center justify-between px-4 py-3 text-sm">
-                <span className="flex items-center gap-2" style={{ color: '#1c1c1c' }}>
-                  {r.email}
-                  <Badge tone={r.role === 'owner' ? 'verde' : 'cafe'}>{r.role}</Badge>
+              <div key={r.user_id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                <span className="flex items-center gap-2 min-w-0" style={{ color: '#1c1c1c' }}>
+                  <span className="truncate">{r.email}</span>
+                  <Badge tone={r.role === 'owner' ? 'verde' : 'cafe'} className="shrink-0">
+                    {ROL_LABEL[r.role] ?? r.role}
+                  </Badge>
                 </span>
                 {r.role !== 'owner' && (
                   <Button
                     variant="danger"
                     size="sm"
-                    onClick={() => quitarAdmin(r.user_id)}
-                    aria-label={`Quitar a ${r.email} de admin`}
+                    className="shrink-0"
+                    onClick={() => setQuitarObjetivo(r)}
+                    aria-label={`Quitar a ${r.email} de administrador`}
                   >
                     <Trash2 size={12} /> quitar
                   </Button>
@@ -104,12 +145,26 @@ export default function AdminPage() {
               onChange={e => setNuevoEmail(e.target.value)}
               placeholder="email@ejemplo.com"
               aria-label="Email del nuevo admin"
+              type="email"
+              autoComplete="email"
+              inputMode="email"
             />
           </div>
           <Button onClick={agregarAdmin}>Agregar admin</Button>
         </div>
         {msg && <Alert tone="warning">{msg}</Alert>}
       </section>
+
+      {quitarObjetivo && (
+        <ConfirmDialog
+          title="Quitar administrador"
+          description={`${quitarObjetivo.email} dejará de tener acceso de administrador. Podrás volver a agregarlo/a después si es necesario.`}
+          confirmLabel="Quitar"
+          onConfirm={confirmarQuitarAdmin}
+          onCancel={() => setQuitarObjetivo(null)}
+          busy={quitando}
+        />
+      )}
 
       <section className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>

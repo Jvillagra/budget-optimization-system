@@ -136,27 +136,29 @@ export default function Navbar() {
             {isIOS && (
               <button
                 onClick={() => setShowIOSHint(v => !v)}
-                className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold"
+                className="flex items-center justify-center gap-1 rounded-lg min-h-[44px] min-w-[44px] text-xs font-semibold"
                 style={{ background: 'rgba(58,125,68,0.1)', color: 'var(--verde-dark)', border: '1px solid rgba(58,125,68,0.2)' }}
+                aria-label="Instalar app"
               >
-                <Download size={13} />
+                <Download size={16} />
               </button>
             )}
             {/* Android/Chrome install */}
             {installPrompt && (
               <button
                 onClick={handleInstall}
-                className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold"
+                className="flex items-center justify-center gap-1 rounded-lg min-h-[44px] min-w-[44px] text-xs font-semibold"
                 style={{ background: 'rgba(58,125,68,0.1)', color: 'var(--verde-dark)', border: '1px solid rgba(58,125,68,0.2)' }}
+                aria-label="Instalar app"
               >
-                <Download size={13} />
+                <Download size={16} />
               </button>
             )}
             {/* Salir */}
             {links.length > 0 && (
               <button
                 onClick={handleLogout}
-                className="rounded-lg p-2"
+                className="flex items-center justify-center rounded-lg min-h-[44px] min-w-[44px]"
                 style={{ color: 'var(--cafe)' }}
                 aria-label="Salir"
               >

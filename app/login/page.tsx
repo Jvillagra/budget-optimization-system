@@ -115,7 +115,7 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-[70vh] flex items-center justify-center px-4">
+    <div className="min-h-[70dvh] flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-sm motion-safe:animate-[fadeIn_250ms_ease-out]">
         <Card strong className="p-8 text-center space-y-6">
           <div className="flex flex-col items-center gap-3">
@@ -124,7 +124,7 @@ function LoginForm() {
               <h1 className="text-lg font-bold" style={{ color: 'var(--verde-dark)' }}>
                 Proyecto PAT
               </h1>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+              <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>
                 Comunidad Pedro Huisca
               </p>
             </div>
@@ -148,7 +148,7 @@ function LoginForm() {
               <div className="pt-2 text-left" style={{ borderTop: '1px solid rgba(0,0,0,0.08)' }}>
                 {mostrarPegar ? (
                   <form onSubmit={entrarConLinkPegado} className="space-y-2 pt-3">
-                    <label className="text-xs font-medium block" style={{ color: 'var(--text-muted)' }}>
+                    <label className="text-sm font-medium block" style={{ color: 'var(--text-muted)' }}>
                       ¿Estás usando el ícono de inicio? Copia el link del correo y pégalo acá:
                     </label>
                     <Input
@@ -159,7 +159,19 @@ function LoginForm() {
                       placeholder="https://..."
                       aria-label="Link de acceso pegado"
                     />
-                    {pegarError && <Alert tone="error">{pegarError}</Alert>}
+                    {pegarError && (
+                      <div className="space-y-2">
+                        <Alert tone="error">{pegarError}</Alert>
+                        <button
+                          type="button"
+                          onClick={() => { setEnviado(false); setMostrarPegar(false); setLinkPegado(''); setPegarError(null) }}
+                          className="text-sm font-medium underline underline-offset-2"
+                          style={{ color: 'var(--verde-dark)' }}
+                        >
+                          Pedir un link nuevo
+                        </button>
+                      </div>
+                    )}
                     <Button type="submit" disabled={pegarLoading} className="w-full">
                       {pegarLoading ? 'Entrando…' : 'Entrar con este link'}
                     </Button>
@@ -168,7 +180,7 @@ function LoginForm() {
                   <button
                     type="button"
                     onClick={() => setMostrarPegar(true)}
-                    className="text-xs font-medium underline underline-offset-2 pt-1"
+                    className="text-sm font-medium underline underline-offset-2 pt-1 min-h-[44px]"
                     style={{ color: 'var(--text-muted)' }}
                   >
                     ¿Estás en el ícono de inicio? Pega el link acá
@@ -184,6 +196,8 @@ function LoginForm() {
               <Input
                 type="email"
                 autoFocus
+                autoComplete="email"
+                inputMode="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="tu@email.com"
