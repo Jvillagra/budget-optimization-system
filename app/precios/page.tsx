@@ -20,6 +20,10 @@ export default function PreciosPage() {
   const [addingProv, setAddingProv] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editNombre, setEditNombre] = useState('')
+  // Mobile: la matriz insumo×proveedor no cabe en pantalla chica (celdas de
+  // 128px por proveedor). En vez de scroll horizontal se edita un proveedor
+  // a la vez, elegido acá, con una tarjeta grande por insumo.
+  const [mobileProvId, setMobileProvId] = useState('')
   // IA Vision
   const [showVision, setShowVision] = useState(false)
   const [visionFile, setVisionFile] = useState<File | null>(null)
@@ -39,6 +43,7 @@ export default function PreciosPage() {
         for (const p of precs) map.set(`${p.proveedor_id}_${p.insumo_id}`, p.precio_unitario)
         setPrecios(map)
       }
+      if (provs?.length) setMobileProvId(provs[0].id)
       setLoading(false)
     }
     load()
@@ -70,6 +75,7 @@ export default function PreciosPage() {
     const { data } = await res.json()
     if (res.ok && data) {
       setProveedores(prev => [...prev, data as Proveedor].sort((a, b) => a.nombre.localeCompare(b.nombre)))
+      setMobileProvId(prev => prev || data.id)
       setNuevoNombre('')
       setAddingProv(false)
     }
@@ -205,8 +211,77 @@ export default function PreciosPage() {
         </div>
       )}
 
-      {/* Matriz de precios */}
-      <div className="rounded-2xl overflow-x-auto glass" style={{ maxHeight: '75vh' }}>
+      {/* Mobile: un proveedor a la vez, tarjetas grandes por insumo (ver
+          comentario en mobileProvId más arriba). */}
+      <div className="sm:hidden space-y-4">
+        {proveedores.length === 0 ? (
+          <p className="text-xs text-center py-6" style={{ color: 'rgba(0,0,0,0.4)' }}>
+            Agrega un proveedor para empezar a cargar precios.
+          </p>
+        ) : (
+          <>
+            <div className="rounded-xl p-3 glass-strong flex items-center gap-3">
+              <label className="text-xs font-semibold shrink-0" style={{ color: 'var(--cafe)' }}>
+                Proveedor
+              </label>
+              <select
+                value={mobileProvId}
+                onChange={e => setMobileProvId(e.target.value)}
+                className="flex-1 rounded-lg px-3 py-2 text-sm focus:outline-none"
+                style={{ border: '1px solid rgba(58,125,68,0.3)', background: 'rgba(255,255,255,0.85)' }}
+              >
+                {proveedores.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.nombre}{hayPreciosIncompletos(p.id) ? ' ⚠ incompleto' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {segmentos.map(seg => {
+              const items = insumos.filter(i => i.segmento === seg)
+              if (!items.length) return null
+              return (
+                <div key={seg} className="space-y-2">
+                  <p
+                    className="text-xs font-semibold uppercase tracking-wide px-1"
+                    style={{ color: seg === 'Invernadero' ? 'var(--verde-dark)' : seg === 'Cierre Perimetral' ? 'var(--cafe-dark)' : 'rgba(0,0,0,0.5)' }}
+                  >
+                    {seg}
+                  </p>
+                  {items.map(insumo => {
+                    const key = `${mobileProvId}_${insumo.id}`
+                    const precio = precios.get(key)
+                    const isSaving = saving.has(key)
+                    return (
+                      <div key={insumo.id} className="rounded-xl p-3 glass flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate" style={{ color: '#1c1c1c' }}>{insumo.nombre}</p>
+                          <p className="text-xs" style={{ color: 'rgba(0,0,0,0.4)' }}>{insumo.formato_venta}</p>
+                        </div>
+                        <div className="w-28 shrink-0">
+                          <PrecioCell
+                            initialValue={precio !== undefined ? precio : null}
+                            isSaving={isSaving}
+                            big
+                            onBlur={val => handleBlur(mobileProvId, insumo.id, val)}
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })}
+          </>
+        )}
+      </div>
+
+      {/* Matriz de precios — desktop / tablet, edición por celda con scroll
+          horizontal (varios proveedores a la vez). En mobile la reemplaza
+          la vista de tarjetas de arriba: la matriz no cabe y los inputs sin
+          valor no se distinguían de texto plano. */}
+      <div className="hidden sm:block rounded-2xl overflow-x-auto glass" style={{ maxHeight: '75vh' }}>
         <table className="w-full text-sm border-collapse">
           <thead style={{ position: 'sticky', top: 0, zIndex: 20 }}>
             <tr style={{ background: 'rgba(45,95,53,0.92)', backdropFilter: 'blur(8px)' }}>
@@ -429,10 +504,11 @@ function PrecioRow({ insumo, proveedores, precios, saving, onBlur }: {
   )
 }
 
-function PrecioCell({ initialValue, isSaving, onBlur }: {
+function PrecioCell({ initialValue, isSaving, onBlur, big = false }: {
   initialValue: number | null
   isSaving: boolean
   onBlur: (val: string) => void
+  big?: boolean
 }) {
   const [localVal, setLocalVal] = useState(initialValue !== null ? String(initialValue) : '')
   const inputRef = useRef<HTMLInputElement>(null)
@@ -444,7 +520,7 @@ function PrecioCell({ initialValue, isSaving, onBlur }: {
   return (
     <div className="relative flex items-center justify-end">
       {localVal && !isSaving && (
-        <span className="absolute left-2 text-xs pointer-events-none" style={{ color: 'rgba(0,0,0,0.35)' }}>$</span>
+        <span className={`absolute left-2 pointer-events-none ${big ? 'text-sm' : 'text-xs'}`} style={{ color: 'rgba(0,0,0,0.35)' }}>$</span>
       )}
       <input
         ref={inputRef}
@@ -456,11 +532,11 @@ function PrecioCell({ initialValue, isSaving, onBlur }: {
         onChange={e => setLocalVal(e.target.value)}
         onBlur={e => onBlur(e.target.value)}
         disabled={isSaving}
-        className="w-32 text-right text-sm rounded-lg px-2 py-1 transition-all"
+        className={`w-full text-right rounded-lg transition-all ${big ? 'text-base font-semibold px-3 py-2.5' : 'text-sm px-2 py-1'}`}
         style={{
-          background: localVal ? 'rgba(58,125,68,0.07)' : 'rgba(0,0,0,0.03)',
-          border: localVal ? '1px solid rgba(58,125,68,0.25)' : '1px solid transparent',
-          color: localVal ? 'var(--verde-dark)' : 'rgba(0,0,0,0.25)',
+          background: localVal ? 'rgba(58,125,68,0.07)' : 'rgba(0,0,0,0.04)',
+          border: localVal ? '1px solid rgba(58,125,68,0.25)' : `1px solid ${big ? 'rgba(0,0,0,0.12)' : 'transparent'}`,
+          color: localVal ? 'var(--verde-dark)' : 'rgba(0,0,0,0.35)',
           fontWeight: localVal ? '600' : '400',
           opacity: isSaving ? 0.5 : 1,
         }}

@@ -2,12 +2,14 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
-import { X, ImageOff, CheckCircle2, RotateCcw, Upload, ChevronDown } from 'lucide-react'
+import { X, ImageOff, CheckCircle2, RotateCcw, Upload, ChevronDown, ClipboardList, BarChart3 } from 'lucide-react'
 import { formatCLP } from '@/lib/business-logic'
 import { FOTOS_REQUERIDAS } from '@/lib/constants'
 import { Card, Button, Badge, Input, Alert, Skeleton } from '@/components/design-system'
+import { VistaResumenContent } from '@/components/VistaResumenContent'
 
 // lib/r2.ts es server-only, así que se duplica la constante acá (mismo
 // patrón que ya usa app/mi-dashboard/page.tsx).
@@ -50,6 +52,20 @@ const SEG_COLOR: Record<string, string> = {
 }
 
 export default function RendicionPage() {
+  return (
+    <Suspense>
+      <RendicionPageInner />
+    </Suspense>
+  )
+}
+
+/** Tabs Lista/Resumen: antes "Resumen" (consolidado de compra) era su propia
+ * ruta con ítem propio en el menú -- ver components/VistaResumenContent.tsx.
+ * ?tab=resumen abre directo en Resumen (usado por el redirect de la ruta
+ * vieja /vista-resumen, para no romper enlaces guardados). */
+function RendicionPageInner() {
+  const searchParams = useSearchParams()
+  const [tab, setTab] = useState<'lista' | 'resumen'>(searchParams.get('tab') === 'resumen' ? 'resumen' : 'lista')
   const [filas, setFilas] = useState<FilaRendicion[]>([])
   const [proveedores, setProveedores] = useState<ProveedorOpcion[]>([])
   const [resumen, setResumen] = useState<Resumen | null>(null)
@@ -234,9 +250,38 @@ export default function RendicionPage() {
       <div>
         <h1 className="text-lg font-bold" style={{ color: 'var(--verde-dark)' }}>Rendición</h1>
         <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-          Estado de compra por beneficiario · mínimo {FOTOS_REQUERIDAS} fotos de comprobante para marcar completo
+          {tab === 'lista'
+            ? <>Estado de compra por beneficiario · mínimo {FOTOS_REQUERIDAS} fotos de comprobante para marcar completo</>
+            : 'Consolidado de compra de ambos segmentos'}
         </p>
       </div>
+
+      {/* Sub-tabs Lista/Resumen -- ver comentario en RendicionPageInner */}
+      <div className="flex gap-2">
+        {([
+          { id: 'lista' as const, label: 'Lista', icon: ClipboardList },
+          { id: 'resumen' as const, label: 'Resumen', icon: BarChart3 },
+        ]).map(t => {
+          const Icon = t.icon
+          const active = tab === t.id
+          return (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className="flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold transition-all"
+              style={active
+                ? { background: 'var(--verde)', color: '#fff' }
+                : { background: 'rgba(0,0,0,0.05)', color: 'var(--text-muted)' }}
+            >
+              <Icon size={15} /> {t.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {tab === 'resumen' && <VistaResumenContent />}
+
+      {tab === 'lista' && <>
 
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -484,6 +529,7 @@ export default function RendicionPage() {
       {detalle && (
         <DetalleCotizacionModal f={detalle} onClose={() => setDetalle(null)} />
       )}
+      </>}
     </div>
   )
 }

@@ -5,16 +5,19 @@ import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import {
-  Download, LogOut, ClipboardList, Users, Tag, Calculator, BarChart3, ShieldCheck, ShoppingBag,
+  Download, LogOut, ClipboardList, Users, Tag, Calculator, ShieldCheck, ShoppingBag,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
+// "Resumen" (ex /vista-resumen) se consolidó como sub-tab dentro de
+// /rendicion -- ver components/VistaResumenContent.tsx -- para que la barra
+// mobile (6 tabs no entraban en una pantalla chica, obligando a deslizar
+// para llegar a Admin) quede en 5.
 const STAFF_LINKS = [
   { href: '/rendicion', label: 'Rendición', icon: ClipboardList },
   { href: '/beneficiarios', label: 'Beneficiarios', icon: Users },
   { href: '/precios', label: 'Precios', icon: Tag },
   { href: '/simulador', label: 'Simulador', icon: Calculator },
-  { href: '/vista-resumen', label: 'Resumen', icon: BarChart3 },
   { href: '/admin', label: 'Admin', icon: ShieldCheck },
 ]
 const SOCIO_LINKS = [{ href: '/mi-dashboard', label: 'Mi compra', icon: ShoppingBag }]
