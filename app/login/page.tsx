@@ -13,7 +13,7 @@ import { Card, Input, Button, Alert } from '@/components/design-system'
 // direcciones para pegar el link ahí, este textarea es la única puerta:
 // el usuario copia el link desde Mail y lo pega directo en el ícono
 // instalado, sin salir nunca de su contenedor de sesión.
-function parseLinkPegado(input: string): { accessToken?: string; refreshToken?: string; code?: string; error?: string } {
+function parseLinkPegado(input: string): { accessToken?: string; refreshToken?: string; code?: string; tokenHash?: string; type?: string; error?: string } {
   let url: URL
   try {
     url = new URL(input.trim())
@@ -26,8 +26,14 @@ function parseLinkPegado(input: string): { accessToken?: string; refreshToken?: 
   const accessToken = hashParams.get('access_token') ?? undefined
   const refreshToken = hashParams.get('refresh_token') ?? undefined
   const code = url.searchParams.get('code') ?? undefined
-  if (!accessToken && !code) return { error: 'Ese link no trae una sesión válida. Pégalo completo, tal como llegó en el correo.' }
-  return { accessToken, refreshToken, code }
+  // El link crudo que manda Supabase por correo es el de verificación
+  // (https://<ref>.supabase.co/auth/v1/verify?token=...&type=magiclink),
+  // no trae `code` -- eso solo aparece después de seguirlo y que Supabase
+  // redirija al callback. token/type van en el query string, no en el hash.
+  const tokenHash = url.searchParams.get('token') ?? url.searchParams.get('token_hash') ?? undefined
+  const type = url.searchParams.get('type') ?? undefined
+  if (!accessToken && !code && !tokenHash) return { error: 'Ese link no trae una sesión válida. Pégalo completo, tal como llegó en el correo.' }
+  return { accessToken, refreshToken, code, tokenHash, type }
 }
 
 function LoginForm() {
@@ -57,7 +63,9 @@ function LoginForm() {
     const supabase = getSupabaseBrowserClient()
     const result = parsed.accessToken && parsed.refreshToken
       ? await supabase.auth.setSession({ access_token: parsed.accessToken, refresh_token: parsed.refreshToken })
-      : await supabase.auth.exchangeCodeForSession(parsed.code!)
+      : parsed.tokenHash
+        ? await supabase.auth.verifyOtp({ token_hash: parsed.tokenHash, type: (parsed.type ?? 'magiclink') as any })
+        : await supabase.auth.exchangeCodeForSession(parsed.code!)
 
     if (result.error || !result.data.session) {
       setPegarError('El link es inválido o ya expiró. Pide uno nuevo.')
