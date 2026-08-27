@@ -60,14 +60,24 @@ function LoginForm() {
       return
     }
 
-    const supabase = getSupabaseBrowserClient()
-    const result = parsed.accessToken && parsed.refreshToken
-      ? await supabase.auth.setSession({ access_token: parsed.accessToken, refresh_token: parsed.refreshToken })
-      : parsed.tokenHash
-        ? await supabase.auth.verifyOtp({ token_hash: parsed.tokenHash, type: (parsed.type ?? 'magiclink') as any })
-        : await supabase.auth.exchangeCodeForSession(parsed.code!)
+    // El canje se resuelve en el servidor (POST /api/auth/session), no acá
+    // con el browser client -- ver comentario en app/auth/callback/page.tsx
+    // sobre por qué las cookies de sesión tienen que salir de un Set-Cookie
+    // del servidor y no de document.cookie para sobrevivir reaperturas del
+    // ícono de inicio en iOS.
+    const res = await fetch('/api/auth/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        accessToken: parsed.accessToken,
+        refreshToken: parsed.refreshToken,
+        tokenHash: parsed.tokenHash,
+        type: parsed.type,
+        code: parsed.code,
+      }),
+    }).catch(() => null)
 
-    if (result.error || !result.data.session) {
+    if (!res || !res.ok) {
       setPegarError('El link es inválido o ya expiró. Pide uno nuevo.')
       setPegarLoading(false)
       return
