@@ -18,7 +18,9 @@ function gravatarUrl(email: string): string {
 // la app (lib/business-logic.ts calcularCostoCarrito).
 export async function GET() {
   const ctx = await getViewerContext()
-  if (ctx.role !== 'socio') return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  // Socio puro, o staff (owner/admin) que también es socio con su propio
+  // beneficiarioId (ver lib/roles.ts) -- ambos ven solo lo suyo.
+  if (!ctx.beneficiarioId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
   const admin = getSupabaseAdmin()
 

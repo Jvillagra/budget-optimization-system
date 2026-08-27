@@ -43,14 +43,30 @@ export async function GET(req: NextRequest) {
 }
 
 // POST: confirma una subida ya hecha directo a R2 (ver /api/fotos/upload-url)
-// e inserta el metadato. Solo el propio socio.
+// e inserta el metadato.
+//  - socio: solo para sí mismo (ignora cualquier beneficiarioId del body).
+//  - staff: puede confirmar en nombre de cualquier beneficiario (mismo
+//    patrón que el GET), indicado en el body.
 export async function POST(req: NextRequest) {
   const ctx = await getViewerContext()
-  if (ctx.role !== 'socio') return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
   const body = await req.json().catch(() => null)
+
+  let beneficiarioId: string
+  if (ctx.role === 'socio') {
+    beneficiarioId = ctx.beneficiarioId
+  } else if (isStaff(ctx)) {
+    const bid = body?.beneficiarioId
+    if (typeof bid !== 'string' || !bid) {
+      return NextResponse.json({ error: 'beneficiarioId es requerido' }, { status: 400 })
+    }
+    beneficiarioId = bid
+  } else {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+
   const key = body?.key
-  if (typeof key !== 'string' || !key.startsWith(`${ctx.beneficiarioId}/`)) {
+  if (typeof key !== 'string' || !key.startsWith(`${beneficiarioId}/`)) {
     return NextResponse.json({ error: 'key inválida' }, { status: 400 })
   }
 
@@ -58,27 +74,35 @@ export async function POST(req: NextRequest) {
   const { count } = await admin
     .from('fotos_compra')
     .select('id', { count: 'exact', head: true })
-    .eq('beneficiario_id', ctx.beneficiarioId)
+    .eq('beneficiario_id', beneficiarioId)
   if ((count ?? 0) >= MAX_FOTOS_POR_SOCIO) {
     return NextResponse.json({ error: `Ya tienes el máximo de ${MAX_FOTOS_POR_SOCIO} fotos.` }, { status: 400 })
   }
 
   const { data, error } = await admin
     .from('fotos_compra')
-    .insert({ beneficiario_id: ctx.beneficiarioId, r2_key: key })
+    .insert({ beneficiario_id: beneficiarioId, r2_key: key })
     .select('id, uploaded_at')
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
-  await logAudit('fotos_compra', 'insert', data.id, { beneficiario_id: ctx.beneficiarioId, r2_key: key })
+  // Si quien sube es staff en nombre de otro, se deja trazado quién ejecutó
+  // la acción (no solo el beneficiario dueño de la foto).
+  const payload: Record<string, unknown> = { beneficiario_id: beneficiarioId, r2_key: key }
+  if (isStaff(ctx)) payload.actor = { email: ctx.email, userId: ctx.userId, role: ctx.role }
+
+  await logAudit('fotos_compra', 'insert', data.id, payload)
   return NextResponse.json({ data })
 }
 
-// DELETE: el socio borra su propia foto (borra en R2 y el metadato).
+// DELETE: el socio borra su propia foto; el staff puede borrar la foto de
+// cualquier beneficiario (mismo criterio que el GET, sin restringir a uno).
 export async function DELETE(req: NextRequest) {
   const ctx = await getViewerContext()
-  if (ctx.role !== 'socio') return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  if (ctx.role !== 'socio' && !isStaff(ctx)) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
 
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'id es requerido' }, { status: 400 })
@@ -90,7 +114,8 @@ export async function DELETE(req: NextRequest) {
     .eq('id', id)
     .maybeSingle()
 
-  if (!foto || foto.beneficiario_id !== ctx.beneficiarioId) {
+  const puedeBorrar = foto && (isStaff(ctx) || foto.beneficiario_id === ctx.beneficiarioId)
+  if (!puedeBorrar) {
     return NextResponse.json({ error: 'No encontrada' }, { status: 404 })
   }
 
@@ -98,6 +123,9 @@ export async function DELETE(req: NextRequest) {
   const { error } = await admin.from('fotos_compra').delete().eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
-  await logAudit('fotos_compra', 'delete', id, null)
+  const payload: Record<string, unknown> | null = isStaff(ctx)
+    ? { beneficiario_id: foto.beneficiario_id, actor: { email: ctx.email, userId: ctx.userId, role: ctx.role } }
+    : null
+  await logAudit('fotos_compra', 'delete', id, payload)
   return NextResponse.json({ ok: true })
 }

@@ -2,12 +2,16 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
-import { X, ImageOff, CheckCircle2, RotateCcw } from 'lucide-react'
+import { X, ImageOff, CheckCircle2, RotateCcw, Upload } from 'lucide-react'
 import { formatCLP } from '@/lib/business-logic'
 import { FOTOS_REQUERIDAS } from '@/lib/constants'
 import { Card, Button, Badge } from '@/components/design-system'
+
+// lib/r2.ts es server-only, así que se duplica la constante acá (mismo
+// patrón que ya usa app/mi-dashboard/page.tsx).
+const MAX_FOTOS_POR_SOCIO = 5
 
 type Foto = { id: string; uploaded_at: string; url: string }
 type ProveedorOpcion = { id: string; nombre: string }
@@ -44,6 +48,9 @@ export default function RendicionPage() {
   const [loadError, setLoadError] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [lightbox, setLightbox] = useState<{ nombre: string; fotos: Foto[]; index: number } | null>(null)
+  const [subiendoId, setSubiendoId] = useState<string | null>(null)
+  const [fotoError, setFotoError] = useState<{ id: string; mensaje: string } | null>(null)
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   useEffect(() => { cargar() }, [])
 
@@ -101,6 +108,60 @@ export default function RendicionPage() {
       setResumen(prev => prev ? recomputarResumen(filas, id, false) : prev)
     }
     setBusyId(null)
+  }
+
+  // Sube una foto de comprobante en nombre de un beneficiario (mismo flujo
+  // de 2 pasos que app/mi-dashboard/page.tsx: URL firmada -> PUT a R2 ->
+  // confirmar). El admin pasa el beneficiarioId de la fila en ambas llamadas.
+  async function subirFotoStaff(beneficiarioId: string, file: File) {
+    setFotoError(null)
+    setSubiendoId(beneficiarioId)
+    try {
+      const urlRes = await fetch('/api/fotos/upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ beneficiarioId, contentType: file.type, size: file.size }),
+      })
+      const urlData = await urlRes.json()
+      if (!urlRes.ok) {
+        setFotoError({ id: beneficiarioId, mensaje: urlData.error ?? 'Error al subir' })
+        return
+      }
+
+      const putRes = await fetch(urlData.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file })
+      if (!putRes.ok) {
+        setFotoError({ id: beneficiarioId, mensaje: 'Error al subir la imagen' })
+        return
+      }
+
+      const confirmRes = await fetch('/api/fotos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ beneficiarioId, key: urlData.key }),
+      })
+      const confirmData = await confirmRes.json()
+      if (!confirmRes.ok) {
+        setFotoError({ id: beneficiarioId, mensaje: confirmData.error ?? 'Error al confirmar la foto' })
+        return
+      }
+
+      // La URL de lectura firmada es distinta de la de subida (ver
+      // lib/r2.ts urlFirmadaLectura vs urlFirmadaSubida) -- se pide de
+      // nuevo en vez de derivarla localmente.
+      const fotosRes = await fetch(`/api/fotos?beneficiarioId=${encodeURIComponent(beneficiarioId)}`)
+      if (fotosRes.ok) {
+        const { fotos: fotosActualizadas } = await fotosRes.json()
+        setFilas(prev => prev.map(f => f.id === beneficiarioId
+          ? { ...f, fotos: fotosActualizadas, fotosCount: fotosActualizadas.length }
+          : f))
+      }
+    } catch {
+      setFotoError({ id: beneficiarioId, mensaje: 'Error al subir la imagen' })
+    } finally {
+      setSubiendoId(null)
+      const input = fileInputRefs.current[beneficiarioId]
+      if (input) input.value = ''
+    }
   }
 
   function recomputarResumen(filasActuales: FilaRendicion[], id: string, completo: boolean): Resumen {
@@ -231,28 +292,53 @@ export default function RendicionPage() {
                       </select>
                     </td>
                     <td className="px-4 py-3">
-                      {f.fotos.length === 0 ? (
-                        <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--text-muted)' }}>
-                          <ImageOff size={13} /> sin fotos
-                        </span>
-                      ) : (
-                        <div className="flex items-center gap-1">
-                          {f.fotos.slice(0, 4).map((foto, i) => (
-                            <button
-                              key={foto.id}
-                              onClick={() => setLightbox({ nombre: f.nombre, fotos: f.fotos, index: i })}
-                              className="w-8 h-8 rounded-md overflow-hidden shrink-0 transition-transform hover:scale-105 active:scale-95"
-                              style={{ border: '1px solid rgba(0,0,0,0.08)' }}
-                              aria-label={`Ver foto ${i + 1} de ${f.nombre}`}
-                            >
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={foto.url} alt="" className="w-full h-full object-cover" />
-                            </button>
-                          ))}
-                          <span className="text-xs ml-1" style={{ color: suficientesFotos ? 'var(--verde-dark)' : 'var(--cafe)' }}>
-                            {f.fotosCount}/{FOTOS_REQUERIDAS}
+                      <div className="flex items-center gap-1">
+                        {f.fotos.length === 0 ? (
+                          <span className="flex items-center gap-1 text-xs mr-1" style={{ color: 'var(--text-muted)' }}>
+                            <ImageOff size={13} /> sin fotos
                           </span>
-                        </div>
+                        ) : (
+                          <>
+                            {f.fotos.slice(0, 4).map((foto, i) => (
+                              <button
+                                key={foto.id}
+                                onClick={() => setLightbox({ nombre: f.nombre, fotos: f.fotos, index: i })}
+                                className="w-8 h-8 rounded-md overflow-hidden shrink-0 transition-transform hover:scale-105 active:scale-95"
+                                style={{ border: '1px solid rgba(0,0,0,0.08)' }}
+                                aria-label={`Ver foto ${i + 1} de ${f.nombre}`}
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={foto.url} alt="" className="w-full h-full object-cover" />
+                              </button>
+                            ))}
+                            <span className="text-xs ml-1 mr-1" style={{ color: suficientesFotos ? 'var(--verde-dark)' : 'var(--cafe)' }}>
+                              {f.fotosCount}/{FOTOS_REQUERIDAS}
+                            </span>
+                          </>
+                        )}
+                        {f.fotosCount < MAX_FOTOS_POR_SOCIO && (
+                          <label
+                            className="w-8 h-8 rounded-md border-2 border-dashed flex items-center justify-center shrink-0 cursor-pointer transition-colors hover:border-[var(--verde)] hover:text-[var(--verde-dark)] focus-within:ring-2 focus-within:ring-[var(--verde)] focus-within:ring-offset-1"
+                            style={{ borderColor: 'rgba(0,0,0,0.15)', color: 'var(--text-muted)' }}
+                            aria-label={`Subir foto por ${f.nombre}`}
+                          >
+                            <Upload size={13} />
+                            <input
+                              ref={el => { fileInputRefs.current[f.id] = el }}
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                              className="hidden"
+                              disabled={subiendoId === f.id}
+                              onChange={e => {
+                                const file = e.target.files?.[0]
+                                if (file) subirFotoStaff(f.id, file)
+                              }}
+                            />
+                          </label>
+                        )}
+                      </div>
+                      {fotoError?.id === f.id && (
+                        <p className="text-xs mt-1" style={{ color: 'var(--cafe-dark)' }}>{fotoError.mensaje}</p>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right font-medium" style={{ color: '#1c1c1c' }}>{formatCLP(f.total)}</td>

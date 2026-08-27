@@ -32,7 +32,14 @@ export default function Navbar() {
   useEffect(() => {
     fetch('/api/whoami')
       .then(r => r.json())
-      .then(ctx => setLinks(ctx.role === 'socio' ? SOCIO_LINKS : ctx.role ? STAFF_LINKS : []))
+      .then(ctx => {
+        if (ctx.role === 'socio') return setLinks(SOCIO_LINKS)
+        if (!ctx.role) return setLinks([])
+        // Staff que también es socio (beneficiarioId propio, ver lib/roles.ts)
+        // ve además "Mi compra", sin perder ningún link de staff.
+        const links = ctx.beneficiarioId ? [...STAFF_LINKS, ...SOCIO_LINKS] : STAFF_LINKS
+        setLinks(links)
+      })
       .catch(() => {})
   }, [])
 
