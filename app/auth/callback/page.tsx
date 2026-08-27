@@ -28,11 +28,19 @@ function CallbackInner() {
     const accessToken = hashParams.get('access_token') ?? undefined
     const refreshToken = hashParams.get('refresh_token') ?? undefined
     const code = params.get('code') ?? undefined
+    // token_hash/type van en el query string (no en el hash): es la forma
+    // en que ahora armamos el link del correo, apuntando a esta página en
+    // vez de al GET /auth/v1/verify de Supabase directamente, para que un
+    // prefetcher de cliente de correo (que solo sigue GETs sobre HTML) no
+    // consuma el token de un solo uso antes de que la persona haga clic.
+    // Misma convención de nombres que parseLinkPegado en app/login/page.tsx.
+    const tokenHash = params.get('token') ?? params.get('token_hash') ?? undefined
+    const type = params.get('type') ?? undefined
 
     fetch('/api/auth/session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ accessToken, refreshToken, code }),
+      body: JSON.stringify({ accessToken, refreshToken, code, tokenHash, type }),
     })
       .then(async (res) => {
         if (!res.ok) {
