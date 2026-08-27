@@ -3,7 +3,7 @@ import { getViewerContext, isStaff } from '@/lib/roles'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { urlFirmadaLectura } from '@/lib/r2'
 import { calcularCostoCarrito } from '@/lib/business-logic'
-import { FOTOS_REQUERIDAS } from '@/lib/constants'
+import { FOTOS_REQUERIDAS, EMAIL_QA_SOCIO } from '@/lib/constants'
 import type { Asignacion, Proveedor, PrecioProveedor, FotoCompra } from '@/lib/types'
 
 // Cuadro de mando de rendición (staff-only). Por cada beneficiario: total
@@ -63,8 +63,12 @@ export async function GET() {
   const provs = (proveedores ?? []) as Proveedor[]
   const provPorId = new Map(provs.map(p => [p.id, p]))
 
+  // Oculto de la vista staff -- ver comentario de EMAIL_QA_SOCIO en
+  // lib/constants.ts. La cuenta sigue activa, solo no aparece acá.
+  const beneficiariosVisibles = (beneficiarios ?? []).filter(ben => ben.email !== EMAIL_QA_SOCIO)
+
   const data = await Promise.all(
-    (beneficiarios ?? []).map(async ben => {
+    beneficiariosVisibles.map(async ben => {
       const asigs = asignacionesPorBen.get(ben.id) ?? []
 
       let mejor: { proveedor: Proveedor | null; total: number; itemsSinPrecio: number } = {

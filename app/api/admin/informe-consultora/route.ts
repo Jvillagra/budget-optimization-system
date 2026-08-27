@@ -5,6 +5,7 @@ import { urlFirmadaLectura } from '@/lib/r2'
 import { calcularCostoCarrito, formatCLP } from '@/lib/business-logic'
 import { renderInformeHTML, type InformeBeneficiario } from './template'
 import { getBrowser } from './browser'
+import { EMAIL_QA_SOCIO } from '@/lib/constants'
 import type { Asignacion, Proveedor, PrecioProveedor, FotoCompra } from '@/lib/types'
 
 export const maxDuration = 60
@@ -14,15 +15,7 @@ export const maxDuration = 60
 // beneficiario que /api/rendicion (ver ese archivo para el detalle del
 // cálculo de "mejor proveedor"/total cotizado) -- este endpoint solo
 // cambia el formato de salida (PDF en vez de JSON) y excluye al
-// beneficiario de pruebas de QA.
-//
-// El beneficiario de QA se identifica por email exacto
-// (`neurobotinnovations@gmail.com`), no por nombre: el email es el campo
-// que `getViewerContext()` usa para resolver identidad real de un socio
-// (ver lib/roles.ts), por lo que es el identificador inequívoco de este
-// registro synthetic; `nombre` es solo una etiqueta legible que en teoría
-// podría reutilizarse o cambiar sin que se rompa la lógica de acceso.
-const EMAIL_QA_SOCIO = 'neurobotinnovations@gmail.com'
+// beneficiario de pruebas de QA (ver EMAIL_QA_SOCIO en lib/constants.ts).
 
 export async function GET() {
   const ctx = await getViewerContext()
