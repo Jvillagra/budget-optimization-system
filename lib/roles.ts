@@ -1,4 +1,5 @@
 import 'server-only'
+import { cache } from 'react'
 import { getSupabaseServerClient } from './supabase/server'
 import { getSupabaseAdmin } from './supabase-admin'
 
@@ -13,8 +14,15 @@ export type ViewerContext =
  * 1. Si su auth.users.id está en app_roles -> owner/admin, acceso total.
  * 2. Si no, se busca su email en beneficiarios -> socio, acceso solo a lo suyo.
  * 3. Si no matchea ninguno -> autenticado pero sin acceso (cuenta no provista).
+ *
+ * Envuelto en cache() de React: se memoiza POR REQUEST, no entre requests.
+ * Una carga de /mi-dashboard lo invocaba tres veces (el layout raíz para la
+ * navegación, el layout de sección para el guard de rol, y la página para
+ * saber de qué beneficiario cargar datos) y cada llamada era un getUser()
+ * contra Supabase más una o dos consultas. Ahora la primera resuelve y las
+ * otras dos leen el mismo resultado.
  */
-export async function getViewerContext(): Promise<ViewerContext> {
+export const getViewerContext = cache(async function getViewerContext(): Promise<ViewerContext> {
   const supabase = await getSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user || !user.email) return { role: null, userId: null, email: null, beneficiarioId: null }
@@ -60,7 +68,7 @@ export async function getViewerContext(): Promise<ViewerContext> {
   }
 
   return { role: null, userId: user.id, email: user.email, beneficiarioId: null }
-}
+})
 
 export function isStaff(ctx: ViewerContext): ctx is Extract<ViewerContext, { role: 'owner' | 'admin' }> {
   return ctx.role === 'owner' || ctx.role === 'admin'

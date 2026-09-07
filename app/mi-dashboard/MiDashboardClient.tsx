@@ -80,7 +80,6 @@ export default function MiDashboardClient({ inicial }: { inicial: MiDashboardIni
   const [proveedores] = useState<Proveedor[]>(inicial?.proveedores ?? [])
   const [precioMap] = useState(() => buildPrecioMap(inicial?.preciosProveedor ?? []))
   const [avatarUrl] = useState<string | null>(inicial?.avatarUrl ?? null)
-  const loading = false
   const notFound = inicial === null
 
   const [fotos, setFotos] = useState<Foto[]>(inicial?.fotos ?? [])
@@ -180,20 +179,6 @@ export default function MiDashboardClient({ inicial }: { inicial: MiDashboardIni
     setFotoAEliminar(null)
   }
 
-  if (loading) return (
-    <div className="space-y-8 max-w-2xl mx-auto">
-      <div className="flex items-center gap-3">
-        <div className="h-14 w-14 rounded-full animate-pulse" style={{ background: 'rgba(255,255,255,0.4)' }} />
-        <Skeleton className="h-10 w-40" />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <Skeleton className="h-16" />
-        <Skeleton className="h-16" />
-        <Skeleton className="h-16 col-span-2" />
-      </div>
-      <Skeleton className="h-40" />
-    </div>
-  )
   if (notFound || !beneficiario) {
     return (
       <Card strong className="max-w-md mx-auto mt-16 p-8 text-center space-y-2">
