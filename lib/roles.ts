@@ -20,6 +20,12 @@ export async function getViewerContext(): Promise<ViewerContext> {
   if (!user || !user.email) return { role: null, userId: null, email: null, beneficiarioId: null }
 
   const admin = getSupabaseAdmin()
+  // Supabase Auth normaliza el email a minúsculas; beneficiarios.email es
+  // `text unique`, que distingue Juan@x.com de juan@x.com. Sin normalizar,
+  // un socio cargado con mayúsculas nunca matcheaba y entraba como "cuenta
+  // sin acceso". La migración 009 normaliza lo existente; esto cubre lo que
+  // se cargue a mano después.
+  const emailNorm = user.email.trim().toLowerCase()
 
   const { data: roleRow } = await admin
     .from('app_roles')
@@ -33,7 +39,7 @@ export async function getViewerContext(): Promise<ViewerContext> {
     const { data: benPropio } = await admin
       .from('beneficiarios')
       .select('id, nombre')
-      .eq('email', user.email)
+      .ilike('email', emailNorm)
       .maybeSingle()
     return {
       role: roleRow.role as 'owner' | 'admin',
@@ -47,7 +53,7 @@ export async function getViewerContext(): Promise<ViewerContext> {
   const { data: ben } = await admin
     .from('beneficiarios')
     .select('id, nombre')
-    .eq('email', user.email)
+    .ilike('email', emailNorm)
     .maybeSingle()
   if (ben) {
     return { role: 'socio', userId: user.id, email: user.email, beneficiarioId: ben.id, nombreSocio: ben.nombre }

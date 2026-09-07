@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
-import { Suspense, useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
 import { X, ImageOff, CheckCircle2, RotateCcw, Upload, ChevronDown, ClipboardList, BarChart3 } from 'lucide-react'
@@ -34,6 +34,7 @@ type FilaRendicion = {
   proveedorCompraNombre: string | null
   total: number
   itemsSinPrecio: number
+  totalEsCompleto: boolean
   items: ItemCotizacion[]
   fotos: Foto[]
   fotosCount: number
@@ -44,6 +45,23 @@ type Resumen = {
   total: number
   completos: number
   porSegmento: Record<string, { total: number; completos: number }>
+}
+
+/** Un total parcial (faltan precios, o no hay carrito) no se presenta igual
+ *  que una cotización completa: se marca en ámbar y con un título que dice
+ *  por qué. Mismo criterio que el PDF de la consultora. */
+function TotalCotizado({ f, className }: { f: FilaRendicion; className?: string }) {
+  if (f.totalEsCompleto) {
+    return <span className={className} style={{ color: '#1c1c1c' }}>{formatCLP(f.total)}</span>
+  }
+  const motivo = f.items.length === 0
+    ? 'Sin carrito registrado'
+    : `Parcial: ${f.itemsSinPrecio} ítem(s) sin precio, no incluidos`
+  return (
+    <span className={className} style={{ color: 'var(--cafe-dark)' }} title={motivo}>
+      {f.items.length === 0 ? '—' : `${formatCLP(f.total)}*`}
+    </span>
+  )
 }
 
 const SEG_COLOR: Record<string, string> = {
@@ -68,7 +86,6 @@ function RendicionPageInner() {
   const [tab, setTab] = useState<'lista' | 'resumen'>(searchParams.get('tab') === 'resumen' ? 'resumen' : 'lista')
   const [filas, setFilas] = useState<FilaRendicion[]>([])
   const [proveedores, setProveedores] = useState<ProveedorOpcion[]>([])
-  const [resumen, setResumen] = useState<Resumen | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -96,9 +113,8 @@ function RendicionPageInner() {
     try {
       const res = await fetch('/api/rendicion')
       if (!res.ok) throw new Error('load failed')
-      const { beneficiarios, resumen: r, proveedores: provs } = await res.json()
+      const { beneficiarios, proveedores: provs } = await res.json()
       setFilas(beneficiarios ?? [])
-      setResumen(r ?? null)
       setProveedores(provs ?? [])
     } catch {
       setLoadError(true)
@@ -130,7 +146,6 @@ function RendicionPageInner() {
     if (res.ok) {
       const { data } = await res.json()
       setFilas(prev => prev.map(f => f.id === id ? { ...f, compraCompleta: data.compra_completa, compraCompletaAt: data.compra_completa_at } : f))
-      setResumen(prev => prev ? recomputarResumen(filas, id, true) : prev)
     }
     setBusyId(null)
   }
@@ -141,7 +156,6 @@ function RendicionPageInner() {
     if (res.ok) {
       const { data } = await res.json()
       setFilas(prev => prev.map(f => f.id === id ? { ...f, compraCompleta: data.compra_completa, compraCompletaAt: data.compra_completa_at } : f))
-      setResumen(prev => prev ? recomputarResumen(filas, id, false) : prev)
     }
     setBusyId(null)
   }
@@ -202,20 +216,26 @@ function RendicionPageInner() {
     }
   }
 
-  function recomputarResumen(filasActuales: FilaRendicion[], id: string, completo: boolean): Resumen {
-    const actualizadas = filasActuales.map(f => f.id === id ? { ...f, compraCompleta: completo } : f)
+  // El resumen se DERIVA de las filas en vez de mantenerse como estado
+  // paralelo. La versión anterior lo recalculaba a mano pasándole el `filas`
+  // capturado en el closure (no el actualizado) dentro de un
+  // `setResumen(prev => prev ? ... : prev)` que usaba `prev` solo como
+  // guardia: dos marcados seguidos y el resumen dejaba de coincidir con la
+  // lista que el usuario tenía delante.
+  const resumen: Resumen | null = useMemo(() => {
+    if (filas.length === 0) return null
     const porSegmento: Record<string, { total: number; completos: number }> = {}
-    for (const f of actualizadas) {
+    for (const f of filas) {
       if (!porSegmento[f.segmento]) porSegmento[f.segmento] = { total: 0, completos: 0 }
       porSegmento[f.segmento].total++
       if (f.compraCompleta) porSegmento[f.segmento].completos++
     }
     return {
-      total: actualizadas.length,
-      completos: actualizadas.filter(f => f.compraCompleta).length,
+      total: filas.length,
+      completos: filas.filter(f => f.compraCompleta).length,
       porSegmento,
     }
-  }
+  }, [filas])
 
   if (loading) return (
     <div className="space-y-4">
@@ -468,7 +488,7 @@ function RendicionPageInner() {
                         <p className="text-xs mt-1" style={{ color: 'var(--cafe-dark)' }}>{fotoError.mensaje}</p>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right font-medium" style={{ color: '#1c1c1c' }}>{formatCLP(f.total)}</td>
+                    <td className="px-4 py-3 text-right font-medium"><TotalCotizado f={f} /></td>
                     <td className="px-4 py-3">
                       <Badge tone={f.compraCompleta ? 'verde' : 'neutral'}>
                         {f.compraCompleta && <CheckCircle2 size={12} />}
@@ -596,8 +616,10 @@ function DetalleCotizacionModal({ f, onClose }: { f: FilaRendicion; onClose: () 
           )}
 
           <div className="flex justify-between text-base pt-3" style={{ borderTop: '1px solid rgba(0,0,0,0.08)' }}>
-            <span className="font-semibold" style={{ color: 'var(--text-muted)' }}>Total cotizado</span>
-            <span className="font-bold" style={{ color: '#1c1c1c' }}>{formatCLP(f.total)}</span>
+            <span className="font-semibold" style={{ color: 'var(--text-muted)' }}>
+              {f.totalEsCompleto ? 'Total cotizado' : 'Total parcial'}
+            </span>
+            <TotalCotizado f={f} className="font-bold" />
           </div>
         </div>
       </div>
@@ -703,8 +725,10 @@ function FilaCardMobile({
         className="w-full flex items-center justify-between text-base"
         style={{ borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: '0.75rem' }}
       >
-        <span className="underline underline-offset-2" style={{ color: 'var(--text-muted)' }}>Total cotizado · ver detalle</span>
-        <span className="font-bold" style={{ color: '#1c1c1c' }}>{formatCLP(f.total)}</span>
+        <span className="underline underline-offset-2" style={{ color: 'var(--text-muted)' }}>
+          {f.totalEsCompleto ? 'Total cotizado' : 'Total parcial'} · ver detalle
+        </span>
+        <TotalCotizado f={f} className="font-bold" />
       </button>
 
       {/* Fotos -- siempre visibles: es la acción diaria más frecuente

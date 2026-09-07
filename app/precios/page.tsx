@@ -15,6 +15,10 @@ export default function PreciosPage() {
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
   const [precios, setPrecios] = useState<PrecioMap>(new Map())
   const [saving, setSaving] = useState<Set<string>>(new Set())
+  // Celdas cuyo último intento de guardado no llegó a la base. Antes un
+  // valor inválido o un POST fallido no producían NINGÚN aviso: el número
+  // quedaba en pantalla y el usuario creía que estaba guardado.
+  const [errores, setErrores] = useState<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(true)
   const [nuevoNombre, setNuevoNombre] = useState('')
   const [addingProv, setAddingProv] = useState(false)
@@ -31,6 +35,8 @@ export default function PreciosPage() {
   const [visionLoading, setVisionLoading] = useState(false)
   const [visionData, setVisionData] = useState<VisionItem[] | null>(null)
   const [visionProvId, setVisionProvId] = useState('')
+  const [visionError, setVisionError] = useState<string | null>(null)
+  const [visionResultado, setVisionResultado] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -49,18 +55,49 @@ export default function PreciosPage() {
     load()
   }, [])
 
+  function marcarError(key: string, mensaje: string | null) {
+    setErrores(prev => {
+      const n = new Map(prev)
+      if (mensaje) n.set(key, mensaje); else n.delete(key)
+      return n
+    })
+  }
+
   async function handleBlur(provId: string, insumoId: string, rawValue: string) {
     const key = `${provId}_${insumoId}`
-    const precio = rawValue.trim() === '' ? null : parseFloat(rawValue)
-    if (isNaN(precio as number) && precio !== null) return
+    const texto = rawValue.trim()
 
+    // parseFloat aceptaba basura con prefijo numérico ("45000 pesos" -> 45000)
+    // y devolvía NaN en silencio para el resto. Acá el formato es explícito:
+    // vacío = no cotizado, o un número >= 0 (coma o punto decimal).
+    let precio: number | null
+    if (texto === '') {
+      precio = null
+    } else if (/^\d+([.,]\d+)?$/.test(texto)) {
+      precio = Number(texto.replace(',', '.'))
+    } else {
+      marcarError(key, 'Escribe solo el número, sin puntos de miles ni texto.')
+      return
+    }
+    if (precio !== null && (!Number.isFinite(precio) || precio < 0)) {
+      marcarError(key, 'El precio no puede ser negativo.')
+      return
+    }
+
+    marcarError(key, null)
     setSaving(s => new Set(s).add(key))
     const res = await fetch('/api/precios-proveedor', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ proveedor_id: provId, insumo_id: insumoId, precio_unitario: precio }),
-    })
-    if (res.ok) setPrecios(prev => new Map(prev).set(key, precio))
+    }).catch(() => null)
+
+    if (res?.ok) {
+      setPrecios(prev => new Map(prev).set(key, precio))
+    } else {
+      const data = await res?.json().catch(() => null)
+      marcarError(key, data?.error ?? 'No se pudo guardar. Revisa tu conexión e intenta de nuevo.')
+    }
     setSaving(s => { const n = new Set(s); n.delete(key); return n })
   }
 
@@ -104,31 +141,58 @@ export default function PreciosPage() {
     if (!visionFile) return
     setVisionLoading(true)
     setVisionData(null)
+    setVisionError(null)
+    setVisionResultado(null)
     const fd = new FormData()
     fd.append('image', visionFile)
     fd.append('catalogo', JSON.stringify(insumos.map(i => i.nombre)))
-    const res = await fetch('/api/vision', { method: 'POST', body: fd })
-    const json = await res.json()
-    setVisionData(json.data ?? [])
+    const res = await fetch('/api/vision', { method: 'POST', body: fd }).catch(() => null)
+    const json = await res?.json().catch(() => null)
+    // Antes se ignoraba el status: un 403 o un 500 dejaban la lista vacía
+    // como si la cotización simplemente no tuviera precios reconocibles.
+    if (!res?.ok) {
+      setVisionError(json?.error ?? 'No se pudo procesar la imagen.')
+    } else {
+      setVisionData(json?.data ?? [])
+    }
     setVisionLoading(false)
   }
 
   async function aplicarPrecios() {
     if (!visionData || !visionProvId) return
+    setVisionError(null)
+    let aplicados = 0
+    const omitidos: string[] = []
+
     for (const item of visionData) {
-      const insumo = insumos.find(i =>
-        i.nombre.toLowerCase().includes(item.nombre_insumo.toLowerCase()) ||
-        item.nombre_insumo.toLowerCase().includes(i.nombre.toLowerCase())
-      )
-      if (!insumo) continue
+      // Match EXACTO contra el catálogo. El `includes()` bidireccional
+      // anterior hacía que "Malla" calzara con Ursus 80, Ursus 100 e
+      // Inchalam a la vez y `find` se quedaba con el primero: se escribía el
+      // precio de un producto sobre otro, en bucle y sin confirmación.
+      // El endpoint ya solo devuelve nombres que existen en el catálogo.
+      const candidatos = insumos.filter(i => i.nombre === item.nombre_insumo)
+      if (candidatos.length !== 1) { omitidos.push(item.nombre_insumo); continue }
+      const insumo = candidatos[0]
+
       const key = `${visionProvId}_${insumo.id}`
       const res = await fetch('/api/precios-proveedor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ proveedor_id: visionProvId, insumo_id: insumo.id, precio_unitario: item.precio_extraido }),
-      })
-      if (res.ok) setPrecios(prev => new Map(prev).set(key, item.precio_extraido))
+      }).catch(() => null)
+      if (res?.ok) {
+        setPrecios(prev => new Map(prev).set(key, item.precio_extraido))
+        aplicados++
+      } else {
+        omitidos.push(item.nombre_insumo)
+      }
     }
+
+    setVisionResultado(
+      omitidos.length === 0
+        ? `${aplicados} precio(s) aplicados.`
+        : `${aplicados} precio(s) aplicados. Sin aplicar: ${omitidos.join(', ')}.`
+    )
     setShowVision(false)
     setVisionFile(null)
     setVisionPreview(null)
@@ -179,6 +243,14 @@ export default function PreciosPage() {
           </button>
         </div>
       </div>
+
+      {visionResultado && (
+        <div className="rounded-xl px-3 py-2 text-xs flex items-start justify-between gap-3"
+          style={{ background: 'rgba(58,125,68,0.10)', color: 'var(--verde-dark)' }}>
+          <span>{visionResultado}</span>
+          <button onClick={() => setVisionResultado(null)} aria-label="Cerrar aviso">✕</button>
+        </div>
+      )}
 
       {/* Formulario nuevo proveedor */}
       {addingProv && (
@@ -263,6 +335,7 @@ export default function PreciosPage() {
                           <PrecioCell
                             initialValue={precio !== undefined ? precio : null}
                             isSaving={isSaving}
+                            error={errores.get(key)}
                             big
                             onBlur={val => handleBlur(mobileProvId, insumo.id, val)}
                           />
@@ -352,6 +425,7 @@ export default function PreciosPage() {
                     proveedores={proveedores}
                     precios={precios}
                     saving={saving}
+                    errores={errores}
                     onBlur={handleBlur}
                   />
                 )),
@@ -422,6 +496,12 @@ export default function PreciosPage() {
               </div>
             )}
 
+            {visionError && (
+              <p className="text-xs rounded-lg px-3 py-2" style={{ background: 'rgba(220,38,38,0.08)', color: '#dc2626' }}>
+                {visionError}
+              </p>
+            )}
+
             {/* Resultados */}
             {visionData && (
               <div className="space-y-3">
@@ -462,11 +542,12 @@ export default function PreciosPage() {
   )
 }
 
-function PrecioRow({ insumo, proveedores, precios, saving, onBlur }: {
+function PrecioRow({ insumo, proveedores, precios, saving, errores, onBlur }: {
   insumo: CatalogoInsumo
   proveedores: Proveedor[]
   precios: PrecioMap
   saving: Set<string>
+  errores: Map<string, string>
   onBlur: (provId: string, insumoId: string, value: string) => void
 }) {
   return (
@@ -495,6 +576,7 @@ function PrecioRow({ insumo, proveedores, precios, saving, onBlur }: {
             <PrecioCell
               initialValue={precio !== undefined ? precio : null}
               isSaving={isSaving}
+              error={errores.get(key)}
               onBlur={(val) => onBlur(prov.id, insumo.id, val)}
             />
           </td>
@@ -504,9 +586,10 @@ function PrecioRow({ insumo, proveedores, precios, saving, onBlur }: {
   )
 }
 
-function PrecioCell({ initialValue, isSaving, onBlur, big = false }: {
+function PrecioCell({ initialValue, isSaving, error, onBlur, big = false }: {
   initialValue: number | null
   isSaving: boolean
+  error?: string
   onBlur: (val: string) => void
   big?: boolean
 }) {
@@ -532,11 +615,15 @@ function PrecioCell({ initialValue, isSaving, onBlur, big = false }: {
         onChange={e => setLocalVal(e.target.value)}
         onBlur={e => onBlur(e.target.value)}
         disabled={isSaving}
+        aria-invalid={Boolean(error)}
+        title={error}
         className={`w-full text-right rounded-lg transition-all ${big ? 'text-base font-semibold px-3 py-2.5' : 'text-sm px-2 py-1'}`}
         style={{
-          background: localVal ? 'rgba(58,125,68,0.07)' : 'rgba(0,0,0,0.04)',
-          border: localVal ? '1px solid rgba(58,125,68,0.25)' : `1px solid ${big ? 'rgba(0,0,0,0.12)' : 'transparent'}`,
-          color: localVal ? 'var(--verde-dark)' : 'rgba(0,0,0,0.35)',
+          background: error ? 'rgba(220,38,38,0.07)' : localVal ? 'rgba(58,125,68,0.07)' : 'rgba(0,0,0,0.04)',
+          border: error
+            ? '1px solid rgba(220,38,38,0.55)'
+            : localVal ? '1px solid rgba(58,125,68,0.25)' : `1px solid ${big ? 'rgba(0,0,0,0.12)' : 'transparent'}`,
+          color: error ? '#dc2626' : localVal ? 'var(--verde-dark)' : 'rgba(0,0,0,0.35)',
           fontWeight: localVal ? '600' : '400',
           opacity: isSaving ? 0.5 : 1,
         }}

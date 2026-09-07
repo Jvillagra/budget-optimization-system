@@ -20,7 +20,8 @@ export default function AdminPage() {
   const [nuevoEmail, setNuevoEmail] = useState('')
   const [msg, setMsg] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
-  const [reporte, setReporte] = useState<{ enviados: number; fallidos: number } | null>(null)
+  const [reporte, setReporte] = useState<{ enviados: number; fallidos: number; pendientes?: number; total?: number } | null>(null)
+  const [confirmarEnvio, setConfirmarEnvio] = useState(false)
   const [quitarObjetivo, setQuitarObjetivo] = useState<RoleRow | null>(null)
   const [quitando, setQuitando] = useState(false)
 
@@ -53,26 +54,35 @@ export default function AdminPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email }),
     })
-    const data = await res.json()
-    if (data.pending) setMsg(data.message)
+    const data = await res.json().catch(() => null)
+    if (data?.pending) setMsg(data.message)
+    else if (res.ok && data?.sinCambios) { setNuevoEmail(''); setMsg('Esa persona ya es administradora.') }
     else if (res.ok) { setNuevoEmail(''); cargar() }
-    else setMsg(data.error ?? 'Error')
+    else setMsg(data?.error ?? 'No se pudo agregar el administrador.')
   }
 
   async function confirmarQuitarAdmin() {
     if (!quitarObjetivo) return
     setQuitando(true)
-    await fetch(`/api/admin/roles?userId=${encodeURIComponent(quitarObjetivo.user_id)}`, { method: 'DELETE' })
+    // Igual que con las fotos: si el DELETE falla hay que decirlo, no
+    // recargar y dejar que el usuario deduzca por qué sigue en la lista.
+    const res = await fetch(`/api/admin/roles?userId=${encodeURIComponent(quitarObjetivo.user_id)}`, { method: 'DELETE' }).catch(() => null)
+    if (!res?.ok) {
+      const data = await res?.json().catch(() => null)
+      setMsg(data?.error ?? 'No se pudo quitar al administrador.')
+    }
     setQuitando(false)
     setQuitarObjetivo(null)
     cargar()
   }
 
   async function enviarMagicLinks() {
+    setConfirmarEnvio(false)
     setEnviando(true)
     setReporte(null)
-    const res = await fetch('/api/admin/enviar-magic-links', { method: 'POST' })
-    if (res.ok) setReporte(await res.json())
+    const res = await fetch('/api/admin/enviar-magic-links', { method: 'POST' }).catch(() => null)
+    if (res?.ok) setReporte(await res.json())
+    else setMsg('No se pudieron enviar los links. Intenta de nuevo.')
     setEnviando(false)
   }
 
@@ -155,6 +165,17 @@ export default function AdminPage() {
         {msg && <Alert tone="warning">{msg}</Alert>}
       </section>
 
+      {confirmarEnvio && (
+        <ConfirmDialog
+          title="Enviar Magic Links a todos los socios"
+          description="Se enviará un correo con link de acceso a cada socio que tenga email cargado. Los links anteriores dejarán de servir. ¿Confirmas el envío masivo?"
+          confirmLabel="Enviar a todos"
+          onConfirm={enviarMagicLinks}
+          onCancel={() => setConfirmarEnvio(false)}
+          busy={enviando}
+        />
+      )}
+
       {quitarObjetivo && (
         <ConfirmDialog
           title="Quitar administrador"
@@ -190,12 +211,17 @@ export default function AdminPage() {
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
             Envía un link de acceso a todos los socios que tengan email cargado.
           </p>
-          <Button onClick={enviarMagicLinks} disabled={enviando}>
+          {/* Un click mandaba 29 correos sin ninguna confirmación. */}
+          <Button onClick={() => setConfirmarEnvio(true)} disabled={enviando}>
             {enviando ? 'Enviando…' : 'Enviar Magic Links a todos los socios'}
           </Button>
           {reporte && (
-            <Alert tone="info">
-              {reporte.enviados} enviados, {reporte.fallidos} fallidos.
+            <Alert tone={reporte.pendientes ? 'warning' : 'info'}>
+              {reporte.enviados} enviados, {reporte.fallidos} fallidos
+              {typeof reporte.total === 'number' ? ` de ${reporte.total}` : ''}.
+              {reporte.pendientes
+                ? ` Quedaron ${reporte.pendientes} sin enviar porque se acabó el tiempo de la operación: vuelve a ejecutarla para completarlos.`
+                : ''}
             </Alert>
           )}
         </Card>

@@ -9,7 +9,7 @@ import { FOTOS_REQUERIDAS } from '@/lib/constants'
 // el botón, pero esta es la barrera real (el front se puede saltar).
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await getViewerContext()
-  if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
 
   const { id } = await params
   const admin = getSupabaseAdmin()
@@ -18,7 +18,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .from('fotos_compra')
     .select('id', { count: 'exact', head: true })
     .eq('beneficiario_id', id)
-  if (countError) return NextResponse.json({ error: countError.message }, { status: 500 })
+  if (countError) {
+    console.error('completar count', countError)
+    return NextResponse.json({ error: 'Error al verificar las fotos' }, { status: 500 })
+  }
 
   if ((count ?? 0) < FOTOS_REQUERIDAS) {
     return NextResponse.json(
@@ -28,15 +31,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   const now = new Date().toISOString()
+  // maybeSingle + chequeo explícito: con .single(), un id inexistente
+  // devolvía un error de Postgres crudo con status 400 en vez de un 404.
   const { data, error } = await admin
     .from('beneficiarios')
     .update({ compra_completa: true, compra_completa_at: now, compra_completa_by: ctx.userId })
     .eq('id', id)
     .select()
-    .single()
+    .maybeSingle()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  if (error) {
+    console.error('completar update', error)
+    return NextResponse.json({ error: 'No se pudo marcar como completo' }, { status: 400 })
+  }
+  if (!data) return NextResponse.json({ error: 'Beneficiario inexistente' }, { status: 404 })
 
-  await logAudit('beneficiarios', 'update', id, { compra_completa: true, by: ctx.userId })
+  await logAudit('beneficiarios', 'update', id, {
+    compra_completa: true, fotos: count ?? 0,
+    actor: { email: ctx.email, userId: ctx.userId, role: ctx.role },
+  })
   return NextResponse.json({ data })
 }

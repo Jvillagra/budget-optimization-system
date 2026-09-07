@@ -5,13 +5,19 @@ export interface InformeBeneficiario {
   segmento: string
   proveedorCompraNombre: string
   total: number
+  /** false = `total` es una suma parcial, no un total cotizado. */
+  totalEsCompleto: boolean
+  itemsSinPrecio: number
+  sinCarrito: boolean
   fotos: string[]
 }
 
 interface InformeData {
   beneficiarios: InformeBeneficiario[]
+  /** Suma SOLO de los beneficiarios con cotización completa. */
   totalGeneral: number
   totalGeneralFormateado: string
+  beneficiariosIncompletos: number
   fechaGeneracion: string
 }
 
@@ -28,15 +34,24 @@ function renderBeneficiario(b: InformeBeneficiario): string {
     ? `<div class="fotos">${b.fotos.map(url => `<img src="${encodeURI(url)}" alt="Comprobante de compra" />`).join('')}</div>`
     : `<p class="sin-fotos">Sin fotos de comprobante subidas.</p>`
 
+  // Un total parcial NUNCA se presenta como total: se etiqueta distinto y
+  // lleva la razón al lado. Antes se imprimía la suma de los ítems con
+  // precio bajo el rótulo "Total cotizado" y el auditor no podía saberlo.
+  const totalHTML = b.sinCarrito
+    ? `<div><dt>Total</dt><dd class="parcial">Sin carrito registrado</dd></div>`
+    : b.totalEsCompleto
+      ? `<div><dt>Total cotizado</dt><dd class="total">${formatCLP(b.total)}</dd></div>`
+      : `<div><dt>Total parcial</dt><dd class="parcial">${formatCLP(b.total)} <span class="nota">· ${b.itemsSinPrecio} ítem(s) sin precio, no incluidos</span></dd></div>`
+
   return `
-    <section class="beneficiario">
+    <section class="beneficiario${b.totalEsCompleto ? '' : ' incompleto'}">
       <div class="beneficiario-header">
         <h3>${escapeHTML(b.nombre)}</h3>
         <span class="badge">${escapeHTML(b.segmento)}</span>
       </div>
       <dl class="datos">
         <div><dt>Proveedor de compra</dt><dd>${escapeHTML(b.proveedorCompraNombre)}</dd></div>
-        <div><dt>Total cotizado</dt><dd class="total">${formatCLP(b.total)}</dd></div>
+        ${totalHTML}
       </dl>
       ${fotosHTML}
     </section>
@@ -141,6 +156,18 @@ export function renderInformeHTML(data: InformeData): string {
     font-weight: 600;
   }
   .datos dd.total { color: #3a7d44; }
+  .datos dd.parcial { color: #8a5a00; }
+  .datos dd.parcial .nota { font-weight: 500; font-size: 10px; }
+  .beneficiario.incompleto { border-color: rgba(180,120,0,0.45); background: #fffaf0; }
+  .aviso {
+    background: #fff4e0;
+    border: 1px solid rgba(180,120,0,0.35);
+    color: #7a5200;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    font-size: 11px;
+  }
   .fotos {
     display: flex;
     flex-wrap: wrap;
@@ -177,11 +204,18 @@ export function renderInformeHTML(data: InformeData): string {
 
   <div class="resumen">
     <div>
-      <div class="label">Total general cotizado</div>
+      <div class="label">Total general cotizado (solo cotizaciones completas)</div>
       <div class="valor">${escapeHTML(data.totalGeneralFormateado)}</div>
     </div>
     <div class="conteo">${data.beneficiarios.length} beneficiarios reales</div>
   </div>
+
+  ${data.beneficiariosIncompletos > 0 ? `<div class="aviso">
+    <strong>El total general no cubre a todos los beneficiarios.</strong>
+    ${data.beneficiariosIncompletos} de ${data.beneficiarios.length} tienen la cotización
+    incompleta (ítems sin precio o sin carrito registrado) y quedan excluidos del total
+    general. Aparecen marcados en el detalle.
+  </div>` : ''}
 
   ${data.beneficiarios.map(renderBeneficiario).join('')}
 

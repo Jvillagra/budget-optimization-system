@@ -3,17 +3,21 @@ import { getViewerContext, isStaff } from '@/lib/roles'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { logAudit } from '@/lib/audit'
 
-// Owner y admin tienen los mismos permisos (ver PRD v2) -- ambos pueden
-// gestionar la lista de admins. No hay endpoint para cambiar quién es
-// owner: ese dato se setea a mano en la base, a propósito.
+// Owner y admin tienen los mismos permisos operativos (ver PRD v2), pero el
+// rol `owner` NO es administrable desde acá: no se puede crear, degradar ni
+// borrar por API. Se setea a mano en la base, a propósito -- es el ancla que
+// impide que un admin comprometido se quede con el proyecto.
 
 export async function GET() {
   const ctx = await getViewerContext()
-  if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
 
   const admin = getSupabaseAdmin()
   const { data, error } = await admin.from('app_roles').select('user_id, role, created_at').order('created_at')
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    console.error('roles GET', error)
+    return NextResponse.json({ error: 'Error al cargar los roles' }, { status: 500 })
+  }
 
   const { data: usersData } = await admin.auth.admin.listUsers()
   const emailPorId = new Map((usersData?.users ?? []).map(u => [u.id, u.email]))
@@ -27,7 +31,7 @@ export async function GET() {
 // vincular el rol -- se lo informamos al que hace el pedido.
 export async function POST(req: NextRequest) {
   const ctx = await getViewerContext()
-  if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
 
   const body = await req.json().catch(() => null)
   const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
@@ -45,25 +49,69 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  const { error } = await admin.from('app_roles').upsert({ user_id: user.id, role: 'admin' })
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  // El upsert ciego degradaba al owner a admin si alguien escribía su email
+  // en el formulario "agregar admin". El rol owner nunca se toca por API.
+  const { data: existente } = await admin
+    .from('app_roles')
+    .select('role')
+    .eq('user_id', user.id)
+    .maybeSingle()
 
-  await logAudit('app_roles', 'insert', user.id, { email, role: 'admin' })
+  if (existente?.role === 'owner') {
+    return NextResponse.json({
+      pending: true,
+      message: `${email} ya es propietario del proyecto -- no hace falta agregarlo como administrador.`,
+    })
+  }
+  if (existente?.role === 'admin') {
+    return NextResponse.json({ ok: true, sinCambios: true })
+  }
+
+  const { error } = await admin.from('app_roles').insert({ user_id: user.id, role: 'admin' })
+  if (error) {
+    console.error('roles POST', error)
+    return NextResponse.json({ error: 'No se pudo agregar el administrador' }, { status: 400 })
+  }
+
+  await logAudit('app_roles', 'insert', user.id, {
+    email, role: 'admin', actor: { email: ctx.email, userId: ctx.userId, role: ctx.role },
+  })
   return NextResponse.json({ ok: true })
 }
 
 export async function DELETE(req: NextRequest) {
   const ctx = await getViewerContext()
-  if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
 
   const userId = req.nextUrl.searchParams.get('userId')
   if (!userId) return NextResponse.json({ error: 'userId es requerido' }, { status: 400 })
   if (userId === ctx.userId) return NextResponse.json({ error: 'No puedes quitarte a ti mismo' }, { status: 400 })
 
   const admin = getSupabaseAdmin()
-  const { error } = await admin.from('app_roles').delete().eq('user_id', userId)
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
-  await logAudit('app_roles', 'delete', userId, null)
+  const { data: objetivo } = await admin
+    .from('app_roles')
+    .select('user_id, role')
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (!objetivo) return NextResponse.json({ error: 'Ese usuario no tiene rol asignado' }, { status: 404 })
+  if (objetivo.role !== 'admin') {
+    // La UI ya esconde el botón para owners, pero eso es decoración: sin
+    // este chequeo un admin dejaba el proyecto sin propietario con un curl.
+    return NextResponse.json({ error: 'El rol de propietario no se puede quitar desde la aplicación' }, { status: 403 })
+  }
+
+  // El `.eq('role','admin')` es la barrera real: aunque el rol cambie entre
+  // la lectura de arriba y esta línea, el DELETE nunca puede tocar un owner.
+  const { error } = await admin.from('app_roles').delete().eq('user_id', userId).eq('role', 'admin')
+  if (error) {
+    console.error('roles DELETE', error)
+    return NextResponse.json({ error: 'No se pudo quitar el administrador' }, { status: 400 })
+  }
+
+  await logAudit('app_roles', 'delete', userId, {
+    role: 'admin', actor: { email: ctx.email, userId: ctx.userId, role: ctx.role },
+  })
   return NextResponse.json({ ok: true })
 }

@@ -87,8 +87,13 @@ export default function BeneficiariosPage() {
     ? calcularCostoCarrito(asigsBen, proveedorId, precioMap)
     : { total: 0, itemsConPrecio: 0, itemsSinPrecio: 0 }
   const { total, itemsSinPrecio } = carritoCalc
-  const aporteBolsillo = Math.max(0, total - PRESUPUESTO_BASE)
-  const porcentaje = Math.min(100, (total / PRESUPUESTO_BASE) * 100)
+  // El presupuesto es una columna por beneficiario (beneficiarios.presupuesto_base),
+  // que es la que usa la simulación. Usar la constante global acá hacía que
+  // la ficha mostrara un aporte de bolsillo equivocado para cualquier socio
+  // con presupuesto distinto del default.
+  const presupuestoSel = benSeleccionado?.presupuesto_base ?? PRESUPUESTO_BASE
+  const aporteBolsillo = Math.max(0, total - presupuestoSel)
+  const porcentaje = presupuestoSel > 0 ? Math.min(100, (total / presupuestoSel) * 100) : 0
   const bensFiltrados = filtro === 'todos' ? beneficiarios : beneficiarios.filter(b => b.segmento === filtro)
 
   async function agregar() {
@@ -188,8 +193,9 @@ export default function BeneficiariosPage() {
             {bensFiltrados.map(ben => {
               const asigs = asignaciones[ben.id] ?? []
               const { total: costoTotal } = proveedorId ? calcularCostoCarrito(asigs, proveedorId, precioMap) : { total: 0 }
-              const tieneAporte = proveedorId && costoTotal > PRESUPUESTO_BASE
-              const pct = Math.min(100, (costoTotal / PRESUPUESTO_BASE) * 100)
+              const presupuestoBen = ben.presupuesto_base ?? PRESUPUESTO_BASE
+              const tieneAporte = Boolean(proveedorId) && costoTotal > presupuestoBen
+              const pct = presupuestoBen > 0 ? Math.min(100, (costoTotal / presupuestoBen) * 100) : 0
               const isSelected = seleccionado === ben.id
               const itemsCarrito = asigs.length
 
@@ -225,7 +231,7 @@ export default function BeneficiariosPage() {
                       </div>
                       {tieneAporte && (
                         <p className="text-xs mt-1 font-semibold" style={{ color: '#dc2626' }}>
-                          +{formatCLP(costoTotal - PRESUPUESTO_BASE)}
+                          +{formatCLP(costoTotal - presupuestoBen)}
                         </p>
                       )}
                     </>
@@ -390,7 +396,7 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
               </div>
               <div className="flex justify-between text-xs mt-1">
                 <span style={{ color: 'rgba(0,0,0,0.4)' }}>{formatCLP(total)}</span>
-                <span style={{ color: 'rgba(0,0,0,0.4)' }}>{formatCLP(PRESUPUESTO_BASE)}</span>
+                <span style={{ color: 'rgba(0,0,0,0.4)' }}>{formatCLP(ben.presupuesto_base ?? PRESUPUESTO_BASE)}</span>
               </div>
               {itemsSinPrecio > 0 && (
                 <p className="text-xs mt-1" style={{ color: 'var(--cafe)' }}>

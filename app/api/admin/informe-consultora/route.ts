@@ -1,108 +1,57 @@
 import { NextResponse } from 'next/server'
 import { getViewerContext, isStaff } from '@/lib/roles'
-import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { urlFirmadaLectura } from '@/lib/r2'
-import { calcularCostoCarrito, formatCLP } from '@/lib/business-logic'
+import { formatCLP } from '@/lib/business-logic'
+import { cargarRendicion } from '@/lib/rendicion-data'
 import { renderInformeHTML, type InformeBeneficiario } from './template'
 import { getBrowser } from './browser'
-import { EMAIL_QA_SOCIO } from '@/lib/constants'
-import type { Asignacion, Proveedor, PrecioProveedor, FotoCompra } from '@/lib/types'
 
 export const maxDuration = 60
 
 // Informe PDF self-service para la empresa consultora que audita el
-// proyecto (staff-only). Reutiliza exactamente la misma agregación por
-// beneficiario que /api/rendicion (ver ese archivo para el detalle del
-// cálculo de "mejor proveedor"/total cotizado) -- este endpoint solo
-// cambia el formato de salida (PDF en vez de JSON) y excluye al
-// beneficiario de pruebas de QA (ver EMAIL_QA_SOCIO en lib/constants.ts).
+// proyecto (staff-only). Usa exactamente la misma agregación que
+// /api/rendicion (lib/rendicion-data.ts): antes estaba duplicada y podía
+// divergir justo en el documento que va al auditor.
+
+// Las URLs firmadas tienen que sobrevivir al render completo del PDF: con
+// 300s y ~145 imágenes bajando dentro del Lambda, las últimas expiraban a
+// mitad de render y el PDF salía con huecos, status 200 y sin ningún aviso.
+const TTL_FIRMA_PDF = 900
 
 export async function GET() {
   const ctx = await getViewerContext()
-  if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
 
-  const admin = getSupabaseAdmin()
-
-  const [
-    { data: beneficiarios, error: e1 },
-    { data: asignaciones, error: e2 },
-    { data: proveedores, error: e3 },
-    { data: preciosProveedor, error: e4 },
-    { data: fotos, error: e5 },
-  ] = await Promise.all([
-    admin.from('beneficiarios').select('*').order('segmento').order('nombre'),
-    admin.from('asignaciones').select('*, catalogo_insumos(*)'),
-    admin.from('proveedores').select('*').eq('es_activo', true).order('nombre'),
-    admin.from('precios_proveedor').select('*'),
-    admin.from('fotos_compra').select('*').order('uploaded_at', { ascending: true }),
-  ])
-
-  const error = e1 || e2 || e3 || e4 || e5
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-  const precioMap = new Map<string, number | null>()
-  for (const p of (preciosProveedor ?? []) as PrecioProveedor[]) {
-    precioMap.set(`${p.proveedor_id}_${p.insumo_id}`, p.precio_unitario)
+  const res = await cargarRendicion()
+  if (!res.ok) {
+    console.error('informe-consultora', res.error)
+    return NextResponse.json({ error: 'Error al generar el informe' }, { status: 500 })
   }
-
-  const asignacionesPorBen = new Map<string, Asignacion[]>()
-  for (const a of (asignaciones ?? []) as Asignacion[]) {
-    const arr = asignacionesPorBen.get(a.beneficiario_id) ?? []
-    arr.push(a)
-    asignacionesPorBen.set(a.beneficiario_id, arr)
-  }
-
-  const fotosPorBen = new Map<string, FotoCompra[]>()
-  for (const f of (fotos ?? []) as FotoCompra[]) {
-    const arr = fotosPorBen.get(f.beneficiario_id) ?? []
-    arr.push(f)
-    fotosPorBen.set(f.beneficiario_id, arr)
-  }
-
-  const provs = (proveedores ?? []) as Proveedor[]
-  const provPorId = new Map(provs.map(p => [p.id, p]))
-
-  const beneficiariosReales = (beneficiarios ?? []).filter(ben => ben.email !== EMAIL_QA_SOCIO)
 
   const data: InformeBeneficiario[] = await Promise.all(
-    beneficiariosReales.map(async ben => {
-      const asigs = asignacionesPorBen.get(ben.id) ?? []
-
-      let mejor: { proveedor: Proveedor | null; total: number; itemsSinPrecio: number } = {
-        proveedor: null, total: 0, itemsSinPrecio: asigs.length,
-      }
-      for (const prov of provs) {
-        const { total, itemsSinPrecio } = calcularCostoCarrito(asigs, prov.id, precioMap)
-        const mejorCandidato =
-          !mejor.proveedor ||
-          itemsSinPrecio < mejor.itemsSinPrecio ||
-          (itemsSinPrecio === mejor.itemsSinPrecio && total < mejor.total)
-        if (mejorCandidato) mejor = { proveedor: prov, total, itemsSinPrecio }
-      }
-
-      const fotosBen = fotosPorBen.get(ben.id) ?? []
-      const fotosUrls = await Promise.all(
-        fotosBen.map(f => urlFirmadaLectura(f.r2_key, 300))
-      )
-
-      return {
-        nombre: ben.nombre,
-        segmento: ben.segmento,
-        proveedorCompraNombre: ben.proveedor_compra_id
-          ? (provPorId.get(ben.proveedor_compra_id)?.nombre ?? 'sin confirmar')
-          : 'sin confirmar',
-        total: mejor.total,
-        fotos: fotosUrls,
-      }
-    })
+    res.filas.map(async fila => ({
+      nombre: fila.nombre,
+      segmento: fila.segmento,
+      proveedorCompraNombre: fila.proveedorCompraNombre ?? 'sin confirmar',
+      total: fila.total,
+      // El informe declara explícitamente cuándo el total NO es un total:
+      // antes se imprimía la suma parcial etiquetada "Total cotizado" y el
+      // auditor no tenía forma de saber que faltaban precios o el carrito.
+      totalEsCompleto: fila.totalEsCompleto,
+      itemsSinPrecio: fila.itemsSinPrecio,
+      sinCarrito: fila.items.length === 0,
+      fotos: await Promise.all(fila.fotos.map(f => urlFirmadaLectura(f.r2_key, TTL_FIRMA_PDF))),
+    }))
   )
 
-  const totalGeneral = data.reduce((sum, b) => sum + b.total, 0)
+  const completos = data.filter(b => b.totalEsCompleto)
+  const totalGeneral = completos.reduce((sum, b) => sum + b.total, 0)
   const fecha = new Date()
   const html = renderInformeHTML({
     beneficiarios: data,
     totalGeneral,
     totalGeneralFormateado: formatCLP(totalGeneral),
+    beneficiariosIncompletos: data.length - completos.length,
     fechaGeneracion: fecha.toLocaleDateString('es-CL', { year: 'numeric', month: 'long', day: 'numeric' }),
   })
 
@@ -110,6 +59,15 @@ export async function GET() {
   try {
     const page = await browser.newPage()
     await page.setContent(html, { waitUntil: 'load' })
+    // `load` no garantiza que las <img> remotas terminaran de decodificar.
+    // Sin esta espera el PDF podía salir con recuadros vacíos en silencio.
+    await page.evaluate(async () => {
+      await Promise.all(
+        Array.from(document.images)
+          .filter(img => !img.complete)
+          .map(img => new Promise(resolve => { img.onload = img.onerror = resolve }))
+      )
+    })
     const pdf = await page.pdf({
       format: 'A4',
       printBackground: true,
@@ -124,7 +82,10 @@ export async function GET() {
         'Content-Disposition': `attachment; filename="${filename}"`,
       },
     })
+  } catch (err) {
+    console.error('informe-consultora render', err)
+    return NextResponse.json({ error: 'No se pudo generar el PDF' }, { status: 500 })
   } finally {
-    await browser.close()
+    await browser.close().catch(() => {})
   }
 }
