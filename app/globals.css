@@ -33,6 +33,19 @@ body {
   min-height: 100vh;
 }
 
+/* Hueco para la barra de tabs inferior (solo mobile) + safe area del iPhone.
+   Con viewport-fit=cover (ver app/layout.tsx) env() ya devuelve valores
+   reales, así que el contenido deja de quedar debajo del indicador de home.
+   Los insets laterales importan en landscape con notch. */
+.app-shell {
+  padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+@media (min-width: 640px) {
+  .app-shell { padding-bottom: 0; }
+}
+
 /* Glass utility */
 .glass {
   background: var(--glass-bg);
