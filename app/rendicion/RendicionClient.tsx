@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { X, ImageOff, CheckCircle2, RotateCcw, Upload, ChevronDown, ClipboardList, BarChart3 } from 'lucide-react'
 import { formatCLP } from '@/lib/business-logic'
 import { FOTOS_REQUERIDAS } from '@/lib/constants'
 import { Card, Button, Badge, Input, Alert, Skeleton } from '@/components/design-system'
 import { VistaResumenContent } from '@/components/VistaResumenContent'
+import { PanelControl, ESTADOS, estadoDe, type EstadoSocio } from './GraficosRendicion'
 
 // lib/r2.ts es server-only, así que se duplica la constante acá (mismo
 // patrón que ya usa app/mi-dashboard/page.tsx).
@@ -39,23 +40,6 @@ type FilaRendicion = {
   compraCompleta: boolean
   compraCompletaAt: string | null
 }
-type ResumenSegmento = { total: number; completos: number; monto: number; montoRendido: number }
-type Resumen = {
-  total: number
-  completos: number
-  porSegmento: Record<string, ResumenSegmento>
-}
-/** Los tres números de plata que el staff necesita leer de un vistazo, más
- *  la señal de calidad del dato (cuántas filas traen un total parcial). */
-type Totales = {
-  cotizado: number
-  rendido: number
-  porRendir: number
-  sociosRendidos: number
-  sociosPorRendir: number
-  filasParciales: number
-}
-
 /** Un total parcial (faltan precios, o no hay carrito) no se presenta igual
  *  que una cotización completa: se marca en ámbar y con un título que dice
  *  por qué. Mismo criterio que el PDF de la consultora. */
@@ -71,56 +55,6 @@ function TotalCotizado({ f, className }: { f: FilaRendicion; className?: string 
       {f.items.length === 0 ? '—' : `${formatCLP(f.total)}*`}
     </span>
   )
-}
-
-/** Donut de avance. Antes esto eran recharts (PieChart + ResponsiveContainer)
- *  para dibujar dos segmentos de 72px: ~100KB de JS en la ruta más usada del
- *  staff, en celulares de terreno. Un <circle> con strokeDasharray hace lo
- *  mismo sin dependencia. recharts sigue en /simulador y /mi-dashboard, que
- *  sí dibujan gráficos de verdad. */
-function ProgresoDonut({ pct }: { pct: number }) {
-  const r = 28
-  const circunferencia = 2 * Math.PI * r
-  const avance = (Math.max(0, Math.min(100, pct)) / 100) * circunferencia
-  return (
-    <svg width={72} height={72} viewBox="0 0 72 72" className="shrink-0" role="img" aria-label={`${Math.round(pct)}% completo`}>
-      <circle cx="36" cy="36" r={r} fill="none" stroke="rgba(0,0,0,0.10)" strokeWidth="10" />
-      {avance > 0 && (
-        <circle
-          cx="36" cy="36" r={r} fill="none"
-          stroke="var(--verde)" strokeWidth="10" strokeLinecap="round"
-          strokeDasharray={`${avance} ${circunferencia}`}
-          transform="rotate(-90 36 36)"
-          className="motion-safe:transition-[stroke-dasharray] motion-safe:duration-500 motion-safe:ease-out"
-        />
-      )}
-    </svg>
-  )
-}
-
-/** Una cifra de los totales. `destacado` la usa el total cotizado, que es la
- *  referencia contra la que se leen las otras dos. */
-function TotalCelda({ etiqueta, monto, detalle, color, destacado = false }: {
-  etiqueta: string
-  monto: number
-  detalle: string
-  color: string
-  destacado?: boolean
-}) {
-  return (
-    <div className="p-3.5" style={{ background: destacado ? 'rgba(58,125,68,0.06)' : 'rgba(255,255,255,0.75)' }}>
-      <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>{etiqueta}</p>
-      <p className="text-xl sm:text-2xl font-bold leading-tight tabular-nums mt-0.5" style={{ color }}>
-        {formatCLP(monto)}
-      </p>
-      <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{detalle}</p>
-    </div>
-  )
-}
-
-const SEG_COLOR: Record<string, string> = {
-  'Invernadero': 'var(--verde-dark)',
-  'Cierre Perimetral': 'var(--cafe-dark)',
 }
 
 /** Tabs Lista/Resumen: antes "Resumen" (consolidado de compra) era su propia
@@ -147,6 +81,7 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
   const [fotoError, setFotoError] = useState<{ id: string; mensaje: string } | null>(null)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [busqueda, setBusqueda] = useState('')
+  const [filtroEstado, setFiltroEstado] = useState<EstadoSocio | null>(null)
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   function toggleExpanded(id: string) {
@@ -266,49 +201,6 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
     }
   }
 
-  // El resumen se DERIVA de las filas en vez de mantenerse como estado
-  // paralelo. La versión anterior lo recalculaba a mano pasándole el `filas`
-  // capturado en el closure (no el actualizado) dentro de un
-  // `setResumen(prev => prev ? ... : prev)` que usaba `prev` solo como
-  // guardia: dos marcados seguidos y el resumen dejaba de coincidir con la
-  // lista que el usuario tenía delante.
-  const resumen: Resumen | null = useMemo(() => {
-    if (filas.length === 0) return null
-    const porSegmento: Record<string, ResumenSegmento> = {}
-    for (const f of filas) {
-      if (!porSegmento[f.segmento]) porSegmento[f.segmento] = { total: 0, completos: 0, monto: 0, montoRendido: 0 }
-      const seg = porSegmento[f.segmento]
-      seg.total++
-      seg.monto += f.total
-      if (f.compraCompleta) { seg.completos++; seg.montoRendido += f.total }
-    }
-    return {
-      total: filas.length,
-      completos: filas.filter(f => f.compraCompleta).length,
-      porSegmento,
-    }
-  }, [filas])
-
-  // Plata, no solo conteos: "12 de 29" no dice cuánto lleva rendido la
-  // comunidad ni cuánto falta, que es lo que se reporta hacia afuera.
-  // `rendido` suma el total cotizado de los socios ya marcados completos.
-  const totales: Totales = useMemo(() => {
-    let cotizado = 0, rendido = 0, sociosRendidos = 0, filasParciales = 0
-    for (const f of filas) {
-      cotizado += f.total
-      if (!f.totalEsCompleto) filasParciales++
-      if (f.compraCompleta) { rendido += f.total; sociosRendidos++ }
-    }
-    return {
-      cotizado,
-      rendido,
-      porRendir: cotizado - rendido,
-      sociosRendidos,
-      sociosPorRendir: filas.length - sociosRendidos,
-      filasParciales,
-    }
-  }, [filas])
-
   if (loading) return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -327,11 +219,12 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
     </Card>
   )
 
-  const filasFiltradas = busqueda.trim()
-    ? filas.filter(f => f.nombre.toLowerCase().includes(busqueda.trim().toLowerCase()))
-    : filas
-
-  const pctCompleto = resumen && resumen.total > 0 ? (resumen.completos / resumen.total) * 100 : 0
+  const q = busqueda.trim().toLowerCase()
+  const filasFiltradas = filas.filter(f =>
+    (q === '' || f.nombre.toLowerCase().includes(q)) &&
+    (filtroEstado === null || estadoDe(f) === filtroEstado)
+  )
+  const etiquetaFiltro = ESTADOS.find(e => e.id === filtroEstado)?.label
 
   return (
     <div className="space-y-6">
@@ -371,86 +264,20 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
 
       {tab === 'lista' && <>
 
-      {/* Totales -- la pregunta que la pantalla tiene que contestar sin que
-          nadie sume a mano: cuánta plata mueve la comunidad, cuánta está
-          rendida y cuánta falta. Mobile primero: una columna, cifras
-          grandes, tabular-nums para que alineen entre sí. */}
-      <Card className="p-4 sm:p-5 space-y-4">
-        <div className="flex items-center gap-4">
-          <ProgresoDonut pct={pctCompleto} />
-          <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
-              Avance de rendición
-            </p>
-            <p className="text-2xl font-bold leading-tight tabular-nums" style={{ color: '#1c1c1c' }}>
-              {resumen?.completos ?? 0} <span className="text-base font-semibold" style={{ color: 'var(--text-muted)' }}>de {resumen?.total ?? 0} socios</span>
-            </p>
-            <p className="text-sm font-semibold" style={{ color: 'var(--verde-dark)' }}>{pctCompleto.toFixed(0)}% completo</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-px rounded-xl overflow-hidden" style={{ background: 'rgba(0,0,0,0.07)' }}>
-          <TotalCelda
-            etiqueta="Total cotizado"
-            monto={totales.cotizado}
-            detalle={`${resumen?.total ?? 0} socios`}
-            color="#1c1c1c"
-            destacado
-          />
-          <TotalCelda
-            etiqueta="Rendido"
-            monto={totales.rendido}
-            detalle={`${totales.sociosRendidos} socio${totales.sociosRendidos === 1 ? '' : 's'} con compra completa`}
-            color="var(--verde-dark)"
-          />
-          <TotalCelda
-            etiqueta="Por rendir"
-            monto={totales.porRendir}
-            detalle={`${totales.sociosPorRendir} socio${totales.sociosPorRendir === 1 ? '' : 's'} pendiente${totales.sociosPorRendir === 1 ? '' : 's'}`}
-            color="var(--cafe-dark)"
-          />
-        </div>
-
-        {totales.filasParciales > 0 && (
-          <p className="text-xs" style={{ color: 'var(--cafe-dark)' }}>
-            * {totales.filasParciales} socio{totales.filasParciales === 1 ? '' : 's'} con total parcial
-            (ítems sin precio o sin carrito): no están sumados completos acá.
-          </p>
-        )}
-
-        {/* Por segmento: mismo dato en plata, no solo en conteo */}
-        <div className="space-y-3 pt-1" style={{ borderTop: '1px solid rgba(0,0,0,0.07)' }}>
-          {Object.entries(resumen?.porSegmento ?? {}).map(([seg, d]) => {
-            const color = SEG_COLOR[seg] ?? 'var(--cafe)'
-            const pct = d.total > 0 ? (d.completos / d.total) * 100 : 0
-            return (
-              <div key={seg}>
-                <div className="flex items-baseline justify-between gap-3">
-                  <p className="text-sm font-semibold truncate" style={{ color }}>{seg}</p>
-                  <p className="text-sm font-bold shrink-0 tabular-nums" style={{ color: '#1c1c1c' }}>
-                    {formatCLP(d.montoRendido)}
-                    <span className="font-medium" style={{ color: 'var(--text-muted)' }}> / {formatCLP(d.monto)}</span>
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 mt-1">
-                  <div className="h-1.5 flex-1 rounded-full overflow-hidden" style={{ background: 'rgba(0,0,0,0.08)' }}>
-                    <div
-                      className="h-full rounded-full transition-[width] duration-300 ease-out"
-                      style={{ width: `${pct}%`, background: color }}
-                    />
-                  </div>
-                  <span className="text-xs shrink-0 tabular-nums" style={{ color: 'var(--text-muted)' }}>
-                    {d.completos}/{d.total}
-                  </span>
-                </div>
-              </div>
-            )
-          })}
-        </div>
+      {/* Panel de control: avance, etapa de cada socio (con filtro), plata,
+          presupuesto y proveedor. Ver app/rendicion/GraficosRendicion.tsx. */}
+      <Card className="p-3 sm:p-4">
+        <PanelControl filas={filas} filtro={filtroEstado} onFiltro={setFiltroEstado} />
       </Card>
 
       {/* Búsqueda — con 30+ beneficiarios el único mecanismo de navegación
           antes de esto era scroll; filtra ambas vistas (mobile y desktop). */}
+      {etiquetaFiltro && (
+        <p className="text-sm font-semibold" style={{ color: 'var(--verde-dark)' }}>
+          Mostrando {filasFiltradas.length} de {filas.length} · {etiquetaFiltro}
+        </p>
+      )}
+
       {filas.length > 8 && (
         <Input
           type="search"
@@ -464,7 +291,9 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
       {filasFiltradas.length === 0 && (
         <Card className="p-6 text-center">
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-            No encontramos a nadie llamado &ldquo;{busqueda}&rdquo;.
+            {q
+              ? <>No encontramos a nadie llamado &ldquo;{busqueda}&rdquo;{etiquetaFiltro ? ` en “${etiquetaFiltro}”` : ''}.</>
+              : <>Ningún socio en &ldquo;{etiquetaFiltro}&rdquo;.</>}
           </p>
         </Card>
       )}
