@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic'
 import { Trash2, Upload } from 'lucide-react'
 import type { Beneficiario, Asignacion, Proveedor, PrecioProveedor } from '@/lib/types'
 import { buildPrecioMap, calcularCostoCarrito, formatCLP, PRESUPUESTO_BASE } from '@/lib/business-logic'
-import { useProveedor } from '@/lib/proveedor-context'
+import { useProveedor, proveedorPorDefecto } from '@/lib/proveedor-context'
 import { FOTOS_REQUERIDAS } from '@/lib/constants'
 import { Card, Alert, ConfirmDialog, Skeleton } from '@/components/design-system'
 import { cx } from '@/components/design-system/cx'
@@ -93,11 +93,12 @@ export default function MiDashboardClient({ inicial }: { inicial: MiDashboardIni
   // Lo único que queda por resolver en el cliente: el proveedor elegido vive
   // en localStorage (ver lib/proveedor-context.tsx), así que el servidor no
   // lo conoce. Si no hay uno guardado, o el guardado ya no está disponible,
-  // se cae al primero de la lista.
+  // se cae al proveedor por defecto del programa (Sodimac).
   useEffect(() => {
     const idsDisponibles = new Set(proveedores.map(p => p.id))
-    if ((!proveedorId || !idsDisponibles.has(proveedorId)) && proveedores.length) {
-      setProveedorId(proveedores[0].id)
+    const porDefecto = proveedorPorDefecto(proveedores)
+    if ((!proveedorId || !idsDisponibles.has(proveedorId)) && porDefecto) {
+      setProveedorId(porDefecto.id)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

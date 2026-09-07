@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import type { Beneficiario, CatalogoInsumo, Asignacion, AyudaMemoria, Proveedor } from '@/lib/types'
 import { buildPrecioMap, calcularCostoCarrito, formatCLP, PRESUPUESTO_BASE } from '@/lib/business-logic'
-import { useProveedor } from '@/lib/proveedor-context'
+import { useProveedor, proveedorPorDefecto, STORAGE_KEY } from '@/lib/proveedor-context'
 
 type Filtro = 'todos' | 'Invernadero' | 'Cierre Perimetral'
 
@@ -45,10 +45,11 @@ export default function BeneficiariosPage() {
         if (ins) setInsumos(ins as CatalogoInsumo[])
         if (provs) {
           setProveedores(provs as Proveedor[])
-          const savedId = localStorage.getItem('pat_proveedor_id')
+          const savedId = localStorage.getItem(STORAGE_KEY)
           const validSaved = savedId && (provs as Proveedor[]).find(p => p.id === savedId)
-          if (!validSaved && (provs as Proveedor[]).length > 0) {
-            setProveedorId((provs as Proveedor[])[0].id)
+          const porDefecto = proveedorPorDefecto(provs as Proveedor[])
+          if (!validSaved && porDefecto) {
+            setProveedorId(porDefecto.id)
           }
         }
         if (asigs) {
