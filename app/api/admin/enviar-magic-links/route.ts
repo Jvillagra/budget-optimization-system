@@ -19,7 +19,7 @@ const PAUSA_MS = 400
 // acaba, devolvemos lo hecho MARCADO como incompleto en vez de morir.
 const PRESUPUESTO_MS = 50_000
 
-export async function POST() {
+export async function POST(req: Request) {
   const ctx = await getViewerContext()
   if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
 
@@ -40,12 +40,21 @@ export async function POST() {
   const resultados: { nombre: string; email: string; ok: boolean; error?: string }[] = []
   let pendientes = 0
 
+  // El template del correo arma el link como `{{ .RedirectTo }}&token_hash=...`
+  // (ver app/auth/callback/page.tsx). Sin emailRedirectTo, Supabase usa el
+  // Site URL pelado y el link sale malformado (`host&token_hash=...`): el
+  // socio tocaba el botón y no llegaba a ninguna parte. Misma URL de
+  // retorno que usa /login, con el origen de esta misma petición.
+  const emailRedirectTo = `${new URL(req.url).origin}/auth/callback?next=${encodeURIComponent('/mi-dashboard')}`
   for (const [i, b] of destinatarios.entries()) {
     if (Date.now() - inicio > PRESUPUESTO_MS) {
       pendientes = destinatarios.length - i
       break
     }
-    const { error: sendError } = await admin.auth.signInWithOtp({ email: b.email! })
+    const { error: sendError } = await admin.auth.signInWithOtp({
+      email: b.email!,
+      options: { emailRedirectTo },
+    })
     resultados.push({ nombre: b.nombre, email: b.email!, ok: !sendError, error: sendError?.message })
     await new Promise(r => setTimeout(r, PAUSA_MS))
   }
