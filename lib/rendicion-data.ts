@@ -1,5 +1,6 @@
 import 'server-only'
 import { getSupabaseAdmin } from './supabase-admin'
+import { urlFirmadaLectura } from './r2'
 import { elegirMejorProveedor } from './business-logic'
 import { EMAIL_QA_SOCIO } from './constants'
 import type { Asignacion, Proveedor, PrecioProveedor, FotoCompra, Beneficiario } from './types'
@@ -140,4 +141,41 @@ export async function cargarRendicion(): Promise<
   })
 
   return { ok: true, filas, proveedores: provs }
+}
+
+
+/** Foto ya lista para el navegador: la key de R2 reemplazada por una URL
+ *  firmada de lectura. */
+export type FotoFirmada = { id: string; uploaded_at: string; url: string }
+export type FilaRendicionUI = Omit<FilaRendicion, 'fotos'> & { fotos: FotoFirmada[] }
+
+// Una hora, no cinco minutos: staff deja la pantalla de rendición abierta
+// mientras recorre socios en terreno, y con TTL de 300s las miniaturas ya
+// cargadas se caían al abrir el lightbox un rato después.
+const TTL_LECTURA_SEGUNDOS = 3600
+
+/** Misma agregación que cargarRendicion(), con las fotos ya firmadas. La
+ *  consumen la página server-side app/rendicion/page.tsx y /api/rendicion
+ *  (que sigue existiendo para el reintento desde el cliente). */
+export async function cargarRendicionUI(): Promise<
+  | { ok: true; filas: FilaRendicionUI[]; proveedores: Proveedor[] }
+  | { ok: false; error: unknown }
+> {
+  const res = await cargarRendicion()
+  if (!res.ok) return res
+
+  const filas = await Promise.all(
+    res.filas.map(async ({ fotos, ...resto }) => ({
+      ...resto,
+      fotos: await Promise.all(
+        fotos.map(async f => ({
+          id: f.id,
+          uploaded_at: f.uploaded_at,
+          url: await urlFirmadaLectura(f.r2_key, TTL_LECTURA_SEGUNDOS),
+        }))
+      ),
+    }))
+  )
+
+  return { ok: true, filas, proveedores: res.proveedores }
 }

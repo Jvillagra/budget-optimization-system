@@ -7,46 +7,50 @@ import { useState, useEffect } from 'react'
 import {
   Download, LogOut, ClipboardList, Users, Tag, Calculator, ShieldCheck, ShoppingBag,
 } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
 
 // "Resumen" (ex /vista-resumen) se consolidó como sub-tab dentro de
 // /rendicion -- ver components/VistaResumenContent.tsx -- para que la barra
 // mobile (6 tabs no entraban en una pantalla chica, obligando a deslizar
 // para llegar a Admin) quede en 5.
+// `corto` es la etiqueta de la barra inferior: ahí cada tab tiene ~60px en un
+// celular chico y "Beneficiarios" se cortaba a "Benefi…", que no se entiende.
 const STAFF_LINKS = [
-  { href: '/rendicion', label: 'Rendición', icon: ClipboardList },
-  { href: '/beneficiarios', label: 'Beneficiarios', icon: Users },
-  { href: '/precios', label: 'Precios', icon: Tag },
-  { href: '/simulador', label: 'Simulador', icon: Calculator },
-  { href: '/admin', label: 'Admin', icon: ShieldCheck },
+  { href: '/rendicion', label: 'Rendición', corto: 'Rendición', icon: ClipboardList },
+  { href: '/beneficiarios', label: 'Beneficiarios', corto: 'Socios', icon: Users },
+  { href: '/precios', label: 'Precios', corto: 'Precios', icon: Tag },
+  { href: '/simulador', label: 'Simulador', corto: 'Simular', icon: Calculator },
+  { href: '/admin', label: 'Admin', corto: 'Admin', icon: ShieldCheck },
 ]
-const SOCIO_LINKS = [{ href: '/mi-dashboard', label: 'Mi compra', icon: ShoppingBag }]
+const SOCIO_LINKS = [{ href: '/mi-dashboard', label: 'Mi compra', corto: 'Mi compra', icon: ShoppingBag }]
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
 }
 
-export default function Navbar() {
+/** Quién ve qué. Antes esto se resolvía con un fetch a /api/whoami desde el
+ * cliente -- y lo hacían Navbar y MobileTabBar por separado, o sea dos
+ * round-trips (cada uno con su getUser() contra Supabase) en CADA carga de
+ * página, solo para saber qué links pintar. El resultado visible era una
+ * barra vacía durante ~medio segundo y la barra inferior apareciendo de
+ * golpe. Ahora el rol lo resuelve el servidor una vez en app/layout.tsx y
+ * baja como prop, así el HTML ya llega con la navegación pintada. */
+export type NavRole = 'owner' | 'admin' | 'socio' | null
+
+export function linksParaViewer(role: NavRole, tieneBeneficiario: boolean) {
+  if (role === 'socio') return SOCIO_LINKS
+  if (!role) return []
+  // Staff que también es socio (beneficiarioId propio, ver lib/roles.ts)
+  // ve además "Mi compra", sin perder ningún link de staff.
+  return tieneBeneficiario ? [...STAFF_LINKS, ...SOCIO_LINKS] : STAFF_LINKS
+}
+
+export default function Navbar({ role, tieneBeneficiario }: { role: NavRole; tieneBeneficiario: boolean }) {
   const pathname = usePathname()
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [isIOS, setIsIOS] = useState(false)
   const [showIOSHint, setShowIOSHint] = useState(false)
-  const [links, setLinks] = useState<{ href: string; label: string; icon: LucideIcon }[]>([])
-
-  useEffect(() => {
-    fetch('/api/whoami')
-      .then(r => r.json())
-      .then(ctx => {
-        if (ctx.role === 'socio') return setLinks(SOCIO_LINKS)
-        if (!ctx.role) return setLinks([])
-        // Staff que también es socio (beneficiarioId propio, ver lib/roles.ts)
-        // ve además "Mi compra", sin perder ningún link de staff.
-        const links = ctx.beneficiarioId ? [...STAFF_LINKS, ...SOCIO_LINKS] : STAFF_LINKS
-        setLinks(links)
-      })
-      .catch(() => {})
-  }, [])
+  const links = linksParaViewer(role, tieneBeneficiario)
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' })
@@ -188,27 +192,15 @@ export default function Navbar() {
 }
 
 /** Barra de tabs fija en la parte inferior, solo mobile (reemplaza al menú hamburguesa). */
-export function MobileTabBar() {
+export function MobileTabBar({ role, tieneBeneficiario }: { role: NavRole; tieneBeneficiario: boolean }) {
   const pathname = usePathname()
-  const [links, setLinks] = useState<{ href: string; label: string; icon: LucideIcon }[]>([])
-
-  useEffect(() => {
-    fetch('/api/whoami')
-      .then(r => r.json())
-      .then(ctx => {
-        if (ctx.role === 'socio') return setLinks(SOCIO_LINKS)
-        if (!ctx.role) return setLinks([])
-        const links = ctx.beneficiarioId ? [...STAFF_LINKS, ...SOCIO_LINKS] : STAFF_LINKS
-        setLinks(links)
-      })
-      .catch(() => {})
-  }, [])
+  const links = linksParaViewer(role, tieneBeneficiario)
 
   if (links.length === 0) return null
 
   return (
     <nav
-      className="sm:hidden fixed inset-x-0 bottom-0 z-40 flex overflow-x-auto"
+      className="sm:hidden fixed inset-x-0 bottom-0 z-40 flex"
       style={{
         background: 'rgba(255,255,255,0.94)',
         backdropFilter: 'blur(18px)',
@@ -225,11 +217,19 @@ export function MobileTabBar() {
           <Link
             key={link.href}
             href={link.href}
-            className="flex flex-col items-center justify-center gap-0.5 shrink-0 px-3 py-2 text-[10px] font-medium min-w-[64px]"
+            className="relative flex flex-1 min-w-0 flex-col items-center justify-center gap-0.5 px-1 py-2 text-[10px] font-medium"
             style={{ color: active ? 'var(--verde-dark)' : 'var(--cafe)' }}
+            aria-current={active ? 'page' : undefined}
           >
+            {active && (
+              <span
+                aria-hidden
+                className="absolute top-0 h-0.5 w-8 rounded-full"
+                style={{ background: 'var(--verde)' }}
+              />
+            )}
             <Icon size={20} strokeWidth={active ? 2.5 : 2} />
-            {link.label}
+            <span className="w-full truncate text-center">{link.corto}</span>
           </Link>
         )
       })}

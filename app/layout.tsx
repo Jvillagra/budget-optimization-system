@@ -3,6 +3,7 @@ import { Geist } from 'next/font/google'
 import './globals.css'
 import Navbar, { MobileTabBar } from '@/components/Navbar'
 import { ProveedorProvider } from '@/lib/proveedor-context'
+import { getViewerContext } from '@/lib/roles'
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist' })
 
@@ -33,19 +34,31 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   minimumScale: 1,
+  // Sin viewport-fit=cover, env(safe-area-inset-*) vale 0 SIEMPRE: la barra
+  // inferior de tabs ya pedía ese padding pero el navegador se lo daba en 0,
+  // así que en iPhone con indicador de inicio (y en la PWA standalone) los
+  // tabs quedaban pisados por el gesto de home.
+  viewportFit: 'cover',
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // El rol se resuelve acá, una sola vez por request: Navbar y MobileTabBar
+  // lo recibían antes vía dos fetch('/api/whoami') desde el cliente -- ver
+  // components/Navbar.tsx.
+  const ctx = await getViewerContext()
+
   return (
     <html lang="es" className={`${geist.variable} h-full antialiased`}>
       <head />
-      <body className="min-h-full bg-gray-50 flex flex-col pb-16 sm:pb-0">
+      {/* .app-shell (globals.css) reserva el hueco de la barra de tabs
+          incluyendo el safe area de iOS, y lo saca en desktop. */}
+      <body className="min-h-full bg-gray-50 flex flex-col app-shell">
         <ProveedorProvider>
-        <Navbar />
+        <Navbar role={ctx.role} tieneBeneficiario={ctx.beneficiarioId !== null} />
         <main className="flex-1 mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
           {children}
         </main>
-        <MobileTabBar />
+        <MobileTabBar role={ctx.role} tieneBeneficiario={ctx.beneficiarioId !== null} />
         <footer style={{
           background: 'rgba(255,255,255,0.70)',
           backdropFilter: 'blur(12px)',
