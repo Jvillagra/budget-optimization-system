@@ -13,9 +13,21 @@ export async function getBrowser(): Promise<Browser> {
   const enVercel = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME)
 
   if (!enVercel) {
-    const localPath =
-      process.env.CHROME_EXECUTABLE_PATH ||
-      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+    // El path de macOS estaba hardcodeado: nadie en Linux o Windows podía
+    // generar el informe en desarrollo. CHROME_EXECUTABLE_PATH sigue
+    // teniendo prioridad; si no está, se prueba el path por defecto de cada
+    // plataforma.
+    const porPlataforma: Record<string, string> = {
+      darwin: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      linux: '/usr/bin/google-chrome',
+      win32: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    }
+    const localPath = process.env.CHROME_EXECUTABLE_PATH || porPlataforma[process.platform]
+    if (!localPath) {
+      throw new Error(
+        `No hay un Chrome conocido para la plataforma ${process.platform}. Define CHROME_EXECUTABLE_PATH.`
+      )
+    }
     return puppeteer.launch({ executablePath: localPath, headless: true })
   }
 

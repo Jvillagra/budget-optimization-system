@@ -4,7 +4,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { logAudit } from '@/lib/audit'
 
 export async function POST(req: NextRequest) {
-  const ctx = await getViewerContext(); if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  const ctx = await getViewerContext(); if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
 
   const body = await req.json().catch(() => null)
   const proveedor_id = body?.proveedor_id
@@ -18,12 +18,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'precio_unitario inválido' }, { status: 400 })
   }
 
-  const { error } = await getSupabaseAdmin()
+  const admin = getSupabaseAdmin()
+  const { data: previo } = await admin
+    .from('precios_proveedor')
+    .select('precio_unitario')
+    .eq('proveedor_id', proveedor_id)
+    .eq('insumo_id', insumo_id)
+    .maybeSingle()
+
+  const { error } = await admin
     .from('precios_proveedor')
     .upsert({ proveedor_id, insumo_id, precio_unitario }, { onConflict: 'proveedor_id,insumo_id' })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  if (error) {
+    console.error('precios-proveedor POST', error)
+    return NextResponse.json({ error: 'No se pudo guardar el precio' }, { status: 400 })
+  }
 
-  await logAudit('precios_proveedor', 'update', `${proveedor_id}_${insumo_id}`, { precio_unitario })
+  // El precio anterior es el dato que importa en una auditoría de compras:
+  // sin él, el log solo dice que alguien tocó una celda.
+  await logAudit('precios_proveedor', 'update', `${proveedor_id}_${insumo_id}`, {
+    precio_anterior: previo?.precio_unitario ?? null,
+    precio_unitario,
+    actor: { email: ctx.email, userId: ctx.userId, role: ctx.role },
+  })
   return NextResponse.json({ ok: true })
 }

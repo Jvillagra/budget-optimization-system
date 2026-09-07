@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     }
     beneficiarioId = bid
   } else {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
   }
 
   const contentType = body?.contentType
@@ -46,17 +46,30 @@ export async function POST(req: NextRequest) {
   if (errorValidacion) return NextResponse.json({ error: errorValidacion }, { status: 400 })
 
   const admin = getSupabaseAdmin()
+
+  // El beneficiario tiene que existir: sin esto, staff podía firmar subidas
+  // contra un UUID cualquiera y dejar objetos que ninguna fila referencia.
+  const { data: ben } = await admin
+    .from('beneficiarios')
+    .select('id')
+    .eq('id', beneficiarioId)
+    .maybeSingle()
+  if (!ben) return NextResponse.json({ error: 'Beneficiario inexistente' }, { status: 404 })
+
   const { count } = await admin
     .from('fotos_compra')
     .select('id', { count: 'exact', head: true })
     .eq('beneficiario_id', beneficiarioId)
-  if ((count ?? 0) >= MAX_FOTOS_POR_SOCIO) {
+  const usadas = count ?? 0
+  if (usadas >= MAX_FOTOS_POR_SOCIO) {
     return NextResponse.json({ error: `Ya tienes el máximo de ${MAX_FOTOS_POR_SOCIO} fotos.` }, { status: 400 })
   }
 
   const ext = EXT_POR_TIPO[contentType] ?? 'jpg'
   const key = `${beneficiarioId}/${randomUUID()}.${ext}`
-  const uploadUrl = await urlFirmadaSubida(key, contentType)
+  const uploadUrl = await urlFirmadaSubida(key, contentType, size)
 
-  return NextResponse.json({ uploadUrl, key })
+  // `restantes` deja que el cliente frene el resto de una selección múltiple
+  // sin subir a R2 objetos que el confirm va a rechazar (ver mi-dashboard).
+  return NextResponse.json({ uploadUrl, key, restantes: MAX_FOTOS_POR_SOCIO - usadas })
 }

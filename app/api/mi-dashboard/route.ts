@@ -20,7 +20,7 @@ export async function GET() {
   const ctx = await getViewerContext()
   // Socio puro, o staff (owner/admin) que también es socio con su propio
   // beneficiarioId (ver lib/roles.ts) -- ambos ven solo lo suyo.
-  if (!ctx.beneficiarioId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  if (!ctx.beneficiarioId) return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
 
   const admin = getSupabaseAdmin()
 
@@ -37,7 +37,10 @@ export async function GET() {
   ])
 
   const error = e1 || e2 || e3 || e4
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    console.error('mi-dashboard GET', error)
+    return NextResponse.json({ error: 'Error al cargar tus datos' }, { status: 500 })
+  }
 
   // Si ya hay un proveedor real de compra registrado (staff lo setea en
   // /rendicion), se excluye del selector -- ya no tiene sentido "comparar"

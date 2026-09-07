@@ -10,7 +10,7 @@ import { logAudit } from '@/lib/audit'
 // `check (true)` de RLS no puede hacer.
 
 export async function POST(req: NextRequest) {
-  const ctx = await getViewerContext(); if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  const ctx = await getViewerContext(); if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
 
   const body = await req.json().catch(() => null)
   const beneficiario_id = body?.beneficiario_id
@@ -31,23 +31,44 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (error || !data) {
-    return NextResponse.json({ error: error?.message ?? 'Error al crear la asignación' }, { status: 400 })
+    console.error('asignaciones POST', error)
+    return NextResponse.json({ error: 'No se pudo crear la asignación' }, { status: 400 })
   }
 
   const row = data as unknown as { id: string }
-  await logAudit('asignaciones', 'insert', row.id, { beneficiario_id, insumo_id, cantidad })
+  await logAudit('asignaciones', 'insert', row.id, {
+    beneficiario_id, insumo_id, cantidad,
+    actor: { email: ctx.email, userId: ctx.userId, role: ctx.role },
+  })
   return NextResponse.json({ data })
 }
 
 export async function DELETE(req: NextRequest) {
-  const ctx = await getViewerContext(); if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  const ctx = await getViewerContext(); if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
 
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'id es requerido' }, { status: 400 })
 
-  const { error } = await getSupabaseAdmin().from('asignaciones').delete().eq('id', id)
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  // Se lee la fila ANTES de borrarla: el audit_log guardaba payload null,
+  // así que quedaba un row_id que ya no resuelve a nada y ningún registro de
+  // qué se borró. Un log así no sirve para auditar.
+  const admin = getSupabaseAdmin()
+  const { data: previa } = await admin
+    .from('asignaciones')
+    .select('*, catalogo_insumos(*)')
+    .eq('id', id)
+    .maybeSingle()
+  if (!previa) return NextResponse.json({ error: 'No encontrada' }, { status: 404 })
 
-  await logAudit('asignaciones', 'delete', id, null)
+  const { error } = await admin.from('asignaciones').delete().eq('id', id)
+  if (error) {
+    console.error('asignaciones DELETE', error)
+    return NextResponse.json({ error: 'No se pudo eliminar la asignación' }, { status: 400 })
+  }
+
+  await logAudit('asignaciones', 'delete', id, {
+    anterior: previa,
+    actor: { email: ctx.email, userId: ctx.userId, role: ctx.role },
+  })
   return NextResponse.json({ ok: true })
 }

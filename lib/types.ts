@@ -31,6 +31,7 @@ export interface Beneficiario {
   compra_completa_at: string | null
   compra_completa_by: string | null
   proveedor_compra_id: string | null
+  es_prueba?: boolean
 }
 
 export interface FotoCompra {
@@ -99,9 +100,9 @@ export type Database = {
         Relationships: []
       }
       beneficiarios: {
-        Row: { id: string; nombre: string; segmento: string; presupuesto_base: number; email: string | null; compra_completa: boolean; compra_completa_at: string | null; compra_completa_by: string | null; proveedor_compra_id: string | null }
-        Insert: { id?: string; nombre: string; segmento: string; presupuesto_base?: number; email?: string | null; compra_completa?: boolean; compra_completa_at?: string | null; compra_completa_by?: string | null; proveedor_compra_id?: string | null }
-        Update: { id?: string; nombre?: string; segmento?: string; presupuesto_base?: number; email?: string | null; compra_completa?: boolean; compra_completa_at?: string | null; compra_completa_by?: string | null; proveedor_compra_id?: string | null }
+        Row: { id: string; nombre: string; segmento: string; presupuesto_base: number; email: string | null; compra_completa: boolean; compra_completa_at: string | null; compra_completa_by: string | null; proveedor_compra_id: string | null; es_prueba: boolean }
+        Insert: { id?: string; nombre: string; segmento: string; presupuesto_base?: number; email?: string | null; compra_completa?: boolean; compra_completa_at?: string | null; compra_completa_by?: string | null; proveedor_compra_id?: string | null; es_prueba?: boolean }
+        Update: { id?: string; nombre?: string; segmento?: string; presupuesto_base?: number; email?: string | null; compra_completa?: boolean; compra_completa_at?: string | null; compra_completa_by?: string | null; proveedor_compra_id?: string | null; es_prueba?: boolean }
         Relationships: []
       }
       app_roles: {

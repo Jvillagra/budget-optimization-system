@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getViewerContext, isStaff } from '@/lib/roles'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { EMAIL_QA_SOCIO } from '@/lib/constants'
+import type { Beneficiario } from '@/lib/types'
 
 // Único punto de lectura para el cliente. Antes cada página pegaba directo a
 // Supabase con la anon key (visible en el bundle) -- cualquiera que la
@@ -12,7 +13,7 @@ import { EMAIL_QA_SOCIO } from '@/lib/constants'
 
 export async function GET() {
   const ctx = await getViewerContext()
-  if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
 
   const admin = getSupabaseAdmin()
 
@@ -33,14 +34,16 @@ export async function GET() {
   ])
 
   const error = e1 || e2 || e3 || e4 || e5 || e6
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    console.error('data GET', error)
+    return NextResponse.json({ error: 'Error al cargar los datos' }, { status: 500 })
+  }
 
-  // Oculto de las vistas staff -- ver EMAIL_QA_SOCIO en lib/constants.ts
-  // (mismo criterio ya usado en /api/rendicion e informe-consultora). Este
-  // endpoint alimenta también app/beneficiarios/page.tsx, donde staff
-  // gestiona insumos/asignaciones -- no debe mezclarse ahí con los 29 socios
-  // reales.
-  const beneficiariosVisibles = (beneficiarios ?? []).filter(ben => ben.email !== EMAIL_QA_SOCIO)
+  // Oculto de las vistas staff: desde la migración 009 la marca es la
+  // columna `es_prueba`, no un email hardcodeado. El filtro por email queda
+  // de respaldo por si la migración no se aplicó todavía en algún entorno.
+  const beneficiariosVisibles = ((beneficiarios ?? []) as (Beneficiario & { es_prueba?: boolean })[])
+    .filter(ben => ben.es_prueba !== true && (ben.email?.toLowerCase() ?? null) !== EMAIL_QA_SOCIO)
 
   return NextResponse.json({
     proveedores,

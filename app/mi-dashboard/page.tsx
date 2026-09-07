@@ -106,9 +106,15 @@ export default function MiDashboardPage() {
     if (!files || files.length === 0) return
     setFotoError(null)
     setSubiendo(true)
+    // El contador tiene que ser una variable local: `fotos.length` es estado
+    // de React y NO se actualiza dentro del bucle, así que con 0 fotos una
+    // selección de 10 archivos pasaba el chequeo las 10 veces y subía los 10
+    // a R2 -- el servidor rechazaba a partir del 6º y esos objetos quedaban
+    // huérfanos, pagados y sin fila que los referencie.
+    let usadas = fotos.length
     for (const file of Array.from(files)) {
-      if (fotos.length >= MAX_FOTOS) {
-        setFotoError(`Ya tienes el máximo de ${MAX_FOTOS} fotos.`)
+      if (usadas >= MAX_FOTOS) {
+        setFotoError(`Solo puedes subir ${MAX_FOTOS} fotos. Las demás no se subieron.`)
         break
       }
       try {
@@ -118,16 +124,25 @@ export default function MiDashboardPage() {
           body: JSON.stringify({ contentType: file.type, size: file.size }),
         })
         const urlData = await urlRes.json()
-        if (!urlRes.ok) { setFotoError(urlData.error ?? 'Error al subir'); continue }
+        if (!urlRes.ok) { setFotoError(urlData.error ?? 'Error al subir'); break }
+        // El servidor manda cuántas quedan: si ya no queda cupo, se corta
+        // antes de subir nada más.
+        if (typeof urlData.restantes === 'number') usadas = MAX_FOTOS - urlData.restantes
 
         const putRes = await fetch(urlData.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file })
         if (!putRes.ok) { setFotoError('Error al subir la imagen'); continue }
 
-        await fetch('/api/fotos', {
+        const confirmRes = await fetch('/api/fotos', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ key: urlData.key }),
         })
+        if (!confirmRes.ok) {
+          const err = await confirmRes.json().catch(() => null)
+          setFotoError(err?.error ?? 'No se pudo registrar la foto')
+          continue
+        }
+        usadas++
       } catch {
         setFotoError('Error al subir la imagen')
       }
@@ -141,8 +156,15 @@ export default function MiDashboardPage() {
     if (!fotoAEliminar) return
     setEliminando(true)
     const id = fotoAEliminar.id
-    await fetch(`/api/fotos?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
-    setFotos(prev => prev.filter(f => f.id !== id))
+    // Antes se quitaba de la UI pase lo que pase: si el DELETE fallaba, el
+    // socio creía haber borrado la foto y reaparecía al recargar.
+    const res = await fetch(`/api/fotos?id=${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => null)
+    if (res?.ok) {
+      setFotos(prev => prev.filter(f => f.id !== id))
+      setFotoError(null)
+    } else {
+      setFotoError('No pudimos eliminar la foto. Intenta de nuevo.')
+    }
     setEliminando(false)
     setFotoAEliminar(null)
   }
@@ -173,7 +195,12 @@ export default function MiDashboardPage() {
   }
 
   const carrito = proveedorId ? calcularCostoCarrito(asignaciones, proveedorId, precioMap) : { total: 0 }
-  const aporteBolsillo = Math.max(0, carrito.total - PRESUPUESTO_BASE)
+  // Presupuesto REAL del socio (columna beneficiarios.presupuesto_base), no
+  // la constante global: la simulación siempre usó la columna, así que un
+  // socio con presupuesto distinto veía acá un aporte de bolsillo que no
+  // coincidía con su propio cálculo.
+  const presupuesto = beneficiario.presupuesto_base ?? PRESUPUESTO_BASE
+  const aporteBolsillo = Math.max(0, carrito.total - presupuesto)
 
   const porSegmento = new Map<string, number>()
   if (proveedorId) {
@@ -222,7 +249,7 @@ export default function MiDashboardPage() {
       <div className="grid grid-cols-2 gap-3">
         <Card className="p-4 motion-safe:animate-[riseIn_220ms_ease-out]">
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Presupuesto base</p>
-          <p className="text-lg font-semibold" style={{ color: '#1c1c1c' }}>{formatCLP(PRESUPUESTO_BASE)}</p>
+          <p className="text-lg font-semibold" style={{ color: '#1c1c1c' }}>{formatCLP(presupuesto)}</p>
         </Card>
         <Card className="p-4 motion-safe:animate-[riseIn_220ms_ease-out]" style={{ animationDelay: '40ms' }}>
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Total de tu compra</p>
