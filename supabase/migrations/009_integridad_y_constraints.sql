@@ -12,11 +12,34 @@
 -- ============================================================
 -- app/api/precios-proveedor/route.ts hace
 --   upsert(..., { onConflict: 'proveedor_id,insumo_id' })
--- sobre una constraint que NINGUNA migración declaraba: venía de estado
--- manual no versionado. Si no existe, el upsert falla o duplica filas y el
--- maestro de precios pasa a tener dos precios para la misma celda.
-create unique index if not exists uq_precios_proveedor_prov_insumo
-  on public.precios_proveedor (proveedor_id, insumo_id);
+-- sobre una constraint que NINGUNA migración declaraba. En producción SÍ
+-- existe (`precios_proveedor_proveedor_id_insumo_id_key`, creada a mano y
+-- nunca versionada), pero un entorno reconstruido desde estas migraciones
+-- no la tendría y el upsert duplicaría filas: dos precios para la misma
+-- celda del maestro.
+-- Solo se crea si no hay ya un índice único sobre esas columnas, para no
+-- dejar dos índices redundantes encareciendo cada escritura.
+do $$
+begin
+  if not exists (
+    select 1
+      from pg_index i
+      join pg_class t on t.oid = i.indrelid
+      join pg_namespace n on n.oid = t.relnamespace
+     where n.nspname = 'public'
+       and t.relname = 'precios_proveedor'
+       and i.indisunique
+       and i.indnatts = 2
+       and (
+         select array_agg(a.attname::text order by a.attname)
+           from unnest(i.indkey) k
+           join pg_attribute a on a.attrelid = t.oid and a.attnum = k
+       ) = array['insumo_id','proveedor_id']
+  ) then
+    create unique index uq_precios_proveedor_prov_insumo
+      on public.precios_proveedor (proveedor_id, insumo_id);
+  end if;
+end $$;
 
 -- ============================================================
 -- 2. Tope real de fotos por socio
@@ -110,6 +133,6 @@ comment on table public.catalogo_insumos is
 -- ============================================================
 -- drop trigger if exists trg_tope_fotos_por_socio on public.fotos_compra;
 -- drop function if exists public.fn_tope_fotos_por_socio();
--- drop index if exists public.uq_precios_proveedor_prov_insumo;
+-- drop index if exists public.uq_precios_proveedor_prov_insumo; -- solo si la creó esta migración
 -- drop index if exists public.uq_beneficiarios_email_lower;
 -- alter table public.beneficiarios drop column if exists es_prueba;
