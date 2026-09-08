@@ -243,7 +243,7 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
 
   if (loadError) return (
     <Card className="p-8 text-center space-y-3">
-      <p className="text-sm font-semibold" style={{ color: 'var(--cafe-dark)' }}>Error al cargar la rendición</p>
+      <p className="text-sm font-semibold" style={{ color: 'var(--alerta)' }}>Error al cargar la rendición</p>
       <Button onClick={cargar}>Reintentar</Button>
     </Card>
   )
@@ -655,7 +655,7 @@ function FilaCard({
           )}
         </div>
         {fotoErrorMsg && (
-          <p className="text-sm mt-1.5" style={{ color: 'var(--cafe-dark)' }}>{fotoErrorMsg}</p>
+          <p className="text-sm mt-1.5" style={{ color: 'var(--alerta)' }}>{fotoErrorMsg}</p>
         )}
       </div>
 
@@ -686,7 +686,7 @@ function FilaCard({
         <div className="space-y-1.5">
           <label
             className="inline-flex w-full items-center justify-center gap-2 rounded-[4px] font-semibold text-base py-3 min-h-[48px] cursor-pointer transition-all active:scale-[0.97]"
-            style={{ background: 'var(--tinta)', color: 'var(--papel)', opacity: subiendo ? 0.5 : 1 }}
+            style={{ background: 'var(--marca)', color: 'var(--papel)', opacity: subiendo ? 0.5 : 1 }}
           >
             <Upload size={17} />
             {subiendo ? 'Subiendo…' : 'Agregar foto'}

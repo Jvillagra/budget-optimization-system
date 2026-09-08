@@ -27,12 +27,12 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         className={cx(
           'w-full min-h-[44px] rounded-[4px] border px-3.5 py-2.5 text-sm text-[var(--tinta)] transition-colors',
           'placeholder:text-[var(--tinta-45)] bg-[var(--papel-hueco)]',
-          error ? 'border-[#9b1c1c]/50' : 'border-[var(--linea)] hover:border-[var(--linea-fuerte)]',
+          error ? 'border-[var(--alerta)]/50' : 'border-[var(--linea)] hover:border-[var(--linea-fuerte)]',
           className
         )}
         {...props}
       />
-      {error && <p className="text-xs" style={{ color: '#9b1c1c' }}>{error}</p>}
+      {error && <p className="text-xs" style={{ color: 'var(--alerta)' }}>{error}</p>}
     </div>
   )
 })

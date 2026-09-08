@@ -263,6 +263,52 @@ export function VistaResumenContent() {
         </div>
       ) : (
         <>
+          {/* ---- Estado de la compra -------------------------------------
+              Juan no encontraba como marcar un pedido como completado: la
+              accion existia pero vivia al fondo del panel de cada proyecto,
+              bajo el consolidado. Esta franja pone el estado arriba de todo y
+              lleva al boton; la accion sigue estando en un solo lugar
+              (PanelSegmento), aca no se duplica. */}
+          <section
+            className="rounded-[6px] p-4 sm:p-5"
+            style={{ background: 'var(--papel-hueco)', border: '1px solid var(--linea)' }}
+          >
+            <p className="eyebrow mb-3">Estado de la compra</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {porSegmento.map(({ seg, sigla, nombre, compra }) => (
+                <div key={seg} className="flex items-center justify-between gap-3">
+                  <span className="flex items-center gap-2 text-sm" style={{ color: 'var(--tinta)' }}>
+                    <span
+                      aria-hidden
+                      className="h-2 w-2 rounded-full shrink-0"
+                      style={{ background: seg === 'Invernadero' ? 'var(--marca)' : 'var(--marca-calida)' }}
+                    />
+                    {nombre}
+                  </span>
+                  {compra ? (
+                    <span
+                      className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide px-2 py-1 rounded-[3px] shrink-0"
+                      style={{ background: 'var(--acento)', color: 'var(--tinta)' }}
+                    >
+                      <Check size={11} strokeWidth={3} /> Comprado
+                    </span>
+                  ) : (
+                    <a
+                      href={`#panel-${sigla}`}
+                      className="text-xs font-semibold underline underline-offset-2 shrink-0"
+                      style={{ color: 'var(--marca-dark)' }}
+                    >
+                      Pendiente — marcar como comprado
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+            <p className="text-xs mt-3" style={{ color: 'var(--tinta-70)' }}>
+              Marcar un proyecto como comprado congela sus precios y cantidades. Se puede revertir.
+            </p>
+          </section>
+
           {/* ---- Total general -------------------------------------------- */}
           <Reveal>
             <section>
@@ -290,7 +336,7 @@ export function VistaResumenContent() {
                   bajar al detalle de cada proyecto. */}
               {hayPrecios && totalGasto > 0 && (
                 <div className="mt-8">
-                  <div className="flex h-14 w-full overflow-hidden rounded-[4px]" style={{ border: '1px solid var(--tinta)' }}>
+                  <div className="flex h-14 w-full overflow-hidden rounded-[4px]" style={{ border: '1px solid var(--linea-fuerte)' }}>
                     {porSegmento.map(({ sigla, gasto }, i) => {
                       const pct = (gasto / totalGasto) * 100
                       if (pct <= 0) return null
@@ -300,9 +346,12 @@ export function VistaResumenContent() {
                           className="flex items-center justify-center text-xs font-bold transition-[width] duration-700"
                           style={{
                             width: `${pct}%`,
-                            background: i === 0 ? 'var(--tinta)' : 'var(--acento)',
-                            color: i === 0 ? 'var(--papel)' : 'var(--tinta)',
-                            borderLeft: i === 1 ? '1px solid var(--tinta)' : undefined,
+                            // CP = terracota, INV = verde bosque: los mismos dos
+                            // colores identifican a cada proyecto en toda la app
+                            // (dashboard, panel de proyecto, chips de segmento).
+                            background: i === 0 ? 'var(--marca-calida)' : 'var(--marca)',
+                            color: 'var(--papel)',
+                            borderLeft: i === 1 ? '1px solid var(--papel)' : undefined,
                           }}
                         >
                           {pct >= 12 && `${sigla} ${Math.round(pct)}%`}
@@ -334,19 +383,19 @@ export function VistaResumenContent() {
 
           {/* ---- Polines: total general, el insumo que comparten ---------- */}
           <Reveal delay={120}>
-            <section className="p-6 rounded-[6px]" style={{ background: 'var(--tinta)', color: 'var(--papel)' }}>
+            <section className="p-6 rounded-[6px]" style={{ background: 'var(--marca)', color: 'var(--papel)' }}>
               <div className="flex flex-wrap items-end justify-between gap-6">
                 <div>
-                  <p className="eyebrow" style={{ color: 'rgba(244,240,231,0.55)' }}>Total de polines</p>
+                  <p className="eyebrow" style={{ color: 'rgba(244,240,231,0.82)' }}>Total de polines</p>
                   <p className="titulo-lg mt-2 tabular-nums">{totalPolines || '—'}</p>
-                  <p className="text-xs mt-2" style={{ color: 'rgba(244,240,231,0.55)' }}>
+                  <p className="text-xs mt-2" style={{ color: 'rgba(244,240,231,0.82)' }}>
                     Sumando los dos proyectos
                   </p>
                 </div>
                 <div className="flex gap-8">
                   {porSegmento.map(s => (
                     <div key={s.seg}>
-                      <p className="eyebrow" style={{ color: 'rgba(244,240,231,0.55)' }}>{s.sigla}</p>
+                      <p className="eyebrow" style={{ color: 'rgba(244,240,231,0.82)' }}>{s.sigla}</p>
                       <p className="titulo-md mt-1 tabular-nums">{s.polines || '—'}</p>
                     </div>
                   ))}
@@ -493,7 +542,7 @@ function TagSegmento({ tag }: { tag: 'CP' | 'INV' }) {
     <span
       className="text-[10px] font-bold px-1.5 py-0.5 rounded-[3px] tracking-wide"
       style={tag === 'CP'
-        ? { background: 'var(--tinta)', color: 'var(--papel)' }
+        ? { background: 'var(--marca)', color: 'var(--papel)' }
         : { background: 'var(--acento)', color: 'var(--tinta)' }}
     >
       {tag}
@@ -522,7 +571,15 @@ function PanelSegmento({
   const pct = totalGasto > 0 ? Math.round((gasto / totalGasto) * 100) : 0
 
   return (
-    <div className="p-6 space-y-5 flex flex-col" style={{ background: 'var(--papel)' }}>
+    <div
+      id={`panel-${sigla}`}
+      className="p-6 space-y-5 flex flex-col scroll-mt-24"
+      style={{
+        background: 'var(--papel)',
+        // Linea superior del color del proyecto: CP terracota, INV verde.
+        borderTop: `3px solid ${seg === 'Invernadero' ? 'var(--marca)' : 'var(--marca-calida)'}`,
+      }}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="eyebrow">{sigla} · {nombre}</p>
@@ -575,8 +632,11 @@ function PanelSegmento({
       ) : (
         <div className="pt-2 mt-auto">
           <Button variant="accent" onClick={onConfirmar} disabled={!puedeConfirmar || gasto <= 0} className="w-full">
-            Marcar {sigla} como comprado
+            <Check size={15} strokeWidth={2.5} /> Marcar {nombre} como comprado
           </Button>
+          <p className="text-xs mt-2" style={{ color: 'var(--tinta-70)' }}>
+            Márcalo cuando la compra ya esté hecha: congela los precios y las cantidades de este proyecto.
+          </p>
           {!puedeConfirmar && (
             <p className="text-xs mt-2" style={{ color: 'var(--tinta-45)' }}>
               Elige primero un proveedor en Beneficiarios.

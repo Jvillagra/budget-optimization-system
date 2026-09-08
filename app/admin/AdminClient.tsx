@@ -95,7 +95,7 @@ export default function AdminClient({ initial }: { initial: RoleRow[] | null }) 
   if (loadError) return (
     <div className="max-w-xl mx-auto">
       <Card className="p-8 text-center space-y-3">
-        <p className="text-sm font-semibold" style={{ color: 'var(--cafe-dark)' }}>Error al cargar la administración</p>
+        <p className="text-sm font-semibold" style={{ color: 'var(--alerta)' }}>Error al cargar la administración</p>
         <Button onClick={cargar}>Reintentar</Button>
       </Card>
     </div>

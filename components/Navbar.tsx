@@ -219,7 +219,7 @@ export function MobileTabBar({ role, tieneBeneficiario }: { role: NavRole; tiene
               <span
                 aria-hidden
                 className="absolute top-0 h-0.5 w-8"
-                style={{ background: 'var(--tinta)' }}
+                style={{ background: 'var(--marca)' }}
               />
             )}
             <Icon size={20} strokeWidth={active ? 2.5 : 2} />

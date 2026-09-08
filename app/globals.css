@@ -7,49 +7,71 @@
 @source "../components";
 @source "../lib";
 
-/* Sistema visual editorial (2026-09-08). Papel / tinta / acento, divisores de
-   1px, radios chicos y mucho espacio negativo. Los nombres --verde/--cafe se
-   conservan como alias porque los usan ~10 pantallas: remapearlos acá propaga
-   la paleta sin tocar cada archivo. No agregar tonos nuevos fuera de esta
-   lista -- si hace falta un matiz, sale de color-mix() sobre estos tres. */
+/* Sistema visual corporativo (2026-09-09). Deriva de public/logo.png: verde
+   bosque de los arboles, terracota de la lena, naranja del fuego, sobre el
+   crema del disco. Reemplaza al negro/lima del sistema editorial anterior --
+   el negro solido leia como plantilla generica y el lima #c7ff4a no era un
+   color de la marca.
+
+   Reglas duras de contraste (medidas contra --papel #f4f0e7, no estimadas):
+     --marca        6.69:1  -> admite texto papel encima
+     --marca-calida 5.14:1  -> admite texto papel encima
+     --acento       2.34:1  -> NUNCA texto papel encima, solo --tinta (5.95:1)
+   Los tonos apagados de texto se subieron de 0.45 (2.69:1, reprobaba AA) a
+   0.66 (4.91:1): esa opacidad era la causa del texto ilegible en movil.
+
+   No agregar tonos fuera de esta lista; si hace falta un matiz sale de
+   color-mix() sobre estos. */
 :root {
   --papel: #f4f0e7;
-  --papel-hueco: #ebe6da;   /* superficie hundida: filas alternas, inputs */
-  --tinta: #171815;
-  --tinta-70: rgba(23, 24, 21, 0.70);
-  --tinta-45: rgba(23, 24, 21, 0.45);
-  --linea: rgba(23, 24, 21, 0.14);
-  --linea-fuerte: rgba(23, 24, 21, 0.30);
-  --acento: #c7ff4a;
-  --acento-hueco: #eaffc0;  /* acento al 25% sobre papel, para fondos */
+  --papel-hueco: #ece7db;   /* superficie hundida: filas alternas, inputs */
+  --tinta: #1f2419;         /* verde-tinta, no negro puro */
+  --tinta-70: rgba(31, 36, 25, 0.75);   /* 6.49:1 */
+  --tinta-45: rgba(31, 36, 25, 0.66);   /* 4.91:1 -- alias historico */
+  --linea: rgba(31, 36, 25, 0.16);
+  --linea-fuerte: rgba(31, 36, 25, 0.32);
 
-  /* Alias de compatibilidad. --verde era el color de acción y de énfasis
-     numérico; en el sistema nuevo la acción es tinta sólida y el resalte es
-     el acento, que NUNCA lleva texto encima que no sea tinta (contraste de
-     #c7ff4a sobre papel ~1.2:1, no sirve para texto). */
-  --verde: #171815;
-  --verde-dark: #171815;
-  --verde-light: #c7ff4a;
-  --verde-muted: #eaffc0;
-  --cafe: rgba(23, 24, 21, 0.70);
-  --cafe-dark: #171815;
-  --cafe-light: rgba(23, 24, 21, 0.30);
-  --cafe-muted: #ebe6da;
+  /* Marca */
+  --marca: #3f5c1c;         /* verde bosque: color de accion y de superficie */
+  --marca-dark: #2e4414;
+  --marca-hueco: #e6ecd8;   /* verde al ~12% sobre papel, para fondos */
+  --marca-calida: #8b5a2b;  /* terracota: segundo eje, segmento CP */
+  --marca-calida-hueco: #f0e4d7;
+  --acento: #e8862b;        /* naranja fuego: resalte, nunca fondo de texto claro */
+  --acento-hueco: #fbead8;
+  --alerta: #a33124;        /* rojo tierra, 6.0:1 -- sobrecosto y errores */
+
+  /* Alias de compatibilidad: ~10 pantallas usan --verde/--cafe. Se remapean
+     aca para propagar la paleta sin tocar cada archivo. */
+  --verde: #3f5c1c;
+  --verde-dark: #2e4414;
+  --verde-light: #e8862b;
+  --verde-muted: #e6ecd8;
+  /* --cafe es un alias de TEXTO apagado (etiquetas de formulario, notas al
+     pie): sigue siendo tinta traslucida, no terracota -- pintar de marca cada
+     etiqueta secundaria ensucia la pantalla. Lo que si es identidad de
+     segmento es --cafe-dark / --cafe-muted, que llevan el terracota de CP. */
+  --cafe: rgba(31, 36, 25, 0.75);
+  --cafe-dark: #6d4520;
+  --cafe-light: rgba(31, 36, 25, 0.32);
+  --cafe-muted: #f0e4d7;
 
   --bg-from: #f4f0e7;
   --bg-to: #f4f0e7;
-  /* Sin blur ni sombras de color: las superficies se separan con una línea
+  /* Sin blur ni sombras de color: las superficies se separan con una linea
      de 1px, no con profundidad falsa. */
   --glass-bg: #f4f0e7;
-  --glass-border: rgba(23, 24, 21, 0.14);
+  --glass-border: rgba(31, 36, 25, 0.16);
   --glass-shadow: none;
-  --text-muted: rgba(23, 24, 21, 0.70);
+  --text-muted: rgba(31, 36, 25, 0.75);
 }
 
 @theme inline {
   --color-background: var(--papel);
   --color-foreground: var(--tinta);
   --font-sans: var(--font-instrument);
+  --color-marca: var(--marca);
+  --color-acento: var(--acento);
   --font-serif: var(--font-newsreader);
 }
 
@@ -173,6 +195,6 @@ body {
 /* Foco visible uniforme: el sistema anterior lo definía por componente con
    ring de color; en papel/tinta el anillo es tinta sobre papel. */
 :focus-visible {
-  outline: 2px solid var(--tinta);
+  outline: 2px solid var(--marca);
   outline-offset: 2px;
 }

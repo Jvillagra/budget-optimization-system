@@ -145,7 +145,7 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
 
   if (loadError) return (
     <div className="rounded-[6px] p-8 glass text-center space-y-3">
-      <p className="text-sm font-semibold" style={{ color: 'var(--cafe-dark)' }}>Error al cargar los datos</p>
+      <p className="text-sm font-semibold" style={{ color: 'var(--alerta)' }}>Error al cargar los datos</p>
       <p className="text-xs" style={{ color: 'var(--tinta-45)' }}>Revisa tu conexión e intenta nuevamente.</p>
       <button
         onClick={() => { setLoadError(false); setLoading(true); window.location.reload() }}
@@ -187,7 +187,7 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
                   onClick={() => setFiltro(f)}
                   className="text-xs px-3 py-2 min-h-[38px] rounded-[4px] border transition-all font-semibold"
                   style={filtro === f
-                    ? { background: 'var(--tinta)', color: 'var(--papel)', borderColor: 'var(--tinta)' }
+                    ? { background: 'var(--marca)', color: 'var(--papel)', borderColor: 'var(--marca)' }
                     : { color: 'var(--tinta-70)', borderColor: 'var(--linea)' }}
                 >
                   {f}
@@ -196,13 +196,15 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {/* Una sola columna bajo 640px: a dos columnas los nombres largos
+              ("Maria Alejandra Huisca") se truncaban y la tarjeta quedaba
+              ilegible en telefono, que es donde se usa. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
             {bensFiltrados.map(ben => {
               const asigs = asignaciones[ben.id] ?? []
               const { total: costoTotal } = proveedorId ? calcularCostoCarrito(asigs, proveedorId, precioMap) : { total: 0 }
               const presupuestoBen = ben.presupuesto_base ?? PRESUPUESTO_BASE
               const tieneAporte = Boolean(proveedorId) && costoTotal > presupuestoBen
-              const pct = presupuestoBen > 0 ? Math.min(100, (costoTotal / presupuestoBen) * 100) : 0
               const isSelected = seleccionado === ben.id
               const itemsCarrito = asigs.length
 
@@ -210,42 +212,45 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
                 <button
                   key={ben.id}
                   onClick={() => seleccionarBen(ben.id)}
-                  className="text-left rounded-[6px] p-3 transition-all"
-                  style={isSelected ? {
-                    background: 'var(--papel-hueco)',
-                    border: '1.5px solid var(--verde)',
-                    boxShadow: '0 4px 16px var(--linea)',
-                    
-                  } : {
-                    background: 'rgba(244,240,231,0.65)',
+                  className="text-left rounded-[6px] p-3.5 h-full transition-colors"
+                  style={{
+                    // Sin relleno de color adentro de la tarjeta: la seleccion
+                    // se marca con la linea izquierda y una superficie hundida
+                    // neutra, no pintando el interior. El unico color que
+                    // entra es el punto de 6px del segmento.
+                    background: isSelected ? 'var(--papel-hueco)' : 'var(--papel)',
                     border: '1px solid var(--linea)',
-                    
+                    borderLeft: `3px solid ${isSelected ? 'var(--marca)' : 'transparent'}`,
                   }}
+                  aria-pressed={isSelected}
                 >
-                  <p className="font-semibold text-sm truncate" style={{ color: 'var(--tinta)' }}>{ben.nombre}</p>
-                  <span className="text-xs mt-0.5 inline-block" style={{
-                    color: ben.segmento === 'Invernadero' ? 'var(--verde-dark)' : 'var(--cafe-dark)'
-                  }}>
+                  <p className="font-semibold text-[15px] leading-snug" style={{ color: 'var(--tinta)' }}>{ben.nombre}</p>
+
+                  <span className="mt-1.5 flex items-center gap-1.5 text-xs" style={{ color: 'var(--tinta-70)' }}>
+                    <span
+                      aria-hidden
+                      className="h-1.5 w-1.5 rounded-full shrink-0"
+                      style={{ background: ben.segmento === 'Invernadero' ? 'var(--marca)' : 'var(--marca-calida)' }}
+                    />
                     {ben.segmento}
                   </span>
-                  {proveedorId && itemsCarrito > 0 && (
-                    <>
-                      <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--linea)' }}>
-                        <div className="h-full rounded-full" style={{
-                          width: `${pct}%`,
-                          background: tieneAporte ? '#dc2626' : 'var(--verde)',
-                        }} />
-                      </div>
-                      {tieneAporte && (
-                        <p className="text-xs mt-1 font-semibold" style={{ color: '#dc2626' }}>
-                          +{formatCLP(costoTotal - presupuestoBen)}
-                        </p>
-                      )}
-                    </>
-                  )}
-                  <p className="text-xs mt-1" style={{ color: 'var(--tinta-45)' }}>
-                    {itemsCarrito} ítem{itemsCarrito !== 1 ? 's' : ''} en carrito
+
+                  <p className="text-xs mt-2 tabular-nums" style={{ color: 'var(--tinta-70)' }}>
+                    {itemsCarrito} ítem{itemsCarrito !== 1 ? 's' : ''}
+                    {proveedorId && itemsCarrito > 0 && <> · {formatCLP(costoTotal)} de {formatCLP(presupuestoBen)}</>}
                   </p>
+
+                  {tieneAporte && (
+                    // Sobrecosto: chip con borde, no barra rellena. El texto
+                    // dice que ES el sobrecosto -- antes solo aparecia "+$1.380"
+                    // sin decir de que.
+                    <span
+                      className="mt-2 inline-block text-[11px] font-semibold px-1.5 py-0.5 rounded-[3px] tabular-nums"
+                      style={{ color: 'var(--alerta)', border: '1px solid var(--alerta)' }}
+                    >
+                      Sobre presupuesto +{formatCLP(costoTotal - presupuestoBen)}
+                    </span>
+                  )}
                 </button>
               )
             })}
@@ -398,7 +403,7 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
               <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--linea)' }}>
                 <div className="h-full rounded-full transition-all" style={{
                   width: `${porcentaje}%`,
-                  background: aporteBolsillo > 0 ? '#dc2626' : 'var(--verde)',
+                  background: aporteBolsillo > 0 ? 'var(--alerta)' : 'var(--verde)',
                 }} />
               </div>
               <div className="flex justify-between text-xs mt-1">
@@ -411,11 +416,11 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
                 </p>
               )}
               {aporteBolsillo > 0 && (
-                <div className="rounded-[6px] p-3 mt-2" style={{ background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.2)' }}>
-                  <p className="text-xs font-bold uppercase tracking-wide" style={{ color: '#dc2626' }}>
+                <div className="rounded-[6px] p-3 mt-2" style={{ background: 'color-mix(in srgb, var(--alerta) 10%, transparent)', border: '1px solid rgba(220,38,38,0.2)' }}>
+                  <p className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--alerta)' }}>
                     Aporte de Bolsillo Requerido
                   </p>
-                  <p className="text-xl font-bold" style={{ color: '#dc2626' }}>{formatCLP(aporteBolsillo)}</p>
+                  <p className="text-xl font-bold" style={{ color: 'var(--alerta)' }}>{formatCLP(aporteBolsillo)}</p>
                 </div>
               )}
             </div>
@@ -447,7 +452,7 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
                       <button
                         onClick={() => eliminar(a.id)}
                         className="shrink-0 p-1 rounded-[4px]"
-                        style={{ color: '#dc2626', background: '#fee2e2' }}
+                        style={{ color: 'var(--alerta)', background: 'var(--acento-hueco)' }}
                       >
                         <TrashIcon />
                       </button>
