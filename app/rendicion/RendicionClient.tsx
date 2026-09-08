@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { X, ImageOff, CheckCircle2, RotateCcw, Upload, ChevronDown, ClipboardList, BarChart3, Trash2 } from 'lucide-react'
+import { X, ImageOff, CheckCircle2, RotateCcw, Upload, ChevronDown, ClipboardList, BarChart3, Trash2, Lock } from 'lucide-react'
 import { formatCLP } from '@/lib/business-logic'
 import { FOTOS_REQUERIDAS } from '@/lib/constants'
 import { Card, Button, Badge, Input, Alert, Skeleton, ConfirmDialog } from '@/components/design-system'
@@ -159,10 +159,20 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
     if (!res?.ok) {
       setFotoError({ id: beneficiarioId, mensaje: 'No pudimos eliminar la foto. Intenta de nuevo.' })
     } else {
+      // El servidor revierte "completo" si la rendicion queda bajo el minimo
+      // (ver DELETE en app/api/fotos/route.ts); `compraCompleta` viene en
+      // null cuando el estado no cambio, y ahi se deja el que ya estaba.
+      const cuerpo = await res.json().catch(() => null) as { compraCompleta?: boolean | null } | null
+      const revertido = cuerpo?.compraCompleta === false
       // Se saca de la fila y del lightbox a la vez; si era la ultima, el
       // lightbox se cierra porque ya no hay nada que mostrar.
       setFilas(prev => prev.map(f => f.id === beneficiarioId
-        ? { ...f, fotos: f.fotos.filter(x => x.id !== foto.id), fotosCount: Math.max(0, f.fotosCount - 1) }
+        ? {
+            ...f,
+            fotos: f.fotos.filter(x => x.id !== foto.id),
+            fotosCount: Math.max(0, f.fotosCount - 1),
+            ...(revertido ? { compraCompleta: false } : {}),
+          }
         : f))
       setLightbox(prev => {
         if (!prev) return prev
@@ -531,6 +541,13 @@ function Lightbox({ nombre, fotos, index, onClose, onNavigate, onEliminar }: {
 
 /** Avance de comprobantes: una casilla por foto requerida, llenas las que
  *  ya estan. Se lee de un vistazo y no obliga a interpretar una fraccion. */
+/** "28 ago" -- fecha corta para la linea de estado de cada tarjeta. Es
+ *  cliente puro (las filas llegan por fetch), asi que no hay riesgo de
+ *  desalineacion de locale entre servidor y navegador. */
+function fechaCorta(iso: string) {
+  return new Date(iso).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })
+}
+
 function ProgresoFotos({ count }: { count: number }) {
   const listo = count >= FOTOS_REQUERIDAS
   return (
@@ -586,10 +603,21 @@ function FilaCard({
             {f.segmento}
           </Badge>
         </div>
-        <Badge tone={f.compraCompleta ? 'verde' : 'neutral'} className="shrink-0 !text-sm !px-3 !py-1.5">
-          {f.compraCompleta && <CheckCircle2 size={14} />}
-          {f.compraCompleta ? 'Completo' : 'Pendiente'}
-        </Badge>
+        {/* El estado dice ademas CUANDO se marco. Sin la fecha, un "completo"
+            marcado hace semanas se lee como si lo hubiera puesto el sistema
+            solo -- que fue exactamente la confusion que hubo con una socia
+            marcada en agosto y revisada en septiembre. */}
+        <div className="shrink-0 text-right">
+          <Badge tone={f.compraCompleta ? 'verde' : 'neutral'} className="!text-sm !px-3 !py-1.5">
+            {f.compraCompleta && <CheckCircle2 size={14} />}
+            {f.compraCompleta ? 'Completo' : 'Pendiente'}
+          </Badge>
+          {f.compraCompleta && f.compraCompletaAt && (
+            <p className="text-xs mt-1.5 whitespace-nowrap" style={{ color: 'var(--tinta-70)' }}>
+              Marcado el {fechaCorta(f.compraCompletaAt)}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Total cotizado */}
@@ -605,12 +633,23 @@ function FilaCard({
       </button>
 
       {/* Fotos -- siempre visibles: es la acción diaria más frecuente
-          (incluye admin subiendo por socios sin celular). */}
+          (incluye admin subiendo por socios sin celular). El conteo estaba
+          solo en el aria-label de las barras: el requisito es de tres y el
+          numero tiene que verse, no deducirse de cuantas barras se pintaron. */}
       <div>
+        <div className="flex items-baseline justify-between gap-2 mb-1.5">
+          <span className="text-sm font-semibold" style={{ color: 'var(--text-muted)' }}>Comprobantes</span>
+          <span
+            className="text-sm font-semibold tabular-nums"
+            style={{ color: suficientesFotos ? 'var(--tinta)' : 'var(--tinta-70)' }}
+          >
+            {f.fotosCount} de {FOTOS_REQUERIDAS}
+          </span>
+        </div>
         <div className="flex items-center gap-2 flex-wrap">
           {f.fotos.length === 0 ? (
             <span className="flex items-center gap-2 text-sm" style={{ color: 'var(--tinta-45)' }}>
-              <ImageOff size={16} /> Sin fotos
+              <ImageOff size={16} /> Ninguna todavía
               <ProgresoFotos count={0} />
             </span>
           ) : (
@@ -671,7 +710,7 @@ function FilaCard({
           onClick={onRevertir}
           disabled={busy}
         >
-          <RotateCcw size={16} /> Revertir
+          <RotateCcw size={16} /> Revertir a pendiente
         </Button>
       ) : suficientesFotos ? (
         <Button
@@ -683,7 +722,11 @@ function FilaCard({
           {busy ? 'Guardando…' : 'Marcar completo'}
         </Button>
       ) : (
-        <div className="space-y-1.5">
+        /* Subir sigue siendo la accion grande, pero "Marcar completo" ya no
+           desaparece: que la accion no exista en pantalla hasta la tercera
+           foto hacia creer que el admin no podia cerrar una rendicion. Se
+           muestra bloqueada, con el requisito escrito debajo. */
+        <div className="space-y-2">
           <label
             className="inline-flex w-full items-center justify-center gap-2 rounded-[4px] font-semibold text-base py-3 min-h-[48px] cursor-pointer transition-all active:scale-[0.97]"
             style={{ background: 'var(--marca)', color: 'var(--papel)', opacity: subiendo ? 0.5 : 1 }}
@@ -702,9 +745,24 @@ function FilaCard({
               }}
             />
           </label>
-          <p className="text-sm text-center" style={{ color: 'var(--tinta-70)' }}>
-            {faltan === 1 ? 'Falta 1 foto' : `Faltan ${faltan} fotos`} para poder marcar completo
-          </p>
+          <div className="space-y-1.5">
+            {/* El disabled del sistema baja la opacidad al 40%: sobre papel
+                el texto queda en ~2:1 y la accion se vuelve ilegible, que es
+                justo lo contrario de lo que se busca aca. Se anula esa
+                opacidad y el estado inerte lo comunican el candado, el color
+                apagado y el cursor. */}
+            <Button
+              variant="secondary"
+              className="w-full !text-base !py-3 disabled:!opacity-100 disabled:cursor-not-allowed"
+              style={{ color: 'var(--tinta-70)', borderColor: 'var(--linea)' }}
+              disabled
+            >
+              <Lock size={15} /> Marcar completo
+            </Button>
+            <p className="text-sm text-center" style={{ color: 'var(--tinta-70)' }}>
+              Se habilita con {FOTOS_REQUERIDAS} comprobantes · {faltan === 1 ? 'falta 1' : `faltan ${faltan}`}
+            </p>
+          </div>
         </div>
       )}
 
