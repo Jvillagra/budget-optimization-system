@@ -14,9 +14,12 @@ import { PageHeader } from '@/components/Editorial'
 // Colores de los graficos (recharts no lee variables CSS). Tinta y acento
 // del sistema editorial: se distinguen por valor, no solo por matiz, asi que
 // tambien funcionan impresos en blanco y negro.
-const VERDE = '#171815'
-const CAFE = '#c7ff4a'
-const PIE_COLORS = [VERDE, '#e5e7eb', '#dc2626']
+// Colores de marca en literal porque recharts recibe strings, no var(): el
+// SVG del grafico no resuelve custom properties. Deben seguir a globals.css:
+// --marca / --marca-calida / --alerta.
+const VERDE = '#3f5c1c'
+const CAFE = '#8b5a2b'
+const PIE_COLORS = [VERDE, '#d8d2c4', '#a33124']
 
 type DesgloseItem = { nombre: string; corto: string; total: number; unidad: string }
 
@@ -191,7 +194,7 @@ export default function SimuladorClient({ initial }: { initial: DatosStaff | nul
           onClick={simular}
           disabled={!provA || !provB}
           className="w-full rounded-[4px] px-6 py-3 min-h-[48px] text-sm text-[var(--papel)] font-bold disabled:opacity-40"
-          style={{ background: 'var(--tinta)' }}
+          style={{ background: 'var(--marca)' }}
         >
           Simular
         </button>
@@ -320,7 +323,7 @@ export default function SimuladorClient({ initial }: { initial: DatosStaff | nul
 
           {/* Análisis comparativo */}
           <div className="rounded-[6px] p-5" style={{ background: 'var(--verde-dark)' }}>
-            <p className="text-xs font-semibold mb-3" style={{ color: 'rgba(244,240,231,0.65)' }}>Análisis comparativo</p>
+            <p className="text-xs font-semibold mb-3" style={{ color: 'rgba(244,240,231,0.82)' }}>Análisis comparativo</p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {(() => {
                 const ganador = kpis.reduce((best, k) => k.volumen_total_comunidad > best.volumen_total_comunidad ? k : best)
@@ -331,17 +334,17 @@ export default function SimuladorClient({ initial }: { initial: DatosStaff | nul
                 return (
                   <>
                     <div>
-                      <p className="text-xs" style={{ color: 'rgba(244,240,231,0.55)' }}>Mayor volumen</p>
+                      <p className="text-xs" style={{ color: 'rgba(244,240,231,0.82)' }}>Mayor volumen</p>
                       <p className="text-2xl font-bold text-[var(--papel)]">{ganador.volumen_total_comunidad.toLocaleString('es-CL')} uds.</p>
-                      <p className="text-xs mt-0.5" style={{ color: 'rgba(244,240,231,0.55)' }}>{ganador.proveedor.nombre} (+{difVol.toLocaleString('es-CL')} sobre el resto)</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'rgba(244,240,231,0.82)' }}>{ganador.proveedor.nombre} (+{difVol.toLocaleString('es-CL')} sobre el resto)</p>
                     </div>
                     <div>
-                      <p className="text-xs" style={{ color: 'rgba(244,240,231,0.55)' }}>Ahorro en aportes</p>
+                      <p className="text-xs" style={{ color: 'rgba(244,240,231,0.82)' }}>Ahorro en aportes</p>
                       <p className="text-2xl font-bold text-[var(--papel)]">{formatCLP(maxAporte - minAporte)}</p>
-                      <p className="text-xs mt-0.5" style={{ color: 'rgba(244,240,231,0.55)' }}>diferencia entre mejor y peor opción</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'rgba(244,240,231,0.82)' }}>diferencia entre mejor y peor opción</p>
                     </div>
                     <div>
-                      <p className="text-xs" style={{ color: 'rgba(244,240,231,0.55)' }}>Recomendación</p>
+                      <p className="text-xs" style={{ color: 'rgba(244,240,231,0.82)' }}>Recomendación</p>
                       <p className="text-sm font-bold text-[var(--papel)] mt-1">
                         {difVol > 0
                           ? `${ganador.proveedor.nombre} logra ${difVol.toLocaleString('es-CL')} unidades más que el segundo mejor.`
@@ -424,7 +427,7 @@ function KPICard({ kpi }: { kpi: KPISimulacion }) {
 }
 
 function StatCard({ label, value, color }: { label: string; value: string; color?: 'verde' | 'cafe' | 'rojo' }) {
-  const colorMap = { verde: 'var(--verde)', cafe: 'var(--cafe)', rojo: '#dc2626' }
+  const colorMap = { verde: 'var(--marca)', cafe: 'var(--marca-calida)', rojo: 'var(--alerta)' }
   return (
     <div className="rounded-[6px] p-4 glass">
       <p className="text-xs" style={{ color: 'var(--tinta-45)' }}>{label}</p>
@@ -440,10 +443,10 @@ function Metric({ label, value, sub, highlight, danger, icon: Icon }: {
   return (
     <div className="rounded-[6px] p-3" style={{ background: highlight ? 'var(--papel-hueco)' : 'var(--linea)' }}>
       <div className="flex items-center gap-1.5 mb-1">
-        {Icon && <Icon size={13} style={{ color: highlight ? VERDE : danger ? '#dc2626' : 'var(--tinta-45)' }} />}
+        {Icon && <Icon size={13} style={{ color: highlight ? VERDE : danger ? 'var(--alerta)' : 'var(--tinta-45)' }} />}
         <p className="text-xs" style={{ color: 'var(--tinta-45)' }}>{label}</p>
       </div>
-      <p className="text-base font-bold" style={{ color: highlight ? 'var(--verde-dark)' : danger ? '#dc2626' : 'var(--tinta)' }}>
+      <p className="text-base font-bold" style={{ color: highlight ? 'var(--verde-dark)' : danger ? 'var(--alerta)' : 'var(--tinta)' }}>
         {value}
       </p>
       {sub && <p className="text-xs mt-0.5" style={{ color: 'var(--tinta-45)' }}>{sub}</p>}

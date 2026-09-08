@@ -454,7 +454,7 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
       <div className="hidden sm:block rounded-[6px] overflow-x-auto glass" style={{ maxHeight: '75vh' }}>
         <table className="w-full text-sm border-collapse">
           <thead style={{ position: 'sticky', top: 0, zIndex: 20 }}>
-            <tr style={{ background: 'var(--tinta)', backdropFilter: 'none' }}>
+            <tr style={{ background: 'var(--marca)', backdropFilter: 'none' }}>
               <th
                 className="text-left px-4 py-3 text-xs font-semibold text-[var(--papel)] whitespace-nowrap"
                 style={{ position: 'sticky', left: 0, zIndex: 30, background: 'var(--verde-dark)', minWidth: '220px' }}
@@ -576,7 +576,7 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
                 {!visionData && (
                   <button onClick={escanearCotizacion} disabled={visionLoading || !visionProvId}
                     className="w-full rounded-[6px] py-2.5 text-sm text-[var(--papel)] font-bold disabled:opacity-40 flex items-center justify-center gap-2"
-                    style={{ background: 'var(--cafe)' }}>
+                    style={{ background: 'var(--marca-calida)' }}>
                     {visionLoading ? (
                       <>
                         <span className="inline-block w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
@@ -591,7 +591,7 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
             )}
 
             {visionError && (
-              <p className="text-xs rounded-[4px] px-3 py-2" style={{ background: 'rgba(220,38,38,0.08)', color: '#dc2626' }}>
+              <p className="text-xs rounded-[4px] px-3 py-2" style={{ background: 'color-mix(in srgb, var(--alerta) 10%, transparent)', color: 'var(--alerta)' }}>
                 {visionError}
               </p>
             )}
@@ -727,7 +727,7 @@ function PrecioCell({ initialValue, isSaving, error, onBlur, big = false }: {
           border: error
             ? '1px solid rgba(220,38,38,0.55)'
             : localVal ? '1px solid var(--linea-fuerte)' : `1px solid ${big ? 'var(--linea)' : 'transparent'}`,
-          color: error ? '#dc2626' : localVal ? 'var(--verde-dark)' : 'var(--tinta-45)',
+          color: error ? 'var(--alerta)' : localVal ? 'var(--verde-dark)' : 'var(--tinta-45)',
           fontWeight: localVal ? '600' : '400',
           opacity: isSaving ? 0.5 : 1,
         }}

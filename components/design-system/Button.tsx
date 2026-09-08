@@ -4,14 +4,15 @@ import { cx } from './cx'
 export type ButtonVariant = 'primary' | 'accent' | 'secondary' | 'danger' | 'ghost'
 export type ButtonSize = 'sm' | 'md'
 
-/** Sistema papel/tinta/acento: la accion es tinta solida, el acento se
- *  reserva para el paso decisivo de cada pantalla (confirmar la compra) y
- *  siempre lleva texto tinta encima -- #c7ff4a con texto claro no pasa AA. */
+/** Sistema corporativo: la accion es verde bosque de marca (--marca, 6.69:1
+ *  con texto papel encima) y el acento naranja se reserva para el paso
+ *  decisivo de cada pantalla (confirmar la compra). El acento SIEMPRE lleva
+ *  texto tinta encima: #e8862b con texto papel da 2.34:1 y no pasa AA. */
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
-  primary: 'bg-[var(--tinta)] text-[var(--papel)] hover:opacity-88',
+  primary: 'bg-[var(--marca)] text-[var(--papel)] hover:opacity-88',
   accent: 'bg-[var(--acento)] text-[var(--tinta)] hover:brightness-95',
   secondary: 'bg-transparent text-[var(--tinta)] border border-[var(--linea-fuerte)] hover:bg-[var(--papel-hueco)]',
-  danger: 'bg-transparent text-[#9b1c1c] border border-[#9b1c1c]/35 hover:bg-[#9b1c1c]/8',
+  danger: 'bg-transparent text-[var(--alerta)] border border-[var(--alerta)]/40 hover:bg-[var(--alerta)]/8',
   ghost: 'bg-transparent text-[var(--tinta-70)] hover:bg-[var(--papel-hueco)]',
 }
 

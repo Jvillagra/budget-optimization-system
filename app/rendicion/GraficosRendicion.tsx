@@ -38,7 +38,7 @@ export function estadoDe(f: { compraCompleta: boolean; fotosCount: number }): Es
 export const ESTADOS: { id: EstadoSocio; label: string; color: string; ink: string }[] = [
   { id: 'completo', label: 'Completos', color: 'var(--verde-dark)', ink: 'var(--verde-dark)' },
   { id: 'listo', label: 'Listos para marcar', color: 'var(--verde-light)', ink: 'var(--verde-dark)' },
-  { id: 'faltan', label: 'Faltan fotos', color: 'var(--cafe)', ink: 'var(--cafe-dark)' },
+  { id: 'faltan', label: 'Faltan fotos', color: 'var(--marca-calida)', ink: 'var(--cafe-dark)' },
   { id: 'sin_fotos', label: 'Sin fotos', color: 'var(--linea-fuerte)', ink: 'var(--text-muted)' },
 ]
 
@@ -322,20 +322,20 @@ export function PanelControl({ filas, filtro, onFiltro }: {
               nombre={seg}
               valor={s.completos}
               max={s.total}
-              color={SEG_COLOR[seg] ?? 'var(--cafe)'}
+              color={SEG_COLOR[seg] ?? 'var(--marca-calida)'}
               detalle={`${s.completos}/${s.total}`}
             />
           ))}
           {Object.entries(d.porSegmento).map(([seg, s]) => (
             <p key={`${seg}-plata`} className="text-xs tabular-nums" style={{ color: 'var(--text-muted)' }}>
-              <span className="font-semibold" style={{ color: SEG_COLOR[seg] ?? 'var(--cafe)' }}>{seg}</span>
+              <span className="font-semibold" style={{ color: SEG_COLOR[seg] ?? 'var(--marca-calida)' }}>{seg}</span>
               {' '}{formatCLP(s.montoRendido)} / {formatCLP(s.monto)}
             </p>
           ))}
         </Tarjeta>
 
         <Tarjeta titulo="Presupuesto" className="snap-start shrink-0 w-[78vw] max-w-xs sm:w-auto sm:max-w-none sm:shrink">
-          <p className="text-xl font-bold tabular-nums leading-tight" style={{ color: usoPresupuesto > 100 ? 'var(--cafe-dark)' : 'var(--tinta)' }}>
+          <p className="text-xl font-bold tabular-nums leading-tight" style={{ color: usoPresupuesto > 100 ? 'var(--alerta)' : 'var(--tinta)' }}>
             {usoPresupuesto.toFixed(0)}%
             <span className="text-xs font-medium ml-1.5" style={{ color: 'var(--text-muted)' }}>del presupuesto asignado</span>
           </p>
@@ -344,14 +344,14 @@ export function PanelControl({ filas, filtro, onFiltro }: {
             label={`Cotizado ${formatCLP(d.cotizado)} sobre presupuesto ${formatCLP(d.presupuesto)}`}
             partes={[
               { nombre: 'Dentro del presupuesto', valor: Math.min(d.cotizado, d.presupuesto), color: 'var(--verde)' },
-              { nombre: 'Excedente', valor: Math.max(0, d.cotizado - d.presupuesto), color: 'var(--cafe)' },
+              { nombre: 'Excedente', valor: Math.max(0, d.cotizado - d.presupuesto), color: 'var(--marca-calida)' },
               { nombre: 'Disponible', valor: Math.max(0, d.presupuesto - d.cotizado), color: 'var(--linea)' },
             ]}
           />
           <p className="text-xs tabular-nums" style={{ color: 'var(--text-muted)' }}>
             {formatCLP(d.cotizado)} de {formatCLP(d.presupuesto)}
           </p>
-          <p className="text-sm font-semibold" style={{ color: d.sobrePresupuesto > 0 ? 'var(--cafe-dark)' : 'var(--verde-dark)' }}>
+          <p className="text-sm font-semibold" style={{ color: d.sobrePresupuesto > 0 ? 'var(--alerta)' : 'var(--verde-dark)' }}>
             {d.sobrePresupuesto === 0
               ? 'Nadie sobre su presupuesto'
               : `${d.sobrePresupuesto} socio${d.sobrePresupuesto === 1 ? '' : 's'} sobre presupuesto · ${formatCLP(d.bolsillo)} de bolsillo`}

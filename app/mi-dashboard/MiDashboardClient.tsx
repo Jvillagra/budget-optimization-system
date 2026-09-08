@@ -16,10 +16,13 @@ const ComposicionChart = dynamic(() => import('./ComposicionChart'), {
   loading: () => <div className="h-[220px] rounded-[6px] animate-pulse" style={{ background: 'var(--linea)' }} />,
 })
 
+// Mismos dos colores de segmento que usa el resto de la app (barra CP/INV
+// del Resumen, punto de la tarjeta de beneficiario): verde bosque = INV,
+// terracota = CP. 'Ambos' sale del acento.
 const COLORES: Record<string, string> = {
-  'Invernadero': '#3a7d44',
-  'Cierre Perimetral': '#9a6a3a',
-  'Ambos': '#6b8fa3',
+  'Invernadero': '#3f5c1c',
+  'Cierre Perimetral': '#8b5a2b',
+  'Ambos': '#e8862b',
 }
 const MAX_FOTOS = 5
 
@@ -38,7 +41,7 @@ function Avatar({ url, nombre }: { url: string | null; nombre: string }) {
   return (
     <div
       className="shrink-0 h-14 w-14 rounded-full p-[2px] motion-safe:animate-[scaleIn_200ms_ease-out]"
-      style={{ background: 'linear-gradient(135deg, var(--verde) 0%, var(--cafe) 100%)' }}
+      style={{ background: 'linear-gradient(135deg, var(--marca) 0%, var(--marca-calida) 100%)' }}
     >
       {!fallo && url ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -234,7 +237,7 @@ export default function MiDashboardClient({ inicial }: { inicial: MiDashboardIni
                 proveedorId === p.id ? 'text-[var(--papel)] border-transparent' : 'border-[var(--linea)]'
               )}
               style={proveedorId === p.id
-                ? { background: 'var(--tinta)' }
+                ? { background: 'var(--marca)' }
                 : { color: 'var(--tinta-70)' }}
             >
               {p.nombre}
@@ -243,24 +246,56 @@ export default function MiDashboardClient({ inicial }: { inicial: MiDashboardIni
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
-        <Card className="p-4 motion-safe:animate-[riseIn_220ms_ease-out]">
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Presupuesto base</p>
-          <p className="text-lg font-semibold" style={{ color: 'var(--tinta)' }}>{formatCLP(presupuesto)}</p>
-        </Card>
-        <Card className="p-4 motion-safe:animate-[riseIn_220ms_ease-out]" style={{ animationDelay: '40ms' }}>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Total de tu compra</p>
-          <p className="text-lg font-semibold" style={{ color: 'var(--tinta)' }}>{formatCLP(carrito.total)}</p>
-        </Card>
-        <Card className="p-4 col-span-2 motion-safe:animate-[riseIn_220ms_ease-out]" style={{ animationDelay: '80ms' }}>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Aporte de bolsillo</p>
-          <p className="text-lg font-semibold" style={{ color: 'var(--tinta)' }}>{formatCLP(aporteBolsillo)}</p>
-        </Card>
+      {/* Jerarquia: el total de la compra es EL numero de la pantalla y va en
+          escala editorial; presupuesto y aporte son de apoyo y quedan en una
+          fila secundaria. Antes las tres cifras tenian el mismo peso (text-lg)
+          y el socio no sabia cual mirar. */}
+      <div className="space-y-3">
+        <div
+          className="p-5 rounded-[6px] motion-safe:animate-[riseIn_220ms_ease-out]"
+          style={{ background: 'var(--marca)', color: 'var(--papel)' }}
+        >
+          <p className="eyebrow" style={{ color: 'rgba(244,240,231,0.82)' }}>Total de tu compra</p>
+          <p className="titulo-lg mt-2 tabular-nums">{formatCLP(carrito.total)}</p>
+          {/* Barra de consumo del presupuesto: dice de un vistazo si se paso.
+              El excedente va en acento (naranja) sobre el verde, no en rojo
+              sobre rojo. */}
+          <div className="mt-4 h-2 w-full rounded-full overflow-hidden" style={{ background: 'rgba(244,240,231,0.25)' }}>
+            <div
+              className="h-full transition-[width] duration-700"
+              style={{
+                width: `${Math.min(100, presupuesto > 0 ? (carrito.total / presupuesto) * 100 : 0)}%`,
+                background: aporteBolsillo > 0 ? 'var(--acento)' : 'var(--papel)',
+              }}
+            />
+          </div>
+          <p className="text-xs mt-2" style={{ color: 'rgba(244,240,231,0.82)' }}>
+            {aporteBolsillo > 0
+              ? `Superaste tu presupuesto de ${formatCLP(presupuesto)}`
+              : `Dentro de tu presupuesto de ${formatCLP(presupuesto)}`}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Card className="p-4 motion-safe:animate-[riseIn_220ms_ease-out]" style={{ animationDelay: '40ms' }}>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Presupuesto base</p>
+            <p className="text-lg font-semibold mt-1 tabular-nums" style={{ color: 'var(--tinta)' }}>{formatCLP(presupuesto)}</p>
+          </Card>
+          <Card className="p-4 motion-safe:animate-[riseIn_220ms_ease-out]" style={{ animationDelay: '80ms' }}>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Aporte de bolsillo</p>
+            <p
+              className="text-lg font-semibold mt-1 tabular-nums"
+              style={{ color: aporteBolsillo > 0 ? 'var(--alerta)' : 'var(--tinta)' }}
+            >
+              {formatCLP(aporteBolsillo)}
+            </p>
+          </Card>
+        </div>
       </div>
 
       {chartData.length > 0 && (
         <Card className="p-4">
-          <p className="text-sm font-semibold mb-2" style={{ color: 'var(--tinta)' }}>Composición de tu compra</p>
+          <p className="eyebrow mb-3">Composición de tu compra</p>
           <ComposicionChart data={chartData} colores={COLORES} />
         </Card>
       )}
