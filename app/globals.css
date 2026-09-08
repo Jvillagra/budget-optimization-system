@@ -1,37 +1,100 @@
-@import "tailwindcss";
+/* source(none) + @source explicitos: por defecto Tailwind v4 escanea todo el
+   repo salvo lo que ignora git, y acá hay carpetas de herramientas sin
+   trackear (.impeccable/, .swarm/) donde encontraba "clases" basura -- una
+   con un byte de control adentro rompía la compilación del CSS entero. */
+@import "tailwindcss" source(none);
+@source "../app";
+@source "../components";
+@source "../lib";
 
+/* Sistema visual editorial (2026-09-08). Papel / tinta / acento, divisores de
+   1px, radios chicos y mucho espacio negativo. Los nombres --verde/--cafe se
+   conservan como alias porque los usan ~10 pantallas: remapearlos acá propaga
+   la paleta sin tocar cada archivo. No agregar tonos nuevos fuera de esta
+   lista -- si hace falta un matiz, sale de color-mix() sobre estos tres. */
 :root {
-  --verde: #3a7d44;
-  --verde-dark: #2d5f35;
-  --verde-light: #6ab07a;
-  --verde-muted: #e8f5eb;
-  --cafe: #7f4f24;
-  --cafe-dark: #5c3519;
-  --cafe-light: #a47148;
-  --cafe-muted: #f5ede4;
-  --bg-from: #f7f3ed;
-  --bg-to: #edf4ee;
-  --glass-bg: rgba(255, 255, 255, 0.68);
-  --glass-border: rgba(255, 255, 255, 0.55);
-  --glass-shadow: 0 4px 24px rgba(61, 90, 54, 0.08);
-  /* rgba(0,0,0,0.62) sobre fondo claro ≈ 6:1 -- cumple WCAG AA (>=4.5:1) para
-     texto normal. Reemplaza los tonos rgba(0,0,0,0.3-0.45) usados antes para
-     texto secundario/auxiliar, que quedaban entre 2:1 y 3.4:1. */
-  --text-muted: rgba(0, 0, 0, 0.62);
+  --papel: #f4f0e7;
+  --papel-hueco: #ebe6da;   /* superficie hundida: filas alternas, inputs */
+  --tinta: #171815;
+  --tinta-70: rgba(23, 24, 21, 0.70);
+  --tinta-45: rgba(23, 24, 21, 0.45);
+  --linea: rgba(23, 24, 21, 0.14);
+  --linea-fuerte: rgba(23, 24, 21, 0.30);
+  --acento: #c7ff4a;
+  --acento-hueco: #eaffc0;  /* acento al 25% sobre papel, para fondos */
+
+  /* Alias de compatibilidad. --verde era el color de acción y de énfasis
+     numérico; en el sistema nuevo la acción es tinta sólida y el resalte es
+     el acento, que NUNCA lleva texto encima que no sea tinta (contraste de
+     #c7ff4a sobre papel ~1.2:1, no sirve para texto). */
+  --verde: #171815;
+  --verde-dark: #171815;
+  --verde-light: #c7ff4a;
+  --verde-muted: #eaffc0;
+  --cafe: rgba(23, 24, 21, 0.70);
+  --cafe-dark: #171815;
+  --cafe-light: rgba(23, 24, 21, 0.30);
+  --cafe-muted: #ebe6da;
+
+  --bg-from: #f4f0e7;
+  --bg-to: #f4f0e7;
+  /* Sin blur ni sombras de color: las superficies se separan con una línea
+     de 1px, no con profundidad falsa. */
+  --glass-bg: #f4f0e7;
+  --glass-border: rgba(23, 24, 21, 0.14);
+  --glass-shadow: none;
+  --text-muted: rgba(23, 24, 21, 0.70);
 }
 
 @theme inline {
-  --color-background: var(--bg-from);
-  --color-foreground: #1c1c1c;
-  --font-sans: var(--font-geist-sans);
+  --color-background: var(--papel);
+  --color-foreground: var(--tinta);
+  --font-sans: var(--font-instrument);
+  --font-serif: var(--font-newsreader);
 }
 
 body {
-  background: linear-gradient(135deg, var(--bg-from) 0%, var(--bg-to) 100%);
-  background-attachment: fixed;
-  color: #1c1c1c;
+  background: var(--papel);
+  color: var(--tinta);
   min-height: 100vh;
+  font-family: var(--font-instrument), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
+
+/* Escala tipográfica editorial. line-height 0.91 y peso 520 son del sistema
+   de referencia; 520 solo existe si la fuente es variable (Instrument Sans
+   lo es), en fallback redondea a 500. */
+.titulo-xl,
+.titulo-lg,
+.titulo-md {
+  font-weight: 520;
+  line-height: 0.91;
+  letter-spacing: 0;
+  text-wrap: balance;
+}
+.titulo-xl { font-size: clamp(44px, 7.4vw, 96px); }
+.titulo-lg { font-size: clamp(34px, 6.3vw, 62px); }
+.titulo-md { font-size: clamp(26px, 3.4vw, 38px); }
+
+.titulo-xl em,
+.titulo-lg em,
+.titulo-md em {
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+}
+
+/* Etiqueta de sección: "01 / RENDICIÓN". Reemplaza a los subtítulos en
+   negrita del diseño anterior. */
+.eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tinta-45);
+}
+
+.linea { border-top: 1px solid var(--linea); }
 
 /* Hueco para la barra de tabs inferior (solo mobile) + safe area del iPhone.
    Con viewport-fit=cover (ver app/layout.tsx) env() ya devuelve valores
@@ -46,21 +109,19 @@ body {
   .app-shell { padding-bottom: 0; }
 }
 
-/* Glass utility */
+/* Antes .glass/.glass-strong eran vidrio esmerilado con blur y sombra de
+   color. Ahora son papel plano separado por una línea; se conservan los
+   nombres para no tocar las ~34 llamadas repartidas por las pantallas. */
 .glass {
-  background: var(--glass-bg);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow);
+  background: var(--papel);
+  border: 1px solid var(--linea);
+  box-shadow: none;
 }
 
 .glass-strong {
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.65);
-  box-shadow: 0 8px 32px rgba(61, 90, 54, 0.10);
+  background: var(--papel);
+  border: 1px solid var(--linea-fuerte);
+  box-shadow: none;
 }
 
 /* Lightbox de /rendicion -- entrada rápida, solo transform/opacity, dentro
@@ -82,7 +143,36 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* Reveal al entrar al viewport (components/Reveal.tsx). El estado inicial
+   vive acá y no en el componente para que el contenido no parpadee visible
+   antes de hidratar. Con prefers-reduced-motion el contenido nace visible:
+   el data-attribute ya no controla nada. */
+.reveal {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity 0.75s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.75s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.reveal[data-visible='true'] {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
 /* Scrollbar sutil */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(127, 79, 36, 0.25); border-radius: 99px; }
+::-webkit-scrollbar-thumb { background: var(--linea-fuerte); border-radius: 99px; }
+
+/* Foco visible uniforme: el sistema anterior lo definía por componente con
+   ring de color; en papel/tinta el anillo es tinta sobre papel. */
+:focus-visible {
+  outline: 2px solid var(--tinta);
+  outline-offset: 2px;
+}

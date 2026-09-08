@@ -1,7 +1,8 @@
 import 'server-only'
 import { getSupabaseAdmin } from './supabase-admin'
 import { EMAIL_QA_SOCIO } from './constants'
-import type { Beneficiario, CatalogoInsumo, Asignacion, AyudaMemoria, Proveedor, PrecioProveedor } from './types'
+import type { Beneficiario, CatalogoInsumo, Asignacion, AyudaMemoria, Proveedor, PrecioProveedor, CompraSegmento, PrecioCongelado } from './types'
+import { cargarComprasSegmento } from './compras-segmento'
 
 // Datos que comparten las pantallas de staff (beneficiarios, precios,
 // simulador). Los consumen las páginas server-side (app/<ruta>/page.tsx) y
@@ -13,6 +14,10 @@ import type { Beneficiario, CatalogoInsumo, Asignacion, AyudaMemoria, Proveedor,
 // de sesión) -- medidos en 1,0-1,5 s desde Chile con buena conexión. Con
 // los datos dentro del RSC queda un salto menos y ninguna llamada extra.
 
+// `proveedores` incluye los desactivados (es_activo=false): quien arma un
+// selector filtra por es_activo, pero /precios los muestra apagados para
+// poder reactivarlos y las compras ya confirmadas necesitan resolver el
+// nombre de un proveedor que quizas ya se desactivo.
 export type DatosStaff = {
   proveedores: Proveedor[]
   beneficiarios: Beneficiario[]
@@ -20,11 +25,16 @@ export type DatosStaff = {
   asignaciones: Asignacion[]
   ayudaMemoria: AyudaMemoria[]
   preciosProveedor: PrecioProveedor[]
+  compras: CompraSegmento[]
+  preciosCongelados: PrecioCongelado[]
 }
 
 /** null si alguna consulta falló (ya logueado). Quien llama decide qué mostrar. */
 export async function cargarDatosStaff(): Promise<DatosStaff | null> {
   const admin = getSupabaseAdmin()
+  // Se lanza antes del Promise.all y se espera despues: asi el estado de
+  // compras viaja en paralelo con las seis consultas y no agrega un salto.
+  const comprasPromise = cargarComprasSegmento()
 
   const [
     { data: proveedores, error: e1 },
@@ -34,13 +44,15 @@ export async function cargarDatosStaff(): Promise<DatosStaff | null> {
     { data: ayudaMemoria, error: e5 },
     { data: preciosProveedor, error: e6 },
   ] = await Promise.all([
-    admin.from('proveedores').select('*').eq('es_activo', true).order('nombre'),
+    admin.from('proveedores').select('*').order('nombre'),
     admin.from('beneficiarios').select('*').order('segmento').order('nombre'),
     admin.from('catalogo_insumos').select('*').order('segmento').order('nombre'),
     admin.from('asignaciones').select('*, catalogo_insumos(*)'),
     admin.from('ayuda_memoria').select('*, catalogo_insumos(*)'),
     admin.from('precios_proveedor').select('*'),
   ])
+
+  const estadoCompras = await comprasPromise
 
   const error = e1 || e2 || e3 || e4 || e5 || e6
   if (error) {
@@ -61,6 +73,8 @@ export async function cargarDatosStaff(): Promise<DatosStaff | null> {
     asignaciones: (asignaciones ?? []) as Asignacion[],
     ayudaMemoria: (ayudaMemoria ?? []) as AyudaMemoria[],
     preciosProveedor: (preciosProveedor ?? []) as PrecioProveedor[],
+    compras: estadoCompras.compras,
+    preciosCongelados: estadoCompras.preciosCongelados,
   }
 }
 

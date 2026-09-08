@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { Card, Button, Input, Badge, Alert, ConfirmDialog, Skeleton } from '@/components/design-system'
+import { PageHeader } from '@/components/Editorial'
 
 import type { RoleRow } from '@/lib/staff-data'
 
@@ -102,7 +103,10 @@ export default function AdminClient({ initial }: { initial: RoleRow[] | null }) 
 
   return (
     <div className="max-w-xl mx-auto space-y-8">
-      <h1 className="text-lg font-bold" style={{ color: 'var(--verde-dark)' }}>Administración</h1>
+      <PageHeader
+        eyebrow="05 / Administración"
+        titulo={<>Quién puede<br /><em>entrar.</em></>}
+      />
 
       {loading ? (
         <Skeleton className="h-24" />
@@ -110,17 +114,17 @@ export default function AdminClient({ initial }: { initial: RoleRow[] | null }) 
         <Card className="p-4 grid grid-cols-2 gap-4">
           <div>
             <p className="text-sm font-semibold" style={{ color: 'var(--verde-dark)' }}>Propietarios</p>
-            <p className="text-xl font-bold mt-1" style={{ color: '#1c1c1c' }}>{owners}</p>
+            <p className="text-xl font-bold mt-1" style={{ color: 'var(--tinta)' }}>{owners}</p>
           </div>
           <div>
             <p className="text-sm font-semibold" style={{ color: 'var(--cafe-dark)' }}>Administradores</p>
-            <p className="text-xl font-bold mt-1" style={{ color: '#1c1c1c' }}>{admins}</p>
+            <p className="text-xl font-bold mt-1" style={{ color: 'var(--tinta)' }}>{admins}</p>
           </div>
         </Card>
       )}
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+        <h2 className="eyebrow">
           Propietarios y administradores
         </h2>
         {loading ? (
@@ -129,7 +133,7 @@ export default function AdminClient({ initial }: { initial: RoleRow[] | null }) 
           <Card className="divide-y divide-black/6 overflow-hidden">
             {roles.map(r => (
               <div key={r.user_id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
-                <span className="flex items-center gap-2 min-w-0" style={{ color: '#1c1c1c' }}>
+                <span className="flex items-center gap-2 min-w-0" style={{ color: 'var(--tinta)' }}>
                   <span className="truncate">{r.email}</span>
                   <Badge tone={r.role === 'owner' ? 'verde' : 'cafe'} className="shrink-0">
                     {ROL_LABEL[r.role] ?? r.role}
@@ -190,7 +194,7 @@ export default function AdminClient({ initial }: { initial: RoleRow[] | null }) 
       )}
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+        <h2 className="eyebrow">
           Informe para consultora
         </h2>
         <Card className="p-4 space-y-3">
@@ -206,7 +210,7 @@ export default function AdminClient({ initial }: { initial: RoleRow[] | null }) 
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+        <h2 className="eyebrow">
           Magic Links masivos
         </h2>
         <Card className="p-4 space-y-3">

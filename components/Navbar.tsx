@@ -82,19 +82,16 @@ export default function Navbar({ role, tieneBeneficiario }: { role: NavRole; tie
 
   return (
     <header className="sticky top-0 z-40" style={{
-      background: 'rgba(255,255,255,0.90)',
-      backdropFilter: 'blur(18px)',
-      WebkitBackdropFilter: 'blur(18px)',
-      borderBottom: '1px solid rgba(255,255,255,0.6)',
-      boxShadow: '0 2px 16px rgba(61,90,54,0.07)',
+      background: 'var(--papel)',
+      borderBottom: '1px solid var(--linea)',
     }}>
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-14 items-center justify-between gap-3">
 
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 shrink-0">
-            <Image src="/logo.png" alt="Proyecto PAT" width={30} height={30} className="rounded-md" />
-            <span className="text-sm font-bold tracking-wide" style={{ color: 'var(--verde-dark)' }}>
+            <Image src="/logo.png" alt="Proyecto PAT" width={30} height={30} className="rounded-[4px]" />
+            <span className="text-sm font-semibold tracking-tight" style={{ color: 'var(--tinta)' }}>
               Proyecto PAT
             </span>
           </Link>
@@ -105,10 +102,10 @@ export default function Navbar({ role, tieneBeneficiario }: { role: NavRole; tie
               <Link
                 key={link.href}
                 href={link.href}
-                className="rounded-lg px-3 py-1.5 text-sm font-medium transition-all"
-                style={pathname === link.href ? {
-                  background: 'var(--verde)', color: '#fff',
-                } : { color: 'var(--cafe)' }}
+                className="px-1 mx-2.5 py-1.5 text-sm font-medium transition-colors"
+                style={pathname === link.href
+                  ? { color: 'var(--tinta)', fontWeight: 600, boxShadow: 'inset 0 -2px 0 0 var(--tinta)' }
+                  : { color: 'var(--tinta-45)' }}
               >
                 {link.label}
               </Link>
@@ -120,8 +117,8 @@ export default function Navbar({ role, tieneBeneficiario }: { role: NavRole; tie
             {installPrompt && (
               <button
                 onClick={handleInstall}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold"
-                style={{ background: 'rgba(58,125,68,0.1)', color: 'var(--verde-dark)', border: '1px solid rgba(58,125,68,0.2)' }}
+                className="flex items-center gap-1.5 rounded-[4px] px-3 py-1.5 text-xs font-semibold"
+                style={{ background: 'var(--papel-hueco)', color: 'var(--verde-dark)', border: '1px solid var(--linea-fuerte)' }}
               >
                 <Download size={13} /> Instalar app
               </button>
@@ -129,7 +126,7 @@ export default function Navbar({ role, tieneBeneficiario }: { role: NavRole; tie
             {links.length > 0 && (
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold"
+                className="flex items-center gap-1.5 rounded-[4px] px-3 py-1.5 text-xs font-semibold"
                 style={{ color: 'var(--cafe)' }}
               >
                 <LogOut size={13} /> Salir
@@ -143,8 +140,8 @@ export default function Navbar({ role, tieneBeneficiario }: { role: NavRole; tie
             {isIOS && (
               <button
                 onClick={() => setShowIOSHint(v => !v)}
-                className="flex items-center justify-center gap-1 rounded-lg min-h-[44px] min-w-[44px] text-xs font-semibold"
-                style={{ background: 'rgba(58,125,68,0.1)', color: 'var(--verde-dark)', border: '1px solid rgba(58,125,68,0.2)' }}
+                className="flex items-center justify-center gap-1 rounded-[4px] min-h-[44px] min-w-[44px] text-xs font-semibold"
+                style={{ background: 'var(--papel-hueco)', color: 'var(--verde-dark)', border: '1px solid var(--linea-fuerte)' }}
                 aria-label="Instalar app"
               >
                 <Download size={16} />
@@ -154,8 +151,8 @@ export default function Navbar({ role, tieneBeneficiario }: { role: NavRole; tie
             {installPrompt && (
               <button
                 onClick={handleInstall}
-                className="flex items-center justify-center gap-1 rounded-lg min-h-[44px] min-w-[44px] text-xs font-semibold"
-                style={{ background: 'rgba(58,125,68,0.1)', color: 'var(--verde-dark)', border: '1px solid rgba(58,125,68,0.2)' }}
+                className="flex items-center justify-center gap-1 rounded-[4px] min-h-[44px] min-w-[44px] text-xs font-semibold"
+                style={{ background: 'var(--papel-hueco)', color: 'var(--verde-dark)', border: '1px solid var(--linea-fuerte)' }}
                 aria-label="Instalar app"
               >
                 <Download size={16} />
@@ -165,7 +162,7 @@ export default function Navbar({ role, tieneBeneficiario }: { role: NavRole; tie
             {links.length > 0 && (
               <button
                 onClick={handleLogout}
-                className="flex items-center justify-center rounded-lg min-h-[44px] min-w-[44px]"
+                className="flex items-center justify-center rounded-[4px] min-h-[44px] min-w-[44px]"
                 style={{ color: 'var(--cafe)' }}
                 aria-label="Salir"
               >
@@ -179,7 +176,7 @@ export default function Navbar({ role, tieneBeneficiario }: { role: NavRole; tie
       {/* iOS install hint banner */}
       {showIOSHint && isIOS && (
         <div className="sm:hidden px-4 pb-3 pt-0">
-          <div className="rounded-xl px-4 py-3 text-xs flex items-start gap-2" style={{ background: 'rgba(58,125,68,0.08)', border: '1px solid rgba(58,125,68,0.2)', color: 'var(--verde-dark)' }}>
+          <div className="rounded-[6px] px-4 py-3 text-xs flex items-start gap-2" style={{ background: 'var(--linea)', border: '1px solid var(--linea-fuerte)', color: 'var(--verde-dark)' }}>
             <span className="text-base shrink-0">📲</span>
             <span>
               Para instalar la app: toca el botón <strong>Compartir</strong> (⎋) en Safari y luego <strong>"Agregar a pantalla de inicio"</strong>.
@@ -202,11 +199,8 @@ export function MobileTabBar({ role, tieneBeneficiario }: { role: NavRole; tiene
     <nav
       className="sm:hidden fixed inset-x-0 bottom-0 z-40 flex"
       style={{
-        background: 'rgba(255,255,255,0.94)',
-        backdropFilter: 'blur(18px)',
-        WebkitBackdropFilter: 'blur(18px)',
-        borderTop: '1px solid rgba(0,0,0,0.06)',
-        boxShadow: '0 -2px 16px rgba(61,90,54,0.07)',
+        background: 'var(--papel)',
+        borderTop: '1px solid var(--linea)',
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
@@ -218,14 +212,14 @@ export function MobileTabBar({ role, tieneBeneficiario }: { role: NavRole; tiene
             key={link.href}
             href={link.href}
             className="relative flex flex-1 min-w-0 flex-col items-center justify-center gap-0.5 px-1 py-2 text-[10px] font-medium"
-            style={{ color: active ? 'var(--verde-dark)' : 'var(--cafe)' }}
+            style={{ color: active ? 'var(--tinta)' : 'var(--tinta-45)' }}
             aria-current={active ? 'page' : undefined}
           >
             {active && (
               <span
                 aria-hidden
-                className="absolute top-0 h-0.5 w-8 rounded-full"
-                style={{ background: 'var(--verde)' }}
+                className="absolute top-0 h-0.5 w-8"
+                style={{ background: 'var(--tinta)' }}
               />
             )}
             <Icon size={20} strokeWidth={active ? 2.5 : 2} />

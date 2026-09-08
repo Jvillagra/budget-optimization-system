@@ -42,7 +42,8 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
       try {
         const datos: DatosStaff | null = initial ?? await fetch('/api/data').then(r => r.ok ? r.json() : null)
         if (!datos) throw new Error('load failed')
-        const { beneficiarios: bens, catalogoInsumos: ins, proveedores: provs, asignaciones: asigs, ayudaMemoria: ams, preciosProveedor: precs } = datos
+        const { beneficiarios: bens, catalogoInsumos: ins, proveedores: todosProvs, asignaciones: asigs, ayudaMemoria: ams, preciosProveedor: precs } = datos
+        const provs = (todosProvs as Proveedor[] | undefined)?.filter(p => p.es_activo)
         if (bens) setBeneficiarios(bens as Beneficiario[])
         if (ins) setInsumos(ins as CatalogoInsumo[])
         if (provs) {
@@ -137,19 +138,19 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
   if (loading) return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
       {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="h-20 rounded-2xl animate-pulse" style={{ background: 'rgba(255,255,255,0.4)' }} />
+        <div key={i} className="h-20 rounded-[6px] animate-pulse" style={{ background: 'var(--papel-hueco)' }} />
       ))}
     </div>
   )
 
   if (loadError) return (
-    <div className="rounded-2xl p-8 glass text-center space-y-3">
+    <div className="rounded-[6px] p-8 glass text-center space-y-3">
       <p className="text-sm font-semibold" style={{ color: 'var(--cafe-dark)' }}>Error al cargar los datos</p>
-      <p className="text-xs" style={{ color: 'rgba(0,0,0,0.45)' }}>Revisa tu conexión e intenta nuevamente.</p>
+      <p className="text-xs" style={{ color: 'var(--tinta-45)' }}>Revisa tu conexión e intenta nuevamente.</p>
       <button
         onClick={() => { setLoadError(false); setLoading(true); window.location.reload() }}
-        className="text-sm font-semibold px-4 py-2 rounded-lg"
-        style={{ background: 'var(--verde)', color: '#fff' }}
+        className="text-sm font-semibold px-4 py-2 rounded-[4px]"
+        style={{ background: 'var(--verde)', color: 'var(--papel)' }}
       >
         Reintentar
       </button>
@@ -173,18 +174,21 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
         {/* Lista */}
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <h1 className="text-lg font-bold" style={{ color: 'var(--verde-dark)' }}>
-              beneficiarios <span className="font-normal text-sm" style={{ color: 'rgba(0,0,0,0.35)' }}>({beneficiarios.length})</span>
-            </h1>
+            <div>
+              <p className="eyebrow mb-2">01 / Beneficiarios</p>
+              <h1 className="titulo-md">
+                {beneficiarios.length} <em>socios.</em>
+              </h1>
+            </div>
             <div className="flex gap-1">
               {(['todos', 'Invernadero', 'Cierre Perimetral'] as const).map(f => (
                 <button
                   key={f}
                   onClick={() => setFiltro(f)}
-                  className="text-xs px-3 py-1 rounded-full border transition-all"
+                  className="text-xs px-3 py-2 min-h-[38px] rounded-[4px] border transition-all font-semibold"
                   style={filtro === f
-                    ? { background: 'var(--verde)', color: '#fff', borderColor: 'var(--verde)' }
-                    : { color: 'var(--cafe)', borderColor: 'rgba(127,79,36,0.3)' }}
+                    ? { background: 'var(--tinta)', color: 'var(--papel)', borderColor: 'var(--tinta)' }
+                    : { color: 'var(--tinta-70)', borderColor: 'var(--linea)' }}
                 >
                   {f}
                 </button>
@@ -206,19 +210,19 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
                 <button
                   key={ben.id}
                   onClick={() => seleccionarBen(ben.id)}
-                  className="text-left rounded-2xl p-3 transition-all"
+                  className="text-left rounded-[6px] p-3 transition-all"
                   style={isSelected ? {
-                    background: 'rgba(58,125,68,0.12)',
+                    background: 'var(--papel-hueco)',
                     border: '1.5px solid var(--verde)',
-                    boxShadow: '0 4px 16px rgba(58,125,68,0.15)',
-                    backdropFilter: 'blur(14px)',
+                    boxShadow: '0 4px 16px var(--linea)',
+                    
                   } : {
-                    background: 'rgba(255,255,255,0.65)',
-                    border: '1px solid rgba(255,255,255,0.55)',
-                    backdropFilter: 'blur(14px)',
+                    background: 'rgba(244,240,231,0.65)',
+                    border: '1px solid var(--linea)',
+                    
                   }}
                 >
-                  <p className="font-semibold text-sm truncate" style={{ color: '#1c1c1c' }}>{ben.nombre}</p>
+                  <p className="font-semibold text-sm truncate" style={{ color: 'var(--tinta)' }}>{ben.nombre}</p>
                   <span className="text-xs mt-0.5 inline-block" style={{
                     color: ben.segmento === 'Invernadero' ? 'var(--verde-dark)' : 'var(--cafe-dark)'
                   }}>
@@ -226,7 +230,7 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
                   </span>
                   {proveedorId && itemsCarrito > 0 && (
                     <>
-                      <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(0,0,0,0.08)' }}>
+                      <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--linea)' }}>
                         <div className="h-full rounded-full" style={{
                           width: `${pct}%`,
                           background: tieneAporte ? '#dc2626' : 'var(--verde)',
@@ -239,7 +243,7 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
                       )}
                     </>
                   )}
-                  <p className="text-xs mt-1" style={{ color: 'rgba(0,0,0,0.35)' }}>
+                  <p className="text-xs mt-1" style={{ color: 'var(--tinta-45)' }}>
                     {itemsCarrito} ítem{itemsCarrito !== 1 ? 's' : ''} en carrito
                   </p>
                 </button>
@@ -265,13 +269,13 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
           {/* Sheet */}
           <div
             className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl overflow-hidden"
-            style={{ background: '#f7f3ed', maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}
+            style={{ background: 'var(--papel)', maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}
           >
             {/* Handle + header */}
-            <div className="flex items-center justify-between px-5 pt-4 pb-3 shrink-0" style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+            <div className="flex items-center justify-between px-5 pt-4 pb-3 shrink-0" style={{ borderBottom: '1px solid var(--linea)' }}>
               <div>
-                <div className="w-10 h-1 rounded-full mx-auto mb-3" style={{ background: 'rgba(0,0,0,0.15)' }} />
-                <p className="font-bold text-sm" style={{ color: '#1c1c1c' }}>{benSeleccionado.nombre}</p>
+                <div className="w-10 h-1 rounded-full mx-auto mb-3" style={{ background: 'var(--linea)' }} />
+                <p className="font-bold text-sm" style={{ color: 'var(--tinta)' }}>{benSeleccionado.nombre}</p>
                 <span className="text-xs font-medium" style={{
                   color: benSeleccionado.segmento === 'Invernadero' ? 'var(--verde-dark)' : 'var(--cafe-dark)'
                 }}>
@@ -281,7 +285,7 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
               <button
                 onClick={() => setSheetOpen(false)}
                 className="rounded-full p-2"
-                style={{ background: 'rgba(0,0,0,0.06)', color: 'rgba(0,0,0,0.5)' }}
+                style={{ background: 'var(--linea)', color: 'var(--tinta-45)' }}
               >
                 <X size={16} />
               </button>
@@ -323,15 +327,15 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
   return (
     <>
       {/* Selector de proveedor */}
-      <div className="rounded-2xl p-4 glass">
+      <div className="rounded-[6px] p-4 glass">
         <label className="text-xs font-semibold block mb-1.5" style={{ color: 'var(--cafe)' }}>
           ver precios de
         </label>
         <select
           value={proveedorId}
           onChange={e => setProveedorId(e.target.value)}
-          className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
-          style={{ border: '1px solid rgba(58,125,68,0.25)', background: 'rgba(255,255,255,0.7)' }}
+          className="w-full rounded-[4px] px-3 py-2 text-sm focus:outline-none"
+          style={{ border: '1px solid var(--linea-fuerte)', background: 'var(--papel)' }}
         >
           <option value="">— sin precios —</option>
           {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
@@ -339,9 +343,9 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
       </div>
 
       {ben ? (
-        <div className="rounded-2xl p-4 glass space-y-4">
+        <div className="rounded-[6px] p-4 glass space-y-4">
           <div>
-            <p className="font-bold" style={{ color: '#1c1c1c' }}>{ben.nombre}</p>
+            <p className="font-bold" style={{ color: 'var(--tinta)' }}>{ben.nombre}</p>
             <span className="text-xs px-2 py-0.5 rounded-full inline-block mt-0.5 font-medium" style={
               ben.segmento === 'Invernadero'
                 ? { background: 'var(--verde-muted)', color: 'var(--verde-dark)' }
@@ -352,14 +356,14 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
           </div>
 
           {ayudaBen.length > 0 && (
-            <div className="rounded-xl p-3 space-y-1" style={{
-              background: 'rgba(127,79,36,0.06)',
-              border: '1px solid rgba(127,79,36,0.15)',
+            <div className="rounded-[6px] p-3 space-y-1" style={{
+              background: 'var(--papel-hueco)',
+              border: '1px solid var(--linea)',
             }}>
               <p className="text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: 'var(--cafe)' }}>
                 ayuda memoria
               </p>
-              <p className="text-xs mb-2" style={{ color: 'rgba(0,0,0,0.45)' }}>
+              <p className="text-xs mb-2" style={{ color: 'var(--tinta-45)' }}>
                 Lo que el socio solicitó originalmente:
               </p>
               <ul className="space-y-1">
@@ -368,7 +372,7 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
                     ? (precioMap.get(`${proveedorId}_${am.insumo_id}`) ?? null) === null
                     : false
                   return (
-                    <li key={am.id} className="flex items-start gap-1.5 text-xs" style={{ color: 'rgba(0,0,0,0.65)' }}>
+                    <li key={am.id} className="flex items-start gap-1.5 text-xs" style={{ color: 'var(--tinta-70)' }}>
                       <span style={{ color: 'var(--cafe)', marginTop: '1px' }}>·</span>
                       <span>
                         {am.detalle_original ?? am.catalogo_insumos?.nombre ?? 'Insumo'}
@@ -387,19 +391,19 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
 
           {proveedorId && asigsBen.length > 0 && (
             <div>
-              <div className="flex justify-between text-xs mb-1" style={{ color: 'rgba(0,0,0,0.45)' }}>
+              <div className="flex justify-between text-xs mb-1" style={{ color: 'var(--tinta-45)' }}>
                 <span>presupuesto usado</span>
                 <span>{porcentaje.toFixed(1)}%</span>
               </div>
-              <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(0,0,0,0.07)' }}>
+              <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--linea)' }}>
                 <div className="h-full rounded-full transition-all" style={{
                   width: `${porcentaje}%`,
                   background: aporteBolsillo > 0 ? '#dc2626' : 'var(--verde)',
                 }} />
               </div>
               <div className="flex justify-between text-xs mt-1">
-                <span style={{ color: 'rgba(0,0,0,0.4)' }}>{formatCLP(total)}</span>
-                <span style={{ color: 'rgba(0,0,0,0.4)' }}>{formatCLP(ben.presupuesto_base ?? PRESUPUESTO_BASE)}</span>
+                <span style={{ color: 'var(--tinta-45)' }}>{formatCLP(total)}</span>
+                <span style={{ color: 'var(--tinta-45)' }}>{formatCLP(ben.presupuesto_base ?? PRESUPUESTO_BASE)}</span>
               </div>
               {itemsSinPrecio > 0 && (
                 <p className="text-xs mt-1" style={{ color: 'var(--cafe)' }}>
@@ -407,7 +411,7 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
                 </p>
               )}
               {aporteBolsillo > 0 && (
-                <div className="rounded-xl p-3 mt-2" style={{ background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.2)' }}>
+                <div className="rounded-[6px] p-3 mt-2" style={{ background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.2)' }}>
                   <p className="text-xs font-bold uppercase tracking-wide" style={{ color: '#dc2626' }}>
                     Aporte de Bolsillo Requerido
                   </p>
@@ -418,11 +422,11 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
           )}
 
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'rgba(0,0,0,0.35)' }}>
+            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--tinta-45)' }}>
               carrito real
             </p>
             {asigsBen.length === 0 ? (
-              <p className="text-xs" style={{ color: 'rgba(0,0,0,0.35)' }}>
+              <p className="text-xs" style={{ color: 'var(--tinta-45)' }}>
                 Carrito vacío. Agrega insumos una vez definido el proveedor.
               </p>
             ) : (
@@ -433,7 +437,7 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
                   return (
                     <li key={a.id} className="flex items-center gap-2 text-xs group">
                       <div className="flex-1 min-w-0">
-                        <span className="font-medium truncate block" style={{ color: '#1c1c1c' }}>
+                        <span className="font-medium truncate block" style={{ color: 'var(--tinta)' }}>
                           {a.catalogo_insumos?.nombre ?? 'Insumo'} × {a.cantidad}
                         </span>
                         {costo !== null && (
@@ -442,7 +446,7 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
                       </div>
                       <button
                         onClick={() => eliminar(a.id)}
-                        className="shrink-0 p-1 rounded-lg"
+                        className="shrink-0 p-1 rounded-[4px]"
                         style={{ color: '#dc2626', background: '#fee2e2' }}
                       >
                         <TrashIcon />
@@ -454,15 +458,15 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
             )}
           </div>
 
-          <div className="space-y-2 pt-2" style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
-            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'rgba(0,0,0,0.35)' }}>
+          <div className="space-y-2 pt-2" style={{ borderTop: '1px solid var(--linea)' }}>
+            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--tinta-45)' }}>
               agregar insumo
             </p>
             <select
               value={insumoForm}
               onChange={e => setInsumoForm(e.target.value)}
-              className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
-              style={{ border: '1px solid rgba(58,125,68,0.25)', background: 'rgba(255,255,255,0.7)' }}
+              className="w-full rounded-[4px] px-3 py-2 text-sm focus:outline-none"
+              style={{ border: '1px solid var(--linea-fuerte)', background: 'var(--papel)' }}
             >
               <option value="">seleccionar...</option>
               {insumosCompatibles.map(i => (
@@ -486,13 +490,13 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
                       min={1}
                       value={cantidadForm}
                       onChange={e => setCantidadForm(Math.max(1, parseInt(e.target.value) || 1))}
-                      className="w-20 rounded-lg px-3 py-2 text-sm focus:outline-none"
-                      style={{ border: '1px solid rgba(58,125,68,0.25)', background: 'rgba(255,255,255,0.7)' }}
+                      className="w-20 rounded-[4px] px-3 py-2 text-sm focus:outline-none"
+                      style={{ border: '1px solid var(--linea-fuerte)', background: 'var(--papel)' }}
                     />
                     <button
                       onClick={agregar}
                       disabled={!insumoForm || sinPrecio || agregando}
-                      className="flex-1 rounded-lg text-sm text-white font-semibold py-2 disabled:opacity-40"
+                      className="flex-1 rounded-[4px] text-sm text-[var(--papel)] font-semibold py-2 disabled:opacity-40"
                       style={{ background: 'var(--verde)' }}
                     >
                       {agregando ? '...' : 'agregar'}
@@ -504,8 +508,8 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
           </div>
         </div>
       ) : (
-        <div className="rounded-2xl p-6 glass text-center">
-          <p className="text-sm" style={{ color: 'rgba(0,0,0,0.35)' }}>
+        <div className="rounded-[6px] p-6 glass text-center">
+          <p className="text-sm" style={{ color: 'var(--tinta-45)' }}>
             Selecciona un beneficiario para ver su carrito.
           </p>
         </div>

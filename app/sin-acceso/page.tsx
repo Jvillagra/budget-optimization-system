@@ -7,7 +7,7 @@ import { Card } from '@/components/design-system'
 export default function SinAccesoPage() {
   return (
     <Card strong className="max-w-md mx-auto mt-16 p-8 text-center space-y-3">
-      <h1 className="text-lg font-semibold" style={{ color: '#1c1c1c' }}>
+      <h1 className="text-lg font-semibold" style={{ color: 'var(--tinta)' }}>
         Tu cuenta todavía no está habilitada
       </h1>
       <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
