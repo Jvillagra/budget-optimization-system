@@ -3,6 +3,7 @@ import { getViewerContext, isStaff } from '@/lib/roles'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { urlFirmadaLectura, borrarFoto, objetoMeta, MAX_FOTOS_POR_SOCIO, MAX_BYTES, TIPOS_PERMITIDOS } from '@/lib/r2'
 import { logAudit } from '@/lib/audit'
+import { FOTOS_REQUERIDAS } from '@/lib/constants'
 
 // GET: lista de fotos con URL firmada de lectura.
 //  - socio: siempre las suyas.
@@ -170,5 +171,63 @@ export async function DELETE(req: NextRequest) {
     uploaded_at: foto.uploaded_at,
     actor: { email: ctx.email, userId: ctx.userId, role: ctx.role },
   })
-  return NextResponse.json({ ok: true })
+
+  // Borrar un comprobante puede dejar al beneficiario bajo el mínimo. El
+  // estado "compra completa" tiene que caerse con él: si no, queda marcado
+  // como completo con menos fotos de las que exige /completar y nadie lo
+  // nota. Pasó de verdad -- una socia quedó COMPLETO con 0 fotos porque las
+  // 3 fotos de prueba con que se marcó en agosto se borraron en septiembre.
+  // El diálogo de confirmación de /rendicion ya prometía esta reversión;
+  // faltaba cumplirla.
+  //
+  // `null` = el estado no cambió (no hacía falta, o no se pudo verificar).
+  let compraCompleta: boolean | null = null
+  const { count: restantes, error: countError } = await admin
+    .from('fotos_compra')
+    .select('id', { count: 'exact', head: true })
+    .eq('beneficiario_id', foto.beneficiario_id)
+
+  if (countError) {
+    // El borrado ya ocurrió y es lo que el usuario pidió: no se devuelve
+    // error, pero queda el rastro para poder cuadrarlo después.
+    console.error('[ESTADO_SIN_REVISAR] no se pudo contar fotos tras el delete', foto.beneficiario_id, countError)
+  } else if ((restantes ?? 0) < FOTOS_REQUERIDAS) {
+    const { data: ben } = await admin
+      .from('beneficiarios')
+      .select('compra_completa')
+      .eq('id', foto.beneficiario_id)
+      .maybeSingle()
+
+    if (ben?.compra_completa) {
+      const { error: revertError } = await admin
+        .from('beneficiarios')
+        .update({
+          compra_completa: false,
+          compra_completa_at: new Date().toISOString(),
+          compra_completa_by: ctx.userId,
+        })
+        .eq('id', foto.beneficiario_id)
+
+      if (revertError) {
+        console.error('[ESTADO_SIN_REVISAR] no se pudo revertir compra_completa', foto.beneficiario_id, revertError)
+      } else {
+        compraCompleta = false
+        await logAudit('beneficiarios', 'update', foto.beneficiario_id, {
+          compra_completa: false,
+          motivo: 'fotos_insuficientes_tras_borrado',
+          fotos: restantes ?? 0,
+          requeridas: FOTOS_REQUERIDAS,
+          foto_borrada: id,
+          actor: { email: ctx.email, userId: ctx.userId, role: ctx.role },
+        })
+      }
+    }
+  }
+
+  return NextResponse.json({
+    ok: true,
+    beneficiarioId: foto.beneficiario_id,
+    fotosRestantes: countError ? null : restantes ?? 0,
+    compraCompleta,
+  })
 }
