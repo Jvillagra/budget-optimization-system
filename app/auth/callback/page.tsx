@@ -44,7 +44,15 @@ function CallbackInner() {
     })
       .then(async (res) => {
         if (!res.ok) {
-          setError('El link es inválido o ya expiró.')
+          // El link es de un solo uso: si la persona lo tocó dos veces (o
+          // el correo se abrió en dos pestañas), el segundo canje falla pero
+          // la sesión del primero ya está en la cookie -- entrar igual.
+          const yaLogueado = await fetch('/api/whoami').then(r => r.ok ? r.json() : null).catch(() => null)
+          if (yaLogueado?.userId) {
+            window.location.assign(yaLogueado.role === 'socio' ? '/mi-dashboard' : (params.get('next') || '/'))
+            return
+          }
+          setError('Este link ya se usó o venció.')
           return
         }
         // El `next` genérico ('/') sirve para owner/admin, pero un socio no
@@ -56,7 +64,7 @@ function CallbackInner() {
         // cookie recién seteada, el router cache de Next podría no verla).
         window.location.assign(destino)
       })
-      .catch(() => setError('El link es inválido o ya expiró.'))
+      .catch(() => setError('No pudimos validar el link.'))
   }, [params])
 
   if (error) {
@@ -64,7 +72,12 @@ function CallbackInner() {
       <div className="max-w-sm mx-auto mt-16 text-center space-y-3">
         <h1 className="text-lg font-semibold">No pudimos iniciar sesión</h1>
         <p className="text-sm text-gray-500">{error}</p>
-        <a href="/login" className="inline-block text-sm text-indigo-600 font-medium">Pedir un link nuevo</a>
+        <p className="text-sm text-gray-500">
+          Puedes entrar con el código de 6 dígitos que viene en el mismo correo, o pedir un link nuevo.
+        </p>
+        <a href="/login?codigo=1" className="inline-block text-sm font-medium" style={{ color: 'var(--verde-dark)' }}>Entrar con el código</a>
+        <span className="text-gray-300 px-2">·</span>
+        <a href="/login" className="inline-block text-sm font-medium" style={{ color: 'var(--verde-dark)' }}>Pedir un link nuevo</a>
       </div>
     )
   }

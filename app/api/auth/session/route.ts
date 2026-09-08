@@ -14,12 +14,18 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null)
   if (!body) return NextResponse.json({ error: 'Body inválido' }, { status: 400 })
 
-  const { accessToken, refreshToken, tokenHash, type, code } = body as {
+  const { accessToken, refreshToken, tokenHash, type, code, email, otp } = body as {
     accessToken?: string
     refreshToken?: string
     tokenHash?: string
     type?: string
     code?: string
+    // Código numérico que viene en el mismo correo que el link ({{ .Token }}
+    // del template). Es el camino de respaldo cuando el link no sirve:
+    // escáner de correo que lo consumió, Outlook Safelinks, ícono de inicio
+    // de iOS sin barra de direcciones, etc.
+    email?: string
+    otp?: string
   }
 
   let response = NextResponse.json({ ok: true })
@@ -44,6 +50,8 @@ export async function POST(req: NextRequest) {
     ? await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
     : tokenHash
       ? await supabase.auth.verifyOtp({ token_hash: tokenHash, type: (type ?? 'magiclink') as 'magiclink' })
+      : email && otp
+        ? await supabase.auth.verifyOtp({ email, token: otp.trim(), type: 'email' })
       : code
         ? await supabase.auth.exchangeCodeForSession(code)
         : { error: { message: 'Faltan tokens de sesión' } as { message: string }, data: { session: null } }
