@@ -506,11 +506,8 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
                 <tr key={`seg_${seg}`}>
                   <td
                     colSpan={2 + activos.length}
-                    className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wide"
-                    style={{
-                      background: seg === 'Invernadero' ? 'var(--verde-muted)' : seg === 'Cierre Perimetral' ? 'var(--cafe-muted)' : 'var(--linea)',
-                      color: seg === 'Invernadero' ? 'var(--verde-dark)' : seg === 'Cierre Perimetral' ? 'var(--cafe-dark)' : 'var(--tinta-45)',
-                    }}
+                    className="px-4 py-2 eyebrow"
+                    style={{ background: 'var(--papel-hueco)', color: 'var(--tinta-70)' }}
                   >
                     {seg}
                   </td>
@@ -726,7 +723,7 @@ function PrecioCell({ initialValue, isSaving, error, onBlur, big = false }: {
         title={error}
         className={`w-full text-right rounded-[4px] transition-all ${big ? 'text-base font-semibold px-3 py-2.5' : 'text-sm px-2 py-1'}`}
         style={{
-          background: error ? 'rgba(155,28,28,0.08)' : localVal ? 'var(--acento-hueco)' : 'var(--papel-hueco)',
+          background: error ? 'rgba(155,28,28,0.08)' : localVal ? 'var(--papel)' : 'var(--papel-hueco)',
           border: error
             ? '1px solid rgba(220,38,38,0.55)'
             : localVal ? '1px solid var(--linea-fuerte)' : `1px solid ${big ? 'var(--linea)' : 'transparent'}`,

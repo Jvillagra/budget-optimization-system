@@ -6,7 +6,7 @@ import type {
   Beneficiario, Asignacion, Proveedor, PrecioProveedor, CompraSegmento, PrecioCongelado, Segmento,
 } from '@/lib/types'
 import { buildPrecioMap, formatCLP } from '@/lib/business-logic'
-import { useProveedor } from '@/lib/proveedor-context'
+import { useProveedor, proveedorPorDefecto } from '@/lib/proveedor-context'
 import { Button, ConfirmDialog, Alert } from '@/components/design-system'
 import { Reveal } from '@/components/Editorial'
 
@@ -42,7 +42,7 @@ interface BaseData {
  * propio (no inline) porque también lo usa app/vista-resumen/page.tsx, que
  * queda como redirect para no romper enlaces guardados. */
 export function VistaResumenContent() {
-  const { proveedorId, isLoaded } = useProveedor()
+  const { proveedorId, setProveedorId, isLoaded } = useProveedor()
   const [baseData, setBaseData] = useState<BaseData | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
@@ -65,6 +65,10 @@ export function VistaResumenContent() {
         compras: d.compras ?? [],
         preciosCongelados: d.preciosCongelados ?? [],
       })
+      if (!proveedorId) {
+        const porDefecto = proveedorPorDefecto((d.proveedores ?? []).filter((p: Proveedor) => p.es_activo))
+        if (porDefecto) setProveedorId(porDefecto.id)
+      }
       setLoading(false)
     } catch {
       setLoadError(true)
@@ -72,6 +76,9 @@ export function VistaResumenContent() {
     }
   }
 
+  // Carga inicial. `cargar` se recrea en cada render pero solo debe correr
+  // al montar; las recargas posteriores las disparan confirmar/revertir.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { cargar() }, [])
 
   const compraDe = useMemo(() => {
@@ -261,11 +268,19 @@ export function VistaResumenContent() {
             <section>
               <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
                 <p className="eyebrow">Total general de la compra</p>
-                {proveedor && (
-                  <p className="text-xs" style={{ color: 'var(--tinta-45)' }}>
-                    Cotizado con <span style={{ color: 'var(--tinta)', fontWeight: 600 }}>{proveedor.nombre}</span>
-                  </p>
-                )}
+                <label className="text-xs flex items-center gap-2" style={{ color: 'var(--tinta-45)' }}>
+                  Cotizado con
+                  <select
+                    value={proveedorId}
+                    onChange={e => setProveedorId(e.target.value)}
+                    className="rounded-[4px] px-2 py-1.5 min-h-[38px] text-sm font-semibold"
+                    style={{ border: '1px solid var(--linea-fuerte)', background: 'var(--papel)', color: 'var(--tinta)' }}
+                  >
+                    {(baseData?.proveedores ?? []).filter(p => p.es_activo).map(p => (
+                      <option key={p.id} value={p.id}>{p.nombre}</option>
+                    ))}
+                  </select>
+                </label>
               </div>
               <p className="titulo-xl mt-3 tabular-nums">
                 {hayPrecios ? formatCLP(totalGasto) : '—'}
@@ -507,7 +522,7 @@ function PanelSegmento({
   const pct = totalGasto > 0 ? Math.round((gasto / totalGasto) * 100) : 0
 
   return (
-    <div className="p-6 space-y-5" style={{ background: 'var(--papel)' }}>
+    <div className="p-6 space-y-5 flex flex-col" style={{ background: 'var(--papel)' }}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="eyebrow">{sigla} · {nombre}</p>
@@ -545,7 +560,7 @@ function PanelSegmento({
       </dl>
 
       {compra ? (
-        <div className="pt-2 space-y-3">
+        <div className="pt-2 space-y-3 mt-auto">
           <p className="text-xs flex items-start gap-1.5" style={{ color: 'var(--tinta-70)' }}>
             <Lock size={13} className="shrink-0 mt-0.5" />
             <span>
@@ -558,7 +573,7 @@ function PanelSegmento({
           </Button>
         </div>
       ) : (
-        <div className="pt-2">
+        <div className="pt-2 mt-auto">
           <Button variant="accent" onClick={onConfirmar} disabled={!puedeConfirmar || gasto <= 0} className="w-full">
             Marcar {sigla} como comprado
           </Button>

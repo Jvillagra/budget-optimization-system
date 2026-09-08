@@ -574,6 +574,7 @@ function FilaCard({
   onVerCotizacion: () => void
 }) {
   const suficientesFotos = f.fotosCount >= FOTOS_REQUERIDAS
+  const faltan = Math.max(0, FOTOS_REQUERIDAS - f.fotosCount)
 
   return (
     <Card className="p-4 space-y-3">
@@ -629,7 +630,7 @@ function FilaCard({
               <ProgresoFotos count={f.fotosCount} />
             </>
           )}
-          {f.fotosCount < MAX_FOTOS_POR_SOCIO && (
+          {suficientesFotos && f.fotosCount < MAX_FOTOS_POR_SOCIO && (
             <label
               className="w-11 h-11 rounded-[4px] border-2 border-dashed flex items-center justify-center shrink-0 cursor-pointer transition-colors hover:border-[var(--verde)] hover:text-[var(--verde-dark)] focus-within:ring-2 focus-within:ring-[var(--verde)] focus-within:ring-offset-1"
               style={{ borderColor: 'var(--linea-fuerte)', color: 'var(--text-muted)' }}
@@ -658,7 +659,11 @@ function FilaCard({
         )}
       </div>
 
-      {/* Acción principal -- botón de ancho completo, fácil de tocar */}
+      {/* Accion principal. Antes "Marcar completo" ocupaba el ancho completo
+          aunque estuviera deshabilitado por falta de fotos, y subir una foto
+          -- lo que en realidad hay que hacer -- era un cuadrado de 32px. Sin
+          fotos suficientes, la accion grande es subir; recien despues
+          aparece la de marcar. */}
       {f.compraCompleta ? (
         <Button
           variant="secondary"
@@ -668,21 +673,38 @@ function FilaCard({
         >
           <RotateCcw size={16} /> Revertir
         </Button>
+      ) : suficientesFotos ? (
+        <Button
+          variant="primary"
+          className="w-full !text-base !py-3"
+          onClick={onMarcarCompleto}
+          disabled={busy}
+        >
+          {busy ? 'Guardando…' : 'Marcar completo'}
+        </Button>
       ) : (
         <div className="space-y-1.5">
-          <Button
-            variant="primary"
-            className="w-full !text-base !py-3"
-            onClick={onMarcarCompleto}
-            disabled={!suficientesFotos || busy}
+          <label
+            className="inline-flex w-full items-center justify-center gap-2 rounded-[4px] font-semibold text-base py-3 min-h-[48px] cursor-pointer transition-all active:scale-[0.97]"
+            style={{ background: 'var(--tinta)', color: 'var(--papel)', opacity: subiendo ? 0.5 : 1 }}
           >
-            {busy ? 'Guardando…' : 'Marcar completo'}
-          </Button>
-          {!suficientesFotos && (
-            <p className="text-sm text-center" style={{ color: 'var(--cafe-dark)' }}>
-              Faltan fotos: {f.fotosCount} de {FOTOS_REQUERIDAS}
-            </p>
-          )}
+            <Upload size={17} />
+            {subiendo ? 'Subiendo…' : 'Agregar foto'}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+              className="hidden"
+              disabled={subiendo}
+              onChange={e => {
+                const file = e.target.files?.[0]
+                e.target.value = ''
+                if (file) onUploadFoto(file)
+              }}
+            />
+          </label>
+          <p className="text-sm text-center" style={{ color: 'var(--tinta-70)' }}>
+            {faltan === 1 ? 'Falta 1 foto' : `Faltan ${faltan} fotos`} para poder marcar completo
+          </p>
         </div>
       )}
 
