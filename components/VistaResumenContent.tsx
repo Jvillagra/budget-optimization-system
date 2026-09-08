@@ -541,9 +541,12 @@ function TagSegmento({ tag }: { tag: 'CP' | 'INV' }) {
   return (
     <span
       className="text-[10px] font-bold px-1.5 py-0.5 rounded-[3px] tracking-wide"
+      // CP terracota, INV verde: la misma identidad de color que usan la barra
+      // proporcional, el borde de cada panel de proyecto, el punto de la
+      // tarjeta de beneficiario y el donut del dashboard. Estaba invertido.
       style={tag === 'CP'
-        ? { background: 'var(--marca)', color: 'var(--papel)' }
-        : { background: 'var(--acento)', color: 'var(--tinta)' }}
+        ? { background: 'var(--marca-calida)', color: 'var(--papel)' }
+        : { background: 'var(--marca)', color: 'var(--papel)' }}
     >
       {tag}
     </span>
