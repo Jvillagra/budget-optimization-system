@@ -64,7 +64,7 @@ export async function cargarRendicion(): Promise<
   ] = await Promise.all([
     admin.from('beneficiarios').select('*').order('segmento').order('nombre'),
     admin.from('asignaciones').select('*, catalogo_insumos(*)'),
-    admin.from('proveedores').select('*').eq('es_activo', true).order('nombre'),
+    admin.from('proveedores').select('*').order('nombre'),
     admin.from('precios_proveedor').select('*'),
     admin.from('fotos_compra').select('*').order('uploaded_at', { ascending: true }),
   ])
@@ -140,7 +140,10 @@ export async function cargarRendicion(): Promise<
     }
   })
 
-  return { ok: true, filas, proveedores: provs }
+  // El mapa de nombres (provPorId) se arma con todos, para que un proveedor
+  // desactivado despues de una compra siga teniendo nombre; el selector solo
+  // ofrece los activos.
+  return { ok: true, filas, proveedores: provs.filter(p => p.es_activo) }
 }
 
 

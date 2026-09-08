@@ -5,7 +5,7 @@ export default function Loading() {
     <div className="space-y-8 max-w-2xl mx-auto" aria-busy="true" aria-live="polite">
       <span className="sr-only">Cargando tu compra…</span>
       <div className="flex items-center gap-3">
-        <div className="h-14 w-14 rounded-full animate-pulse" style={{ background: 'rgba(255,255,255,0.4)' }} />
+        <div className="h-14 w-14 rounded-full animate-pulse" style={{ background: 'var(--papel-hueco)' }} />
         <Skeleton className="h-10 w-40" />
       </div>
       <div className="grid grid-cols-2 gap-3">

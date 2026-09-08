@@ -9,9 +9,13 @@ import {
 import type { Proveedor, Beneficiario, CatalogoInsumo, AyudaMemoria, KPISimulacion, ResultadoSimulacion } from '@/lib/types'
 import { buildPrecioMap, calcularKPI, formatCLP } from '@/lib/business-logic'
 import type { DatosStaff } from '@/lib/staff-data'
+import { PageHeader } from '@/components/Editorial'
 
-const VERDE = '#3a7d44'
-const CAFE = '#7f4f24'
+// Colores de los graficos (recharts no lee variables CSS). Tinta y acento
+// del sistema editorial: se distinguen por valor, no solo por matiz, asi que
+// tambien funcionan impresos en blanco y negro.
+const VERDE = '#171815'
+const CAFE = '#c7ff4a'
 const PIE_COLORS = [VERDE, '#e5e7eb', '#dc2626']
 
 type DesgloseItem = { nombre: string; corto: string; total: number; unidad: string }
@@ -64,7 +68,8 @@ export default function SimuladorClient({ initial }: { initial: DatosStaff | nul
   useEffect(() => {
     async function load() {
       const datos: DatosStaff | null = initial ?? await fetch('/api/data').then(r => r.ok ? r.json() : null)
-      const { proveedores: provs, beneficiarios: bens, catalogoInsumos: ins, ayudaMemoria: ams, preciosProveedor: precs } = datos ?? {}
+      const { proveedores: todos, beneficiarios: bens, catalogoInsumos: ins, ayudaMemoria: ams, preciosProveedor: precs } = datos ?? {}
+      const provs = (todos as Proveedor[] | undefined)?.filter(p => p.es_activo)
       if (provs) {
         setProveedores(provs as Proveedor[])
         if (provs.length >= 1) setProvA(provs[0].id)
@@ -139,21 +144,20 @@ export default function SimuladorClient({ initial }: { initial: DatosStaff | nul
 
   if (loading) return (
     <div className="space-y-4">
-      <div className="h-8 rounded animate-pulse w-48" style={{ background: 'rgba(255,255,255,0.4)' }} />
+      <div className="h-8 rounded animate-pulse w-48" style={{ background: 'var(--papel-hueco)' }} />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {[0, 1].map(i => <div key={i} className="h-64 rounded-2xl animate-pulse" style={{ background: 'rgba(255,255,255,0.4)' }} />)}
+        {[0, 1].map(i => <div key={i} className="h-64 rounded-[6px] animate-pulse" style={{ background: 'var(--papel-hueco)' }} />)}
       </div>
     </div>
   )
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-lg font-bold" style={{ color: 'var(--verde-dark)' }}>Simulador comparativo</h1>
-        <p className="text-xs mt-0.5" style={{ color: 'rgba(0,0,0,0.4)' }}>
-          Simulación en memoria basada en la ayuda memoria de cada socio. No altera el carrito real.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="04 / Simulador"
+        titulo={<>Qué proveedor<br /><em>conviene.</em></>}
+        bajada="Compara hasta tres proveedores con la ayuda memoria de cada socio. Es una simulación: no cambia el carrito de nadie."
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -164,7 +168,7 @@ export default function SimuladorClient({ initial }: { initial: DatosStaff | nul
       </div>
 
       {/* Selector */}
-      <div className="rounded-2xl p-4 glass-strong space-y-3">
+      <div className="rounded-[6px] p-4 glass-strong space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[
             { label: 'Proveedor A', val: provA, set: setProvA },
@@ -174,8 +178,8 @@ export default function SimuladorClient({ initial }: { initial: DatosStaff | nul
             <div key={label}>
               <label className="text-xs font-semibold block mb-1" style={{ color: 'var(--cafe)' }}>{label}</label>
               <select value={val} onChange={e => set(e.target.value)}
-                className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
-                style={{ border: '1px solid rgba(58,125,68,0.3)', background: 'rgba(255,255,255,0.8)' }}
+                className="w-full rounded-[4px] px-3 py-2 text-sm focus:outline-none"
+                style={{ border: '1px solid var(--linea-fuerte)', background: 'var(--papel)' }}
               >
                 {label === 'Proveedor C' && <option value="">— opcional —</option>}
                 {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
@@ -186,8 +190,8 @@ export default function SimuladorClient({ initial }: { initial: DatosStaff | nul
         <button
           onClick={simular}
           disabled={!provA || !provB}
-          className="w-full rounded-xl px-6 py-2.5 text-sm text-white font-bold disabled:opacity-40"
-          style={{ background: 'var(--verde)' }}
+          className="w-full rounded-[4px] px-6 py-3 min-h-[48px] text-sm text-[var(--papel)] font-bold disabled:opacity-40"
+          style={{ background: 'var(--tinta)' }}
         >
           Simular
         </button>
@@ -204,18 +208,18 @@ export default function SimuladorClient({ initial }: { initial: DatosStaff | nul
           {/* Scorecard + Polines chart */}
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
             {/* Scorecard */}
-            <div className="lg:col-span-3 rounded-2xl p-5 glass">
+            <div className="lg:col-span-3 rounded-[6px] p-5 glass">
               <p className="text-sm font-semibold mb-0.5" style={{ color: 'var(--verde-dark)' }}>
                 Materiales que puede adquirir la comunidad
               </p>
-              <p className="text-xs mb-4" style={{ color: 'rgba(0,0,0,0.4)' }}>
+              <p className="text-xs mb-4" style={{ color: 'var(--tinta-45)' }}>
                 Total de unidades por insumo, dado los precios de cada proveedor
               </p>
 
               {/* Header — N columnas dinámicas */}
               <div
                 className="text-xs font-semibold mb-2 px-1 gap-x-2"
-                style={{ display: 'grid', gridTemplateColumns: `1fr ${kpis.map(() => '64px').join(' ')}`, color: 'rgba(0,0,0,0.4)' }}
+                style={{ display: 'grid', gridTemplateColumns: `1fr ${kpis.map(() => '64px').join(' ')}`, color: 'var(--tinta-45)' }}
               >
                 <span>Insumo</span>
                 {kpis.map(k => (
@@ -227,18 +231,18 @@ export default function SimuladorClient({ initial }: { initial: DatosStaff | nul
                 {scorecardData.map(row => (
                   <div
                     key={row.nombre}
-                    className="items-center px-3 py-2 rounded-xl gap-x-2"
-                    style={{ display: 'grid', gridTemplateColumns: `1fr ${kpis.map(() => '64px').join(' ')}`, background: 'rgba(0,0,0,0.03)' }}
+                    className="items-center px-3 py-2 rounded-[6px] gap-x-2"
+                    style={{ display: 'grid', gridTemplateColumns: `1fr ${kpis.map(() => '64px').join(' ')}`, background: 'var(--papel-hueco)' }}
                   >
-                    <span className="text-xs font-medium" style={{ color: 'rgba(0,0,0,0.65)' }}>{row.corto}</span>
+                    <span className="text-xs font-medium" style={{ color: 'var(--tinta-70)' }}>{row.corto}</span>
                     {row.totales.map((val, i) => (
                       <div key={i} className="text-center">
                         <span className="text-sm font-bold" style={{
-                          color: row.igual ? 'rgba(0,0,0,0.5)' : row.esGanador[i] ? VERDE : 'rgba(0,0,0,0.3)'
+                          color: row.igual ? 'var(--tinta-45)' : row.esGanador[i] ? VERDE : 'var(--tinta-45)'
                         }}>
                           {val.toLocaleString('es-CL')}
                         </span>
-                        <span className="text-xs" style={{ color: 'rgba(0,0,0,0.4)' }}> {row.unidad}</span>
+                        <span className="text-xs" style={{ color: 'var(--tinta-45)' }}> {row.unidad}</span>
                         {row.esGanador[i] && <div className="text-xs" style={{ color: VERDE }}>✓</div>}
                       </div>
                     ))}
@@ -248,9 +252,9 @@ export default function SimuladorClient({ initial }: { initial: DatosStaff | nul
             </div>
 
             {/* Polines chart */}
-            <div className="lg:col-span-2 rounded-2xl p-5 glass flex flex-col">
+            <div className="lg:col-span-2 rounded-[6px] p-5 glass flex flex-col">
               <p className="text-sm font-semibold mb-0.5" style={{ color: 'var(--verde-dark)' }}>Polines totales</p>
-              <p className="text-xs mb-4" style={{ color: 'rgba(0,0,0,0.4)' }}>
+              <p className="text-xs mb-4" style={{ color: 'var(--tinta-45)' }}>
                 El precio del polin define cuántos puede comprar cada socio con su saldo
               </p>
               <div className="flex-1 flex items-end">
@@ -260,7 +264,7 @@ export default function SimuladorClient({ initial }: { initial: DatosStaff | nul
                     <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
                     <Tooltip
                       formatter={(v, _name, props) => [`${(v as number).toLocaleString('es-CL')} un.`, props.payload?.nombreCompleto ?? '']}
-                      contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)' }}
+                      contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid var(--linea)' }}
                     />
                     <Bar dataKey="polines" radius={[6, 6, 0, 0]} maxBarSize={80}>
                       <LabelList dataKey="polines" position="top" style={{ fontSize: 13, fontWeight: 700 }} formatter={(v: unknown) => typeof v === 'number' ? v.toLocaleString('es-CL') : String(v)} />
@@ -287,7 +291,7 @@ export default function SimuladorClient({ initial }: { initial: DatosStaff | nul
                 ...(aporte > 0 ? [{ name: 'Aporte bolsillo', value: aporte }] : []),
               ]
               return (
-                <div key={kpi.proveedor.id} className="rounded-2xl p-4 glass flex items-center gap-4">
+                <div key={kpi.proveedor.id} className="rounded-[6px] p-4 glass flex items-center gap-4">
                   <div className="shrink-0">
                     <ResponsiveContainer width={100} height={100}>
                       <PieChart>
@@ -305,7 +309,7 @@ export default function SimuladorClient({ initial }: { initial: DatosStaff | nul
                     {pieData.map((d, i) => (
                       <div key={d.name} className="flex items-center gap-1.5">
                         <div className="w-2 h-2 rounded-full shrink-0" style={{ background: PIE_COLORS[i] }} />
-                        <span className="text-xs truncate" style={{ color: 'rgba(0,0,0,0.55)' }}>{d.name}: <strong style={{ color: '#1c1c1c' }}>{formatCLP(d.value)}</strong></span>
+                        <span className="text-xs truncate" style={{ color: 'var(--tinta-70)' }}>{d.name}: <strong style={{ color: 'var(--tinta)' }}>{formatCLP(d.value)}</strong></span>
                       </div>
                     ))}
                   </div>
@@ -315,8 +319,8 @@ export default function SimuladorClient({ initial }: { initial: DatosStaff | nul
           </div>
 
           {/* Análisis comparativo */}
-          <div className="rounded-2xl p-5" style={{ background: 'var(--verde-dark)' }}>
-            <p className="text-xs font-semibold mb-3" style={{ color: 'rgba(255,255,255,0.65)' }}>Análisis comparativo</p>
+          <div className="rounded-[6px] p-5" style={{ background: 'var(--verde-dark)' }}>
+            <p className="text-xs font-semibold mb-3" style={{ color: 'rgba(244,240,231,0.65)' }}>Análisis comparativo</p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {(() => {
                 const ganador = kpis.reduce((best, k) => k.volumen_total_comunidad > best.volumen_total_comunidad ? k : best)
@@ -327,18 +331,18 @@ export default function SimuladorClient({ initial }: { initial: DatosStaff | nul
                 return (
                   <>
                     <div>
-                      <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>Mayor volumen</p>
-                      <p className="text-2xl font-bold text-white">{ganador.volumen_total_comunidad.toLocaleString('es-CL')} uds.</p>
-                      <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.5)' }}>{ganador.proveedor.nombre} (+{difVol.toLocaleString('es-CL')} sobre el resto)</p>
+                      <p className="text-xs" style={{ color: 'rgba(244,240,231,0.55)' }}>Mayor volumen</p>
+                      <p className="text-2xl font-bold text-[var(--papel)]">{ganador.volumen_total_comunidad.toLocaleString('es-CL')} uds.</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'rgba(244,240,231,0.55)' }}>{ganador.proveedor.nombre} (+{difVol.toLocaleString('es-CL')} sobre el resto)</p>
                     </div>
                     <div>
-                      <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>Ahorro en aportes</p>
-                      <p className="text-2xl font-bold text-white">{formatCLP(maxAporte - minAporte)}</p>
-                      <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.5)' }}>diferencia entre mejor y peor opción</p>
+                      <p className="text-xs" style={{ color: 'rgba(244,240,231,0.55)' }}>Ahorro en aportes</p>
+                      <p className="text-2xl font-bold text-[var(--papel)]">{formatCLP(maxAporte - minAporte)}</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'rgba(244,240,231,0.55)' }}>diferencia entre mejor y peor opción</p>
                     </div>
                     <div>
-                      <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>Recomendación</p>
-                      <p className="text-sm font-bold text-white mt-1">
+                      <p className="text-xs" style={{ color: 'rgba(244,240,231,0.55)' }}>Recomendación</p>
+                      <p className="text-sm font-bold text-[var(--papel)] mt-1">
                         {difVol > 0
                           ? `${ganador.proveedor.nombre} logra ${difVol.toLocaleString('es-CL')} unidades más que el segundo mejor.`
                           : 'Todos los proveedores entregan el mismo volumen.'}
@@ -353,11 +357,11 @@ export default function SimuladorClient({ initial }: { initial: DatosStaff | nul
       )}
 
       {!simulado && (
-        <div className="rounded-2xl border-2 border-dashed p-12 text-center" style={{ borderColor: 'rgba(58,125,68,0.2)' }}>
-          <p className="text-sm" style={{ color: 'rgba(0,0,0,0.4)' }}>
+        <div className="rounded-[6px] border-2 border-dashed p-12 text-center" style={{ borderColor: 'var(--linea-fuerte)' }}>
+          <p className="text-sm" style={{ color: 'var(--tinta-45)' }}>
             Selecciona dos o tres proveedores y presiona <strong>Simular</strong>.
           </p>
-          <p className="text-xs mt-1" style={{ color: 'rgba(0,0,0,0.3)' }}>
+          <p className="text-xs mt-1" style={{ color: 'var(--tinta-45)' }}>
             La simulación usa la ayuda memoria de cada socio. No modifica el carrito real.
           </p>
         </div>
@@ -374,20 +378,20 @@ function KPICard({ kpi }: { kpi: KPISimulacion }) {
   const totalPoly = exitosos.filter(r => r.insumo_base_nombre?.startsWith('Polietileno')).reduce((s, r) => s + r.insumo_base_cantidad, 0)
 
   return (
-    <div className="rounded-2xl p-5 space-y-4 transition-all" style={es_ganador ? {
-      background: 'rgba(58,125,68,0.1)',
+    <div className="rounded-[6px] p-5 space-y-4 transition-all" style={es_ganador ? {
+      background: 'var(--papel-hueco)',
       border: '2px solid var(--verde)',
-      boxShadow: '0 0 0 4px rgba(58,125,68,0.08), 0 8px 32px rgba(58,125,68,0.15)',
-      backdropFilter: 'blur(14px)',
+      boxShadow: '0 0 0 4px var(--linea), 0 8px 32px var(--linea)',
+      
     } : {
-      background: 'rgba(255,255,255,0.65)',
-      border: '1px solid rgba(255,255,255,0.55)',
-      backdropFilter: 'blur(14px)',
+      background: 'rgba(244,240,231,0.65)',
+      border: '1px solid var(--linea)',
+      
     }}>
       <div className="flex items-center justify-between">
-        <h3 className="font-bold" style={{ color: '#1c1c1c' }}>{proveedor.nombre}</h3>
+        <h3 className="font-bold" style={{ color: 'var(--tinta)' }}>{proveedor.nombre}</h3>
         {es_ganador && (
-          <span className="flex items-center gap-1 text-xs font-bold text-white px-2.5 py-1 rounded-full" style={{ background: 'var(--verde)' }}>
+          <span className="flex items-center gap-1 text-xs font-bold text-[var(--papel)] px-2.5 py-1 rounded-full" style={{ background: 'var(--verde)' }}>
             🏆 Mejor opción
           </span>
         )}
@@ -408,7 +412,7 @@ function KPICard({ kpi }: { kpi: KPISimulacion }) {
         </summary>
         <div className="mt-2 max-h-48 overflow-y-auto space-y-1">
           {exitosos.map(r => (
-            <div key={r.beneficiario.id} className="flex justify-between py-0.5" style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', color: 'rgba(0,0,0,0.65)' }}>
+            <div key={r.beneficiario.id} className="flex justify-between py-0.5" style={{ borderBottom: '1px solid var(--linea)', color: 'var(--tinta-70)' }}>
               <span className="truncate max-w-[140px]">{r.beneficiario.nombre}</span>
               <span className="font-semibold shrink-0 ml-2">{r.volumen_total} uds.</span>
             </div>
@@ -422,9 +426,9 @@ function KPICard({ kpi }: { kpi: KPISimulacion }) {
 function StatCard({ label, value, color }: { label: string; value: string; color?: 'verde' | 'cafe' | 'rojo' }) {
   const colorMap = { verde: 'var(--verde)', cafe: 'var(--cafe)', rojo: '#dc2626' }
   return (
-    <div className="rounded-2xl p-4 glass">
-      <p className="text-xs" style={{ color: 'rgba(0,0,0,0.4)' }}>{label}</p>
-      <p className="text-xl font-bold mt-0.5" style={{ color: color ? colorMap[color] : '#1c1c1c' }}>{value}</p>
+    <div className="rounded-[6px] p-4 glass">
+      <p className="text-xs" style={{ color: 'var(--tinta-45)' }}>{label}</p>
+      <p className="text-xl font-bold mt-0.5" style={{ color: color ? colorMap[color] : 'var(--tinta)' }}>{value}</p>
     </div>
   )
 }
@@ -434,15 +438,15 @@ function Metric({ label, value, sub, highlight, danger, icon: Icon }: {
   icon?: React.ElementType
 }) {
   return (
-    <div className="rounded-xl p-3" style={{ background: highlight ? 'rgba(58,125,68,0.1)' : 'rgba(0,0,0,0.04)' }}>
+    <div className="rounded-[6px] p-3" style={{ background: highlight ? 'var(--papel-hueco)' : 'var(--linea)' }}>
       <div className="flex items-center gap-1.5 mb-1">
-        {Icon && <Icon size={13} style={{ color: highlight ? VERDE : danger ? '#dc2626' : 'rgba(0,0,0,0.35)' }} />}
-        <p className="text-xs" style={{ color: 'rgba(0,0,0,0.45)' }}>{label}</p>
+        {Icon && <Icon size={13} style={{ color: highlight ? VERDE : danger ? '#dc2626' : 'var(--tinta-45)' }} />}
+        <p className="text-xs" style={{ color: 'var(--tinta-45)' }}>{label}</p>
       </div>
-      <p className="text-base font-bold" style={{ color: highlight ? 'var(--verde-dark)' : danger ? '#dc2626' : '#1c1c1c' }}>
+      <p className="text-base font-bold" style={{ color: highlight ? 'var(--verde-dark)' : danger ? '#dc2626' : 'var(--tinta)' }}>
         {value}
       </p>
-      {sub && <p className="text-xs mt-0.5" style={{ color: 'rgba(0,0,0,0.35)' }}>{sub}</p>}
+      {sub && <p className="text-xs mt-0.5" style={{ color: 'var(--tinta-45)' }}>{sub}</p>}
     </div>
   )
 }

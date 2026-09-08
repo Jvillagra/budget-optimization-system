@@ -13,7 +13,7 @@ import { cx } from '@/components/design-system/cx'
 // El gráfico vive fuera del bundle inicial -- ver app/mi-dashboard/ComposicionChart.tsx.
 const ComposicionChart = dynamic(() => import('./ComposicionChart'), {
   ssr: false,
-  loading: () => <div className="h-[220px] rounded-xl animate-pulse" style={{ background: 'rgba(0,0,0,0.05)' }} />,
+  loading: () => <div className="h-[220px] rounded-[6px] animate-pulse" style={{ background: 'var(--linea)' }} />,
 })
 
 const COLORES: Record<string, string> = {
@@ -183,7 +183,7 @@ export default function MiDashboardClient({ inicial }: { inicial: MiDashboardIni
   if (notFound || !beneficiario) {
     return (
       <Card strong className="max-w-md mx-auto mt-16 p-8 text-center space-y-2">
-        <h1 className="text-lg font-semibold" style={{ color: '#1c1c1c' }}>Tu cuenta no está habilitada todavía</h1>
+        <h1 className="text-lg font-semibold" style={{ color: 'var(--tinta)' }}>Tu cuenta no está habilitada todavía</h1>
         <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
           Avisa a la organización del Proyecto PAT para que asocien tu email.
         </p>
@@ -215,10 +215,10 @@ export default function MiDashboardClient({ inicial }: { inicial: MiDashboardIni
       <div className="flex items-center gap-3">
         <Avatar url={avatarUrl} nombre={beneficiario.nombre} />
         <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--verde-dark)' }}>
-            Hola, {beneficiario.nombre.split(' ')[0]}
+          <p className="eyebrow mb-1">{beneficiario.segmento} · Proyecto PAT</p>
+          <h1 className="titulo-md">
+            Hola, <em>{beneficiario.nombre.split(' ')[0]}.</em>
           </h1>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{beneficiario.segmento} · Proyecto PAT</p>
         </div>
       </div>
 
@@ -229,13 +229,13 @@ export default function MiDashboardClient({ inicial }: { inicial: MiDashboardIni
               key={p.id}
               onClick={() => setProveedorId(p.id)}
               className={cx(
-                'px-3 py-1.5 rounded-full text-sm font-medium border transition-colors',
+                'px-3.5 py-2 min-h-[40px] rounded-[4px] text-sm font-semibold border transition-colors',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[var(--verde)]',
-                proveedorId === p.id ? 'text-white border-transparent' : 'border-black/12'
+                proveedorId === p.id ? 'text-[var(--papel)] border-transparent' : 'border-[var(--linea)]'
               )}
               style={proveedorId === p.id
-                ? { background: 'var(--verde)' }
-                : { color: 'var(--text-muted)' }}
+                ? { background: 'var(--tinta)' }
+                : { color: 'var(--tinta-70)' }}
             >
               {p.nombre}
             </button>
@@ -246,28 +246,28 @@ export default function MiDashboardClient({ inicial }: { inicial: MiDashboardIni
       <div className="grid grid-cols-2 gap-3">
         <Card className="p-4 motion-safe:animate-[riseIn_220ms_ease-out]">
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Presupuesto base</p>
-          <p className="text-lg font-semibold" style={{ color: '#1c1c1c' }}>{formatCLP(presupuesto)}</p>
+          <p className="text-lg font-semibold" style={{ color: 'var(--tinta)' }}>{formatCLP(presupuesto)}</p>
         </Card>
         <Card className="p-4 motion-safe:animate-[riseIn_220ms_ease-out]" style={{ animationDelay: '40ms' }}>
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Total de tu compra</p>
-          <p className="text-lg font-semibold" style={{ color: '#1c1c1c' }}>{formatCLP(carrito.total)}</p>
+          <p className="text-lg font-semibold" style={{ color: 'var(--tinta)' }}>{formatCLP(carrito.total)}</p>
         </Card>
         <Card className="p-4 col-span-2 motion-safe:animate-[riseIn_220ms_ease-out]" style={{ animationDelay: '80ms' }}>
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Aporte de bolsillo</p>
-          <p className="text-lg font-semibold" style={{ color: '#1c1c1c' }}>{formatCLP(aporteBolsillo)}</p>
+          <p className="text-lg font-semibold" style={{ color: 'var(--tinta)' }}>{formatCLP(aporteBolsillo)}</p>
         </Card>
       </div>
 
       {chartData.length > 0 && (
         <Card className="p-4">
-          <p className="text-sm font-semibold mb-2" style={{ color: '#1c1c1c' }}>Composición de tu compra</p>
+          <p className="text-sm font-semibold mb-2" style={{ color: 'var(--tinta)' }}>Composición de tu compra</p>
           <ComposicionChart data={chartData} colores={COLORES} />
         </Card>
       )}
 
       <Card className="p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold" style={{ color: '#1c1c1c' }}>Fotos de tu compra</p>
+          <p className="text-sm font-semibold" style={{ color: 'var(--tinta)' }}>Fotos de tu compra</p>
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
             {fotos.length} de {MAX_FOTOS} · mínimo {FOTOS_REQUERIDAS} para tu rendición
           </p>
@@ -278,18 +278,18 @@ export default function MiDashboardClient({ inicial }: { inicial: MiDashboardIni
         {fotosLoading ? (
           <div className="grid grid-cols-3 gap-2">
             {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="aspect-square !rounded-lg" />
+              <Skeleton key={i} className="aspect-square !rounded-[4px]" />
             ))}
           </div>
         ) : (
           <div className="grid grid-cols-3 gap-2">
             {fotos.map(f => (
-              <div key={f.id} className="relative group aspect-square rounded-lg overflow-hidden" style={{ background: 'rgba(0,0,0,0.04)' }}>
+              <div key={f.id} className="relative group aspect-square rounded-[4px] overflow-hidden" style={{ background: 'var(--linea)' }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={f.url} alt="Comprobante de compra" className="w-full h-full object-cover" />
                 <button
                   onClick={() => setFotoAEliminar(f)}
-                  className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-2 min-h-[36px] min-w-[36px] flex items-center justify-center transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                  className="absolute top-1 right-1 bg-[rgba(23,24,21,0.55)] text-[var(--papel)] rounded-full p-2 min-h-[36px] min-w-[36px] flex items-center justify-center transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                   aria-label="Eliminar foto"
                 >
                   <Trash2 size={14} />
@@ -299,10 +299,10 @@ export default function MiDashboardClient({ inicial }: { inicial: MiDashboardIni
             {fotos.length < MAX_FOTOS && (
               <label
                 className={cx(
-                  'aspect-square rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors',
+                  'aspect-square rounded-[4px] border-2 border-dashed flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors',
                   'hover:border-[var(--verde)] hover:text-[var(--verde-dark)] focus-within:ring-2 focus-within:ring-[var(--verde)] focus-within:ring-offset-1'
                 )}
-                style={{ borderColor: 'rgba(0,0,0,0.15)', color: 'var(--text-muted)' }}
+                style={{ borderColor: 'var(--linea)', color: 'var(--text-muted)' }}
               >
                 <Upload size={18} />
                 <span className="text-xs">{subiendo ? 'Subiendo…' : 'Agregar'}</span>

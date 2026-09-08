@@ -94,23 +94,21 @@ function LoginForm() {
   return (
     <div className="min-h-[70dvh] flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-sm motion-safe:animate-[fadeIn_250ms_ease-out]">
-        <Card strong className="p-8 text-center space-y-6">
-          <div className="flex flex-col items-center gap-3">
-            <Image src="/logo.png" alt="" width={48} height={48} className="rounded-xl" />
+        <Card strong className="p-8 space-y-7">
+          <div className="flex flex-col gap-4">
+            <Image src="/logo.png" alt="" width={44} height={44} className="rounded-[4px]" />
             <div>
-              <h1 className="text-lg font-bold" style={{ color: 'var(--verde-dark)' }}>
-                Proyecto PAT
+              <p className="eyebrow">Comunidad Pedro Huisca</p>
+              <h1 className="titulo-md mt-2">
+                Proyecto <em>PAT.</em>
               </h1>
-              <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                Comunidad Pedro Huisca
-              </p>
             </div>
           </div>
 
           {enviado ? (
             <div className="space-y-5 motion-safe:animate-[fadeIn_200ms_ease-out]">
               <div className="space-y-2">
-                <h2 className="text-base font-semibold" style={{ color: '#1c1c1c' }}>
+                <h2 className="text-base font-semibold" style={{ color: 'var(--tinta)' }}>
                   Revisa tu correo
                 </h2>
                 <p className="text-sm" style={{ color: 'var(--text-muted)' }}>

@@ -49,6 +49,19 @@ export interface AyudaMemoria {
   catalogo_insumos?: CatalogoInsumo | null
 }
 
+export interface CompraSegmento {
+  segmento: Segmento
+  proveedor_id: string
+  confirmada_at: string
+  confirmada_by: string | null
+}
+
+export interface PrecioCongelado {
+  segmento: Segmento
+  insumo_id: string
+  precio_unitario: number | null
+}
+
 export interface Asignacion {
   id: string
   beneficiario_id: string
@@ -97,6 +110,18 @@ export type Database = {
         Row: { id: string; proveedor_id: string; insumo_id: string; precio_unitario: number | null }
         Insert: { id?: string; proveedor_id: string; insumo_id: string; precio_unitario?: number | null }
         Update: { id?: string; proveedor_id?: string; insumo_id?: string; precio_unitario?: number | null }
+        Relationships: []
+      }
+      compras_segmento: {
+        Row: { segmento: string; proveedor_id: string; confirmada_at: string; confirmada_by: string | null }
+        Insert: { segmento: string; proveedor_id: string; confirmada_at?: string; confirmada_by?: string | null }
+        Update: { segmento?: string; proveedor_id?: string; confirmada_at?: string; confirmada_by?: string | null }
+        Relationships: []
+      }
+      compras_segmento_precio: {
+        Row: { segmento: string; insumo_id: string; precio_unitario: number | null }
+        Insert: { segmento: string; insumo_id: string; precio_unitario?: number | null }
+        Update: { segmento?: string; insumo_id?: string; precio_unitario?: number | null }
         Relationships: []
       }
       beneficiarios: {

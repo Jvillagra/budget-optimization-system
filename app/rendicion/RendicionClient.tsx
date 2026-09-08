@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { X, ImageOff, CheckCircle2, RotateCcw, Upload, ChevronDown, ClipboardList, BarChart3 } from 'lucide-react'
+import { X, ImageOff, CheckCircle2, RotateCcw, Upload, ChevronDown, ClipboardList, BarChart3, Trash2 } from 'lucide-react'
 import { formatCLP } from '@/lib/business-logic'
 import { FOTOS_REQUERIDAS } from '@/lib/constants'
-import { Card, Button, Badge, Input, Alert, Skeleton } from '@/components/design-system'
+import { Card, Button, Badge, Input, Alert, Skeleton, ConfirmDialog } from '@/components/design-system'
+import { PageHeader } from '@/components/Editorial'
 import { VistaResumenContent } from '@/components/VistaResumenContent'
 import { PanelControl, ESTADOS, estadoDe, type EstadoSocio } from './GraficosRendicion'
 
@@ -45,7 +46,7 @@ type FilaRendicion = {
  *  por qué. Mismo criterio que el PDF de la consultora. */
 function TotalCotizado({ f, className }: { f: FilaRendicion; className?: string }) {
   if (f.totalEsCompleto) {
-    return <span className={className} style={{ color: '#1c1c1c' }}>{formatCLP(f.total)}</span>
+    return <span className={className} style={{ color: 'var(--tinta)' }}>{formatCLP(f.total)}</span>
   }
   const motivo = f.items.length === 0
     ? 'Sin carrito registrado'
@@ -82,7 +83,12 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [busqueda, setBusqueda] = useState('')
   const [filtroEstado, setFiltroEstado] = useState<EstadoSocio | null>(null)
-  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  // Borrar una foto ya subida: el endpoint (DELETE /api/fotos) siempre lo
+  // permitio al staff, pero la unica pantalla que lo ofrecia era la del
+  // socio (/mi-dashboard). Sin esto, una foto movida o repetida cargada por
+  // un admin no habia forma de sacarla.
+  const [fotoAEliminar, setFotoAEliminar] = useState<{ foto: Foto; beneficiarioId: string; nombre: string } | null>(null)
+  const [borrandoFoto, setBorrandoFoto] = useState(false)
 
   function toggleExpanded(id: string) {
     setExpandedIds(prev => {
@@ -145,6 +151,30 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
     setBusyId(null)
   }
 
+  async function eliminarFoto() {
+    if (!fotoAEliminar) return
+    const { foto, beneficiarioId } = fotoAEliminar
+    setBorrandoFoto(true)
+    const res = await fetch(`/api/fotos?id=${encodeURIComponent(foto.id)}`, { method: 'DELETE' }).catch(() => null)
+    if (!res?.ok) {
+      setFotoError({ id: beneficiarioId, mensaje: 'No pudimos eliminar la foto. Intenta de nuevo.' })
+    } else {
+      // Se saca de la fila y del lightbox a la vez; si era la ultima, el
+      // lightbox se cierra porque ya no hay nada que mostrar.
+      setFilas(prev => prev.map(f => f.id === beneficiarioId
+        ? { ...f, fotos: f.fotos.filter(x => x.id !== foto.id), fotosCount: Math.max(0, f.fotosCount - 1) }
+        : f))
+      setLightbox(prev => {
+        if (!prev) return prev
+        const fotos = prev.fotos.filter(x => x.id !== foto.id)
+        if (fotos.length === 0) return null
+        return { ...prev, fotos, index: Math.min(prev.index, fotos.length - 1) }
+      })
+    }
+    setBorrandoFoto(false)
+    setFotoAEliminar(null)
+  }
+
   // Sube una foto de comprobante en nombre de un beneficiario (mismo flujo
   // de 2 pasos que app/mi-dashboard/page.tsx: URL firmada -> PUT a R2 ->
   // confirmar). El admin pasa el beneficiarioId de la fila en ambas llamadas.
@@ -194,10 +224,9 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
       setFotoError({ id: beneficiarioId, mensaje: 'Error al subir la imagen' })
     } finally {
       setSubiendoId(null)
-      // Solo resetea el input de la fila de tabla desktop -- la tarjeta
-      // mobile resetea el suyo síncronamente en su propio onChange.
-      const input = fileInputRefs.current[beneficiarioId]
-      if (input) input.value = ''
+      // El input lo resetea la propia tarjeta, síncrono en su onChange, para
+      // poder volver a elegir el mismo archivo. Antes hacía falta además un
+      // ref compartido con la fila de la tabla desktop, que ya no existe.
     }
   }
 
@@ -228,17 +257,16 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-lg font-bold" style={{ color: 'var(--verde-dark)' }}>Rendición</h1>
-        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-          {tab === 'lista'
-            ? <>Estado de compra por beneficiario · mínimo {FOTOS_REQUERIDAS} fotos de comprobante para marcar completo</>
-            : 'Consolidado de compra de ambos segmentos'}
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="03 / Rendición"
+        titulo={tab === 'lista' ? <>Quién ya<br /><em>rindió.</em></> : <>Todo lo que<br /><em>hay que comprar.</em></>}
+        bajada={tab === 'lista'
+          ? <>Cada socio necesita {FOTOS_REQUERIDAS} fotos de sus comprobantes para quedar completo.</>
+          : 'Consolidado de la compra de los dos proyectos, con el total de cada uno.'}
+      />
 
       {/* Sub-tabs Lista/Resumen -- ver comentario en RendicionPageInner */}
-      <div className="flex gap-2">
+      <div className="flex" style={{ borderBottom: '1px solid var(--linea)' }}>
         {([
           { id: 'lista' as const, label: 'Lista', icon: ClipboardList },
           { id: 'resumen' as const, label: 'Resumen', icon: BarChart3 },
@@ -249,10 +277,12 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className="flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold transition-all"
-              style={active
-                ? { background: 'var(--verde)', color: '#fff' }
-                : { background: 'rgba(0,0,0,0.05)', color: 'var(--text-muted)' }}
+              className="flex items-center gap-2 px-1 mr-8 pb-3 -mb-px text-sm font-semibold transition-colors"
+              style={{
+                color: active ? 'var(--tinta)' : 'var(--tinta-45)',
+                borderBottom: active ? '2px solid var(--tinta)' : '2px solid transparent',
+              }}
+              aria-current={active ? 'page' : undefined}
             >
               <Icon size={15} /> {t.label}
             </button>
@@ -298,14 +328,14 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
         </Card>
       )}
 
-      {/* Tarjetas — mobile: una fila de tabla es ilegible en pantalla chica
-          (8 columnas, min-w-[900px] forzaba scroll horizontal). Estado y
-          "Marcar completo" quedan siempre visibles porque es la acción que
-          el staff hace en terreno; proveedor estimado/de compra queda detrás
-          de "Ver detalle" por ser configuración ocasional. */}
-      <div className="lg:hidden space-y-3">
+      {/* Una tarjeta por socio, en grilla. Antes esto era solo mobile y en
+          desktop había una tabla de 8 columnas con min-w-[900px]: obligaba a
+          scroll horizontal y dejaba el dato importante (cuántas fotos faltan)
+          en una celda de texto de 12px. La tarjeta muestra lo mismo con la
+          foto y el avance a la vista. */}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {filasFiltradas.map(f => (
-          <FilaCardMobile
+          <FilaCard
             key={f.id}
             f={f}
             proveedores={proveedores}
@@ -324,157 +354,6 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
         ))}
       </div>
 
-      {/* Tabla — desktop / tablet */}
-      {filasFiltradas.length > 0 && (
-      <Card className="hidden lg:block overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[900px]">
-            <thead>
-              <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
-                <th className="text-left font-semibold px-4 py-3" style={{ color: 'var(--text-muted)' }}>Beneficiario</th>
-                <th className="text-left font-semibold px-4 py-3" style={{ color: 'var(--text-muted)' }}>Segmento</th>
-                <th className="text-left font-semibold px-4 py-3" style={{ color: 'var(--text-muted)' }}>Proveedor estimado</th>
-                <th className="text-left font-semibold px-4 py-3" style={{ color: 'var(--text-muted)' }}>Proveedor de compra</th>
-                <th className="text-left font-semibold px-4 py-3" style={{ color: 'var(--text-muted)' }}>Fotos</th>
-                <th className="text-right font-semibold px-4 py-3" style={{ color: 'var(--text-muted)' }}>Total cotizado</th>
-                <th className="text-left font-semibold px-4 py-3" style={{ color: 'var(--text-muted)' }}>Estado</th>
-                <th className="text-right font-semibold px-4 py-3" style={{ color: 'var(--text-muted)' }}>Acción</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filasFiltradas.map(f => {
-                const suficientesFotos = f.fotosCount >= FOTOS_REQUERIDAS
-                return (
-                  <tr key={f.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                    <td className="px-4 py-3 font-medium max-w-[220px]" style={{ color: '#1c1c1c' }}>
-                      <button
-                        onClick={() => setDetalle(f)}
-                        className="text-left hover:underline underline-offset-2 truncate block w-full"
-                        style={{ color: '#1c1c1c' }}
-                        title={f.nombre}
-                      >
-                        {f.nombre}
-                      </button>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge tone={f.segmento === 'Invernadero' ? 'verde' : 'cafe'}>{f.segmento}</Badge>
-                    </td>
-                    <td className="px-4 py-3" style={{ color: 'var(--text-muted)' }}>
-                      {f.proveedorNombre ?? <span style={{ color: 'var(--text-muted)' }}>—</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <select
-                        value={f.proveedorCompraId ?? ''}
-                        onChange={e => setProveedorCompra(f.id, e.target.value || null)}
-                        disabled={busyId === f.id}
-                        aria-label={`Proveedor de compra confirmado de ${f.nombre}`}
-                        className="rounded-lg border px-2 py-1.5 text-xs bg-white/70 border-black/12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[var(--verde)]"
-                        style={{ color: f.proveedorCompraId ? 'var(--verde-dark)' : 'var(--text-muted)', fontWeight: f.proveedorCompraId ? 600 : 400 }}
-                      >
-                        <option value="">Sin confirmar</option>
-                        {proveedores.map(p => (
-                          <option key={p.id} value={p.id}>{p.nombre}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1">
-                        {f.fotos.length === 0 ? (
-                          <span className="flex items-center gap-1 text-xs mr-1" style={{ color: 'var(--text-muted)' }}>
-                            <ImageOff size={13} /> sin fotos
-                          </span>
-                        ) : (
-                          <>
-                            {f.fotos.slice(0, 4).map((foto, i) => (
-                              <button
-                                key={foto.id}
-                                onClick={() => setLightbox({ nombre: f.nombre, fotos: f.fotos, index: i })}
-                                className="w-8 h-8 rounded-md overflow-hidden shrink-0 transition-transform hover:scale-105 active:scale-95"
-                                style={{ border: '1px solid rgba(0,0,0,0.08)' }}
-                                aria-label={`Ver foto ${i + 1} de ${f.nombre}`}
-                              >
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={foto.url} alt="" className="w-full h-full object-cover" />
-                              </button>
-                            ))}
-                            <span className="text-xs ml-1 mr-1" style={{ color: suficientesFotos ? 'var(--verde-dark)' : 'var(--cafe)' }}>
-                              {f.fotosCount}/{FOTOS_REQUERIDAS}
-                            </span>
-                          </>
-                        )}
-                        {f.fotosCount < MAX_FOTOS_POR_SOCIO && (
-                          <label
-                            className="w-8 h-8 rounded-md border-2 border-dashed flex items-center justify-center shrink-0 cursor-pointer transition-colors hover:border-[var(--verde)] hover:text-[var(--verde-dark)] focus-within:ring-2 focus-within:ring-[var(--verde)] focus-within:ring-offset-1"
-                            style={{ borderColor: 'rgba(0,0,0,0.15)', color: 'var(--text-muted)' }}
-                            aria-label={`Subir foto por ${f.nombre}`}
-                          >
-                            <Upload size={13} />
-                            <input
-                              ref={el => { fileInputRefs.current[f.id] = el }}
-                              type="file"
-                              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-                              className="hidden"
-                              disabled={subiendoId === f.id}
-                              onChange={e => {
-                                const file = e.target.files?.[0]
-                                if (file) subirFotoStaff(f.id, file)
-                              }}
-                            />
-                          </label>
-                        )}
-                      </div>
-                      {fotoError?.id === f.id && (
-                        <p className="text-xs mt-1" style={{ color: 'var(--cafe-dark)' }}>{fotoError.mensaje}</p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right font-medium"><TotalCotizado f={f} /></td>
-                    <td className="px-4 py-3">
-                      <Badge tone={f.compraCompleta ? 'verde' : 'neutral'}>
-                        {f.compraCompleta && <CheckCircle2 size={12} />}
-                        {f.compraCompleta ? 'Completo' : 'Pendiente'}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {f.compraCompleta ? (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => revertir(f.id)}
-                          disabled={busyId === f.id}
-                        >
-                          <RotateCcw size={12} /> Revertir
-                        </Button>
-                      ) : (
-                        <div className="inline-block group relative">
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            onClick={() => marcarCompleto(f.id)}
-                            disabled={!suficientesFotos || busyId === f.id}
-                          >
-                            {busyId === f.id ? '...' : 'Marcar completo'}
-                          </Button>
-                          {!suficientesFotos && (
-                            <span
-                              role="tooltip"
-                              className="pointer-events-none absolute right-0 top-full mt-1 whitespace-nowrap rounded-lg px-2 py-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-10"
-                              style={{ background: '#1c1c1c', color: '#fff' }}
-                            >
-                              Faltan fotos: {f.fotosCount} de {FOTOS_REQUERIDAS}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-      )}
-
       {lightbox && (
         <Lightbox
           nombre={lightbox.nombre}
@@ -482,11 +361,26 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
           index={lightbox.index}
           onClose={() => setLightbox(null)}
           onNavigate={i => setLightbox(prev => prev ? { ...prev, index: i } : prev)}
+          onEliminar={foto => {
+            const fila = filas.find(x => x.fotos.some(y => y.id === foto.id))
+            if (fila) setFotoAEliminar({ foto, beneficiarioId: fila.id, nombre: fila.nombre })
+          }}
         />
       )}
 
       {detalle && (
         <DetalleCotizacionModal f={detalle} onClose={() => setDetalle(null)} />
+      )}
+
+      {fotoAEliminar && (
+        <ConfirmDialog
+          title="Eliminar esta foto"
+          description={`Se borra el comprobante de ${fotoAEliminar.nombre}. Si con eso baja de ${FOTOS_REQUERIDAS} fotos, su rendición vuelve a quedar pendiente.`}
+          confirmLabel="Eliminar foto"
+          busy={borrandoFoto}
+          onConfirm={eliminarFoto}
+          onCancel={() => setFotoAEliminar(null)}
+        />
       )}
       </>}
     </div>
@@ -497,20 +391,20 @@ function DetalleCotizacionModal({ f, onClose }: { f: FilaRendicion; onClose: () 
   const proveedorReferencia = f.proveedorCompraNombre ?? f.proveedorNombre
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 motion-safe:animate-[fadeIn_150ms_ease-out]"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(23,24,21,0.55)] p-4 motion-safe:animate-[fadeIn_150ms_ease-out]"
       onClick={onClose}
     >
       <div
-        className="relative max-w-lg w-full rounded-2xl overflow-hidden motion-safe:animate-[scaleIn_180ms_ease-out]"
-        style={{ background: '#f7f3ed', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
+        className="relative max-w-lg w-full rounded-[6px] overflow-hidden motion-safe:animate-[scaleIn_180ms_ease-out]"
+        style={{ background: 'var(--papel)', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between px-5 pt-4 pb-3 shrink-0" style={{ borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
+        <div className="flex items-start justify-between px-5 pt-4 pb-3 shrink-0" style={{ borderBottom: '1px solid var(--linea)' }}>
           <div>
-            <p className="font-bold text-base" style={{ color: '#1c1c1c' }}>{f.nombre}</p>
+            <p className="font-bold text-base" style={{ color: 'var(--tinta)' }}>{f.nombre}</p>
             <Badge tone={f.segmento === 'Invernadero' ? 'verde' : 'cafe'} className="mt-1 !text-xs">{f.segmento}</Badge>
           </div>
-          <button onClick={onClose} className="rounded-full p-2" style={{ background: 'rgba(0,0,0,0.06)', color: 'rgba(0,0,0,0.5)' }} aria-label="Cerrar">
+          <button onClick={onClose} className="rounded-full p-2" style={{ background: 'var(--linea)', color: 'var(--tinta-45)' }} aria-label="Cerrar">
             <X size={16} />
           </button>
         </div>
@@ -530,9 +424,9 @@ function DetalleCotizacionModal({ f, onClose }: { f: FilaRendicion; onClose: () 
           ) : (
             <ul className="space-y-2">
               {f.items.map(item => (
-                <li key={item.id} className="flex items-center justify-between gap-3 text-sm rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.6)' }}>
+                <li key={item.id} className="flex items-center justify-between gap-3 text-sm rounded-[6px] p-3" style={{ background: 'var(--papel)' }}>
                   <div className="min-w-0">
-                    <p className="font-medium truncate" style={{ color: '#1c1c1c' }}>
+                    <p className="font-medium truncate" style={{ color: 'var(--tinta)' }}>
                       {item.insumoNombre} × {item.cantidad}
                     </p>
                     <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -554,7 +448,7 @@ function DetalleCotizacionModal({ f, onClose }: { f: FilaRendicion; onClose: () 
             </p>
           )}
 
-          <div className="flex justify-between text-base pt-3" style={{ borderTop: '1px solid rgba(0,0,0,0.08)' }}>
+          <div className="flex justify-between text-base pt-3" style={{ borderTop: '1px solid var(--linea)' }}>
             <span className="font-semibold" style={{ color: 'var(--text-muted)' }}>
               {f.totalEsCompleto ? 'Total cotizado' : 'Total parcial'}
             </span>
@@ -566,12 +460,13 @@ function DetalleCotizacionModal({ f, onClose }: { f: FilaRendicion; onClose: () 
   )
 }
 
-function Lightbox({ nombre, fotos, index, onClose, onNavigate }: {
+function Lightbox({ nombre, fotos, index, onClose, onNavigate, onEliminar }: {
   nombre: string
   fotos: Foto[]
   index: number
   onClose: () => void
   onNavigate: (i: number) => void
+  onEliminar: (foto: Foto) => void
 }) {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -595,12 +490,24 @@ function Lightbox({ nombre, fotos, index, onClose, onNavigate }: {
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-2 px-1">
-          <p className="text-sm font-medium text-white">{nombre} · foto {index + 1} de {fotos.length}</p>
-          <button onClick={onClose} className="text-white/80 hover:text-white p-1" aria-label="Cerrar">
-            <X size={20} />
-          </button>
+          <p className="text-sm font-medium text-[var(--papel)]">{nombre} · foto {index + 1} de {fotos.length}</p>
+          <div className="flex items-center gap-1">
+            {/* Borrar desde acá y no desde la miniatura: es donde la foto se
+                ve completa, así que se decide mirándola, y sirve igual en
+                mobile y en desktop sin ensuciar la grilla. */}
+            <button
+              onClick={() => onEliminar(foto)}
+              className="flex items-center gap-1.5 text-[var(--papel)]/80 hover:text-[var(--papel)] px-3 py-2 rounded-[4px] text-sm font-semibold"
+              style={{ border: '1px solid rgba(255,255,255,0.3)' }}
+            >
+              <Trash2 size={15} /> Eliminar
+            </button>
+            <button onClick={onClose} className="text-[var(--papel)]/80 hover:text-[var(--papel)] p-2" aria-label="Cerrar">
+              <X size={20} />
+            </button>
+          </div>
         </div>
-        <div className="rounded-2xl overflow-hidden bg-black/20" style={{ maxHeight: '75vh' }}>
+        <div className="rounded-[6px] overflow-hidden bg-black/20" style={{ maxHeight: '75vh' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={foto.url} alt={`Comprobante de ${nombre}`} className="w-full h-full object-contain max-h-[75vh]" />
         </div>
@@ -611,7 +518,7 @@ function Lightbox({ nombre, fotos, index, onClose, onNavigate }: {
                 key={i}
                 onClick={() => onNavigate(i)}
                 className="w-1.5 h-1.5 rounded-full transition-all"
-                style={{ background: i === index ? '#fff' : 'rgba(255,255,255,0.4)' }}
+                style={{ background: i === index ? 'var(--papel)' : 'var(--papel-hueco)' }}
                 aria-label={`Ver foto ${i + 1}`}
               />
             ))}
@@ -622,7 +529,33 @@ function Lightbox({ nombre, fotos, index, onClose, onNavigate }: {
   )
 }
 
-function FilaCardMobile({
+/** Avance de comprobantes: una casilla por foto requerida, llenas las que
+ *  ya estan. Se lee de un vistazo y no obliga a interpretar una fraccion. */
+function ProgresoFotos({ count }: { count: number }) {
+  const listo = count >= FOTOS_REQUERIDAS
+  return (
+    <span
+      className="inline-flex items-center gap-1"
+      role="img"
+      aria-label={`${count} de ${FOTOS_REQUERIDAS} fotos`}
+    >
+      {Array.from({ length: FOTOS_REQUERIDAS }).map((_, i) => (
+        <span
+          key={i}
+          className="block h-1.5 w-5 rounded-[1px]"
+          style={{
+            background: i < count ? (listo ? 'var(--acento)' : 'var(--tinta)') : 'var(--linea)',
+          }}
+        />
+      ))}
+      {count > FOTOS_REQUERIDAS && (
+        <span className="text-xs ml-0.5" style={{ color: 'var(--tinta-45)' }}>+{count - FOTOS_REQUERIDAS}</span>
+      )}
+    </span>
+  )
+}
+
+function FilaCard({
   f, proveedores, busy, subiendo, fotoErrorMsg, expanded,
   onToggleExpanded, onSetProveedor, onMarcarCompleto, onRevertir, onUploadFoto, onOpenLightbox, onVerCotizacion,
 }: {
@@ -641,13 +574,14 @@ function FilaCardMobile({
   onVerCotizacion: () => void
 }) {
   const suficientesFotos = f.fotosCount >= FOTOS_REQUERIDAS
+  const faltan = Math.max(0, FOTOS_REQUERIDAS - f.fotosCount)
 
   return (
     <Card className="p-4 space-y-3">
       {/* Nombre + segmento + estado -- lo primero que el staff necesita leer */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-base font-bold truncate" style={{ color: '#1c1c1c' }}>{f.nombre}</p>
+          <p className="text-base font-bold truncate" style={{ color: 'var(--tinta)' }}>{f.nombre}</p>
           <Badge tone={f.segmento === 'Invernadero' ? 'verde' : 'cafe'} className="mt-1 !text-xs">
             {f.segmento}
           </Badge>
@@ -662,7 +596,7 @@ function FilaCardMobile({
       <button
         onClick={onVerCotizacion}
         className="w-full flex items-center justify-between text-base"
-        style={{ borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: '0.75rem' }}
+        style={{ borderTop: '1px solid var(--linea)', paddingTop: '0.75rem' }}
       >
         <span className="underline underline-offset-2" style={{ color: 'var(--text-muted)' }}>
           {f.totalEsCompleto ? 'Total cotizado' : 'Total parcial'} · ver detalle
@@ -675,8 +609,9 @@ function FilaCardMobile({
       <div>
         <div className="flex items-center gap-2 flex-wrap">
           {f.fotos.length === 0 ? (
-            <span className="flex items-center gap-1.5 text-sm" style={{ color: 'var(--text-muted)' }}>
-              <ImageOff size={16} /> sin fotos
+            <span className="flex items-center gap-2 text-sm" style={{ color: 'var(--tinta-45)' }}>
+              <ImageOff size={16} /> Sin fotos
+              <ProgresoFotos count={0} />
             </span>
           ) : (
             <>
@@ -684,23 +619,21 @@ function FilaCardMobile({
                 <button
                   key={foto.id}
                   onClick={() => onOpenLightbox(i)}
-                  className="w-11 h-11 rounded-lg overflow-hidden shrink-0 transition-transform active:scale-95"
-                  style={{ border: '1px solid rgba(0,0,0,0.1)' }}
+                  className="w-11 h-11 rounded-[4px] overflow-hidden shrink-0 transition-transform active:scale-95"
+                  style={{ border: '1px solid var(--linea)' }}
                   aria-label={`Ver foto ${i + 1} de ${f.nombre}`}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={foto.url} alt="" className="w-full h-full object-cover" />
                 </button>
               ))}
-              <span className="text-sm font-semibold" style={{ color: suficientesFotos ? 'var(--verde-dark)' : 'var(--cafe-dark)' }}>
-                {f.fotosCount}/{FOTOS_REQUERIDAS}
-              </span>
+              <ProgresoFotos count={f.fotosCount} />
             </>
           )}
-          {f.fotosCount < MAX_FOTOS_POR_SOCIO && (
+          {suficientesFotos && f.fotosCount < MAX_FOTOS_POR_SOCIO && (
             <label
-              className="w-11 h-11 rounded-lg border-2 border-dashed flex items-center justify-center shrink-0 cursor-pointer transition-colors hover:border-[var(--verde)] hover:text-[var(--verde-dark)] focus-within:ring-2 focus-within:ring-[var(--verde)] focus-within:ring-offset-1"
-              style={{ borderColor: 'rgba(0,0,0,0.2)', color: 'var(--text-muted)' }}
+              className="w-11 h-11 rounded-[4px] border-2 border-dashed flex items-center justify-center shrink-0 cursor-pointer transition-colors hover:border-[var(--verde)] hover:text-[var(--verde-dark)] focus-within:ring-2 focus-within:ring-[var(--verde)] focus-within:ring-offset-1"
+              style={{ borderColor: 'var(--linea-fuerte)', color: 'var(--text-muted)' }}
               aria-label={`Subir foto por ${f.nombre}`}
             >
               <Upload size={16} />
@@ -726,7 +659,11 @@ function FilaCardMobile({
         )}
       </div>
 
-      {/* Acción principal -- botón de ancho completo, fácil de tocar */}
+      {/* Accion principal. Antes "Marcar completo" ocupaba el ancho completo
+          aunque estuviera deshabilitado por falta de fotos, y subir una foto
+          -- lo que en realidad hay que hacer -- era un cuadrado de 32px. Sin
+          fotos suficientes, la accion grande es subir; recien despues
+          aparece la de marcar. */}
       {f.compraCompleta ? (
         <Button
           variant="secondary"
@@ -736,21 +673,38 @@ function FilaCardMobile({
         >
           <RotateCcw size={16} /> Revertir
         </Button>
+      ) : suficientesFotos ? (
+        <Button
+          variant="primary"
+          className="w-full !text-base !py-3"
+          onClick={onMarcarCompleto}
+          disabled={busy}
+        >
+          {busy ? 'Guardando…' : 'Marcar completo'}
+        </Button>
       ) : (
         <div className="space-y-1.5">
-          <Button
-            variant="primary"
-            className="w-full !text-base !py-3"
-            onClick={onMarcarCompleto}
-            disabled={!suficientesFotos || busy}
+          <label
+            className="inline-flex w-full items-center justify-center gap-2 rounded-[4px] font-semibold text-base py-3 min-h-[48px] cursor-pointer transition-all active:scale-[0.97]"
+            style={{ background: 'var(--tinta)', color: 'var(--papel)', opacity: subiendo ? 0.5 : 1 }}
           >
-            {busy ? 'Guardando…' : 'Marcar completo'}
-          </Button>
-          {!suficientesFotos && (
-            <p className="text-sm text-center" style={{ color: 'var(--cafe-dark)' }}>
-              Faltan fotos: {f.fotosCount} de {FOTOS_REQUERIDAS}
-            </p>
-          )}
+            <Upload size={17} />
+            {subiendo ? 'Subiendo…' : 'Agregar foto'}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+              className="hidden"
+              disabled={subiendo}
+              onChange={e => {
+                const file = e.target.files?.[0]
+                e.target.value = ''
+                if (file) onUploadFoto(file)
+              }}
+            />
+          </label>
+          <p className="text-sm text-center" style={{ color: 'var(--tinta-70)' }}>
+            {faltan === 1 ? 'Falta 1 foto' : `Faltan ${faltan} fotos`} para poder marcar completo
+          </p>
         </div>
       )}
 
@@ -766,10 +720,10 @@ function FilaCardMobile({
       </button>
 
       {expanded && (
-        <div className="space-y-3 pt-1" style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+        <div className="space-y-3 pt-1" style={{ borderTop: '1px solid var(--linea)' }}>
           <div>
             <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Proveedor estimado</p>
-            <p className="text-base font-medium" style={{ color: '#1c1c1c' }}>
+            <p className="text-base font-medium" style={{ color: 'var(--tinta)' }}>
               {f.proveedorNombre ?? '—'}
             </p>
           </div>
@@ -782,7 +736,7 @@ function FilaCardMobile({
               onChange={e => onSetProveedor(e.target.value || null)}
               disabled={busy}
               aria-label={`Proveedor de compra confirmado de ${f.nombre}`}
-              className="w-full rounded-lg border px-3 py-2.5 text-base bg-white/70 border-black/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[var(--verde)]"
+              className="w-full rounded-[4px] border px-3 py-2.5 text-base bg-[var(--papel-hueco)] border-[var(--linea)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[var(--verde)]"
               style={{ color: f.proveedorCompraId ? 'var(--verde-dark)' : 'var(--text-muted)', fontWeight: f.proveedorCompraId ? 600 : 400 }}
             >
               <option value="">Sin confirmar</option>

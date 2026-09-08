@@ -1,10 +1,12 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { ScanLine } from 'lucide-react'
-import type { CatalogoInsumo, Proveedor } from '@/lib/types'
+import { ScanLine, Pencil, EyeOff, RotateCcw } from 'lucide-react'
+import type { CatalogoInsumo, Proveedor, CompraSegmento } from '@/lib/types'
 import { formatCLP } from '@/lib/business-logic'
 import type { DatosStaff } from '@/lib/staff-data'
+import { Button, Alert, ConfirmDialog } from '@/components/design-system'
+import { PageHeader } from '@/components/Editorial'
 
 type PrecioMap = Map<string, number | null>
 type VisionItem = { nombre_insumo: string; precio_extraido: number }
@@ -24,6 +26,18 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
   const [nuevoNombre, setNuevoNombre] = useState('')
   const [addingProv, setAddingProv] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  // Desactivar es el "eliminar" reversible de un proveedor (ver PATCH de
+  // /api/proveedores): no borra precios ni historial, lo saca de la matriz
+  // y de los selectores. El error va a la vista porque el server puede
+  // negarse (proveedor de una compra ya confirmada).
+  const [provError, setProvError] = useState<string | null>(null)
+  const [aDesactivar, setADesactivar] = useState<Proveedor | null>(null)
+  const [gestionAbierta, setGestionAbierta] = useState(false)
+  // Segmentos con compra confirmada: sus precios quedaron congelados en el
+  // momento de confirmar (compras_segmento_precio). Editar acá sigue siendo
+  // legitimo -- hace falta para cotizar el otro proyecto, y "Polines" lo
+  // comparten los dos -- pero ya no mueve lo comprado, y eso hay que decirlo.
+  const [compras, setCompras] = useState<CompraSegmento[]>([])
   const [editNombre, setEditNombre] = useState('')
   // Mobile: la matriz insumo×proveedor no cabe en pantalla chica (celdas de
   // 128px por proveedor). En vez de scroll horizontal se edita un proveedor
@@ -42,7 +56,8 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
   useEffect(() => {
     async function load() {
       const datos: DatosStaff | null = initial ?? await fetch('/api/data').then(r => r.ok ? r.json() : null)
-      const { catalogoInsumos: ins, proveedores: provs, preciosProveedor: precs } = datos ?? {}
+      const { catalogoInsumos: ins, proveedores: provs, preciosProveedor: precs, compras: comps } = datos ?? {}
+      if (comps) setCompras(comps)
       if (ins) setInsumos(ins as CatalogoInsumo[])
       if (provs) setProveedores(provs as Proveedor[])
       if (precs) {
@@ -50,7 +65,8 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
         for (const p of precs) map.set(`${p.proveedor_id}_${p.insumo_id}`, p.precio_unitario)
         setPrecios(map)
       }
-      if (provs?.length) setMobileProvId(provs[0].id)
+      const primerActivo = (provs as Proveedor[] | undefined)?.find(pr => pr.es_activo)
+      if (primerActivo) setMobileProvId(primerActivo.id)
       setLoading(false)
     }
     load()
@@ -131,6 +147,29 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
     setEditingId(null)
   }
 
+  async function cambiarActivo(prov: Proveedor, es_activo: boolean) {
+    setProvError(null)
+    const res = await fetch('/api/proveedores', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: prov.id, es_activo }),
+    }).catch(() => null)
+    if (!res?.ok) {
+      const data = await res?.json().catch(() => null)
+      setProvError(data?.error ?? 'No se pudo actualizar el proveedor.')
+      setADesactivar(null)
+      return
+    }
+    setProveedores(prev => prev.map(x => x.id === prov.id ? { ...x, es_activo } : x))
+    // Si el proveedor apagado era el que se estaba editando en mobile, se
+    // salta al primero que siga activo para no dejar la pantalla en blanco.
+    if (!es_activo && mobileProvId === prov.id) {
+      const siguiente = proveedores.find(x => x.es_activo && x.id !== prov.id)
+      setMobileProvId(siguiente?.id ?? '')
+    }
+    setADesactivar(null)
+  }
+
   function handleVisionFile(file: File) {
     setVisionFile(file)
     setVisionData(null)
@@ -200,6 +239,10 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
     setVisionData(null)
   }
 
+  // La lista completa incluye desactivados (ver lib/staff-data.ts); todo lo
+  // operativo usa solo los activos.
+  const activos = proveedores.filter(p => p.es_activo)
+
   function hayPreciosIncompletos(provId: string): boolean {
     return insumos.some(i => {
       const p = precios.get(`${provId}_${i.id}`)
@@ -212,98 +255,151 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
   if (loading) return (
     <div className="space-y-3">
       {Array.from({ length: 5 }).map((_, i) => (
-        <div key={i} className="h-10 rounded-xl animate-pulse" style={{ background: 'rgba(255,255,255,0.4)' }} />
+        <div key={i} className="h-10 rounded-[6px] animate-pulse" style={{ background: 'var(--papel-hueco)' }} />
       ))}
     </div>
   )
 
   return (
     <div className="space-y-4">
-      {/* Cabecera con gestión de proveedores */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-lg font-bold" style={{ color: 'var(--verde-dark)' }}>maestro de precios</h1>
-          <p className="text-xs mt-0.5" style={{ color: 'rgba(0,0,0,0.4)' }}>
-            Edición inline. Celda vacía = no cotizado. ⚠ indica precios incompletos.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowVision(true)}
-            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold"
-            style={{ background: 'rgba(127,79,36,0.12)', color: 'var(--cafe)', border: '1px solid rgba(127,79,36,0.25)' }}
-          >
-            <ScanLine size={13} /> Escanear Cotización (IA)
-          </button>
-          <button
-            onClick={() => setAddingProv(v => !v)}
-            className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white"
-            style={{ background: 'var(--verde)' }}
-          >
-            + nuevo proveedor
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="02 / Maestro de precios"
+        titulo={<>Lo que cuesta<br /><em>cada material.</em></>}
+        bajada="Un precio por proveedor y por insumo. La celda vacía significa que ese proveedor todavía no lo cotizó."
+        acciones={
+          <>
+            <Button size="sm" variant="secondary" onClick={() => setShowVision(true)}>
+              <ScanLine size={14} /> Escanear cotización
+            </Button>
+            <Button size="sm" onClick={() => setGestionAbierta(v => !v)}>
+              Proveedores ({activos.length})
+            </Button>
+          </>
+        }
+      />
 
-      {visionResultado && (
-        <div className="rounded-xl px-3 py-2 text-xs flex items-start justify-between gap-3"
-          style={{ background: 'rgba(58,125,68,0.10)', color: 'var(--verde-dark)' }}>
-          <span>{visionResultado}</span>
-          <button onClick={() => setVisionResultado(null)} aria-label="Cerrar aviso">✕</button>
-        </div>
+      {provError && <Alert tone="error" className="mb-4">{provError}</Alert>}
+
+      {compras.length > 0 && (
+        <Alert tone="warning" className="mb-4">
+          {compras.map(c => c.segmento).join(' y ')} ya {compras.length > 1 ? 'tienen' : 'tiene'} la compra confirmada:
+          {' '}cambiar precios acá no altera lo ya comprado, porque quedó guardado el precio que se pagó.
+        </Alert>
       )}
 
-      {/* Formulario nuevo proveedor */}
-      {addingProv && (
-        <div className="rounded-xl p-3 flex gap-2 glass-strong">
-          <input
-            autoFocus
-            type="text"
-            placeholder="Nombre del proveedor"
-            value={nuevoNombre}
-            onChange={e => setNuevoNombre(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && agregarProveedor()}
-            className="flex-1 rounded-lg px-3 py-1.5 text-sm focus:outline-none"
-            style={{ border: '1px solid rgba(58,125,68,0.3)', background: 'rgba(255,255,255,0.8)' }}
-          />
-          <button
-            onClick={agregarProveedor}
-            disabled={!nuevoNombre.trim()}
-            className="px-4 py-1.5 rounded-lg text-sm text-white font-semibold disabled:opacity-40"
-            style={{ background: 'var(--verde)' }}
-          >
-            guardar
-          </button>
-          <button
-            onClick={() => { setAddingProv(false); setNuevoNombre('') }}
-            className="px-3 py-1.5 rounded-lg text-sm"
-            style={{ color: 'rgba(0,0,0,0.45)' }}
-          >
-            cancelar
-          </button>
-        </div>
+      {visionResultado && (
+        <Alert tone="info" className="mb-4 flex items-start justify-between gap-3">
+          <span>{visionResultado}</span>
+          <button onClick={() => setVisionResultado(null)} aria-label="Cerrar aviso">✕</button>
+        </Alert>
+      )}
+
+      {/* Panel de proveedores: renombrar y desactivar/reactivar. Antes el
+          nombre solo se podía editar haciendo clic en el encabezado de la
+          matriz -- invisible como afordancia, e inexistente en mobile porque
+          ahí la matriz no se muestra. */}
+      {gestionAbierta && (
+        <section className="mb-8 rounded-[6px] glass-strong">
+          <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid var(--linea)' }}>
+            <p className="eyebrow">Proveedores</p>
+            <Button size="sm" variant="ghost" onClick={() => setAddingProv(v => !v)}>
+              {addingProv ? 'Cancelar' : '+ Agregar'}
+            </Button>
+          </div>
+
+          {addingProv && (
+            <div className="px-5 py-4 flex gap-2" style={{ borderBottom: '1px solid var(--linea)' }}>
+              <input
+                autoFocus
+                type="text"
+                placeholder="Nombre del proveedor"
+                value={nuevoNombre}
+                onChange={e => setNuevoNombre(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && agregarProveedor()}
+                className="flex-1 rounded-[4px] px-3 py-2 text-sm min-h-[44px]"
+                style={{ border: '1px solid var(--linea)', background: 'var(--papel-hueco)' }}
+              />
+              <Button onClick={agregarProveedor} disabled={!nuevoNombre.trim()}>Guardar</Button>
+            </div>
+          )}
+
+          <ul>
+            {proveedores.map(prov => (
+              <li
+                key={prov.id}
+                className="px-5 py-3 flex items-center justify-between gap-3 flex-wrap"
+                style={{ borderBottom: '1px solid var(--linea)', opacity: prov.es_activo ? 1 : 0.55 }}
+              >
+                {editingId === prov.id ? (
+                  <input
+                    autoFocus
+                    type="text"
+                    value={editNombre}
+                    onChange={e => setEditNombre(e.target.value)}
+                    onBlur={() => guardarNombreProveedor(prov.id)}
+                    onKeyDown={e => e.key === 'Enter' && guardarNombreProveedor(prov.id)}
+                    className="flex-1 min-w-0 rounded-[4px] px-3 py-2 text-sm min-h-[44px]"
+                    style={{ border: '1px solid var(--tinta)', background: 'var(--papel-hueco)' }}
+                  />
+                ) : (
+                  <span className="text-sm font-semibold flex items-center gap-2 min-w-0">
+                    <span className="truncate">{prov.nombre}</span>
+                    {!prov.es_activo && (
+                      <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-[3px]"
+                        style={{ border: '1px solid var(--linea-fuerte)', color: 'var(--tinta-70)' }}>
+                        Desactivado
+                      </span>
+                    )}
+                    {prov.es_activo && hayPreciosIncompletos(prov.id) && (
+                      <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: '#8a6d1f' }}>
+                        Precios incompletos
+                      </span>
+                    )}
+                  </span>
+                )}
+                <span className="flex items-center gap-1 shrink-0">
+                  <Button size="sm" variant="ghost" onClick={() => { setEditingId(prov.id); setEditNombre(prov.nombre) }}>
+                    <Pencil size={14} /> Renombrar
+                  </Button>
+                  {prov.es_activo ? (
+                    <Button size="sm" variant="danger" onClick={() => setADesactivar(prov)}>
+                      <EyeOff size={14} /> Desactivar
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="secondary" onClick={() => cambiarActivo(prov, true)}>
+                      <RotateCcw size={14} /> Reactivar
+                    </Button>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="px-5 py-3 text-xs" style={{ color: 'var(--tinta-45)' }}>
+            Desactivar no borra nada: el proveedor y sus precios quedan guardados, pero deja de aparecer en el comparador y en las listas.
+          </p>
+        </section>
       )}
 
       {/* Mobile: un proveedor a la vez, tarjetas grandes por insumo (ver
           comentario en mobileProvId más arriba). */}
       <div className="sm:hidden space-y-4">
-        {proveedores.length === 0 ? (
-          <p className="text-xs text-center py-6" style={{ color: 'rgba(0,0,0,0.4)' }}>
+        {activos.length === 0 ? (
+          <p className="text-xs text-center py-6" style={{ color: 'var(--tinta-45)' }}>
             Agrega un proveedor para empezar a cargar precios.
           </p>
         ) : (
           <>
-            <div className="rounded-xl p-3 glass-strong flex items-center gap-3">
+            <div className="rounded-[6px] p-3 glass-strong flex items-center gap-3">
               <label className="text-xs font-semibold shrink-0" style={{ color: 'var(--cafe)' }}>
                 Proveedor
               </label>
               <select
                 value={mobileProvId}
                 onChange={e => setMobileProvId(e.target.value)}
-                className="flex-1 rounded-lg px-3 py-2 text-sm focus:outline-none"
-                style={{ border: '1px solid rgba(58,125,68,0.3)', background: 'rgba(255,255,255,0.85)' }}
+                className="flex-1 rounded-[4px] px-3 py-2 text-sm focus:outline-none"
+                style={{ border: '1px solid var(--linea-fuerte)', background: 'var(--papel)' }}
               >
-                {proveedores.map(p => (
+                {activos.map(p => (
                   <option key={p.id} value={p.id}>
                     {p.nombre}{hayPreciosIncompletos(p.id) ? ' ⚠ incompleto' : ''}
                   </option>
@@ -318,7 +414,7 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
                 <div key={seg} className="space-y-2">
                   <p
                     className="text-xs font-semibold uppercase tracking-wide px-1"
-                    style={{ color: seg === 'Invernadero' ? 'var(--verde-dark)' : seg === 'Cierre Perimetral' ? 'var(--cafe-dark)' : 'rgba(0,0,0,0.5)' }}
+                    style={{ color: seg === 'Invernadero' ? 'var(--verde-dark)' : seg === 'Cierre Perimetral' ? 'var(--cafe-dark)' : 'var(--tinta-45)' }}
                   >
                     {seg}
                   </p>
@@ -327,10 +423,10 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
                     const precio = precios.get(key)
                     const isSaving = saving.has(key)
                     return (
-                      <div key={insumo.id} className="rounded-xl p-3 glass flex items-center justify-between gap-3">
+                      <div key={insumo.id} className="rounded-[6px] p-3 glass flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="text-sm font-medium truncate" style={{ color: '#1c1c1c' }}>{insumo.nombre}</p>
-                          <p className="text-xs" style={{ color: 'rgba(0,0,0,0.4)' }}>{insumo.formato_venta}</p>
+                          <p className="text-sm font-medium truncate" style={{ color: 'var(--tinta)' }}>{insumo.nombre}</p>
+                          <p className="text-xs" style={{ color: 'var(--tinta-45)' }}>{insumo.formato_venta}</p>
                         </div>
                         <div className="w-28 shrink-0">
                           <PrecioCell
@@ -355,23 +451,23 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
           horizontal (varios proveedores a la vez). En mobile la reemplaza
           la vista de tarjetas de arriba: la matriz no cabe y los inputs sin
           valor no se distinguían de texto plano. */}
-      <div className="hidden sm:block rounded-2xl overflow-x-auto glass" style={{ maxHeight: '75vh' }}>
+      <div className="hidden sm:block rounded-[6px] overflow-x-auto glass" style={{ maxHeight: '75vh' }}>
         <table className="w-full text-sm border-collapse">
           <thead style={{ position: 'sticky', top: 0, zIndex: 20 }}>
-            <tr style={{ background: 'rgba(45,95,53,0.92)', backdropFilter: 'blur(8px)' }}>
+            <tr style={{ background: 'var(--tinta)', backdropFilter: 'none' }}>
               <th
-                className="text-left px-4 py-3 text-xs font-semibold text-white whitespace-nowrap"
+                className="text-left px-4 py-3 text-xs font-semibold text-[var(--papel)] whitespace-nowrap"
                 style={{ position: 'sticky', left: 0, zIndex: 30, background: 'var(--verde-dark)', minWidth: '220px' }}
               >
                 insumo
               </th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-white whitespace-nowrap" style={{ minWidth: '100px' }}>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-[var(--papel)] whitespace-nowrap" style={{ minWidth: '100px' }}>
                 formato
               </th>
-              {proveedores.map(p => {
+              {activos.map(p => {
                 const incompleto = hayPreciosIncompletos(p.id)
                 return (
-                  <th key={p.id} className="px-4 py-3 text-xs font-semibold text-white whitespace-nowrap" style={{ minWidth: '160px' }}>
+                  <th key={p.id} className="px-4 py-3 text-xs font-semibold text-[var(--papel)] whitespace-nowrap" style={{ minWidth: '160px' }}>
                     <div className="flex items-center justify-end gap-1.5">
                       {incompleto && (
                         <span title="Precios incompletos — no apto para simulación" style={{ color: '#fca5a5', fontSize: '13px' }}>⚠</span>
@@ -385,7 +481,7 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
                           onBlur={() => guardarNombreProveedor(p.id)}
                           onKeyDown={e => e.key === 'Enter' && guardarNombreProveedor(p.id)}
                           className="rounded px-2 py-0.5 text-xs text-gray-900 w-32 focus:outline-none"
-                          style={{ background: 'rgba(255,255,255,0.9)' }}
+                          style={{ background: 'var(--papel)' }}
                         />
                       ) : (
                         <button
@@ -409,12 +505,9 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
               return [
                 <tr key={`seg_${seg}`}>
                   <td
-                    colSpan={2 + proveedores.length}
-                    className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wide"
-                    style={{
-                      background: seg === 'Invernadero' ? 'var(--verde-muted)' : seg === 'Cierre Perimetral' ? 'var(--cafe-muted)' : 'rgba(0,0,0,0.04)',
-                      color: seg === 'Invernadero' ? 'var(--verde-dark)' : seg === 'Cierre Perimetral' ? 'var(--cafe-dark)' : 'rgba(0,0,0,0.5)',
-                    }}
+                    colSpan={2 + activos.length}
+                    className="px-4 py-2 eyebrow"
+                    style={{ background: 'var(--papel-hueco)', color: 'var(--tinta-70)' }}
                   >
                     {seg}
                   </td>
@@ -423,7 +516,7 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
                   <PrecioRow
                     key={insumo.id}
                     insumo={insumo}
-                    proveedores={proveedores}
+                    proveedores={activos}
                     precios={precios}
                     saving={saving}
                     errores={errores}
@@ -436,40 +529,40 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
         </table>
       </div>
 
-      <p className="text-xs" style={{ color: 'rgba(0,0,0,0.35)' }}>
-        {insumos.length} insumos · {proveedores.length} proveedores · Los precios se guardan al salir de cada celda. Haz clic en el nombre del proveedor para editarlo.
+      <p className="text-xs" style={{ color: 'var(--tinta-45)' }}>
+        {insumos.length} insumos · {activos.length} proveedores activos · Los precios se guardan al salir de cada celda.
       </p>
 
       {/* Modal IA Vision */}
       {showVision && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}>
-          <div className="rounded-2xl p-6 w-full max-w-md space-y-4 glass-strong" style={{ background: 'rgba(255,255,255,0.96)' }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'var(--tinta-70)', backdropFilter: 'none' }}>
+          <div className="rounded-[6px] p-6 w-full max-w-md space-y-4 glass-strong" style={{ background: 'var(--papel)' }}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <ScanLine size={18} style={{ color: 'var(--cafe)' }} />
-                <h2 className="font-bold text-sm" style={{ color: '#1c1c1c' }}>Escanear Cotización (IA)</h2>
+                <h2 className="font-bold text-sm" style={{ color: 'var(--tinta)' }}>Escanear Cotización (IA)</h2>
               </div>
               <button onClick={() => { setShowVision(false); setVisionFile(null); setVisionPreview(null); setVisionData(null) }}
-                className="text-lg leading-none" style={{ color: 'rgba(0,0,0,0.4)' }}>✕</button>
+                className="text-lg leading-none" style={{ color: 'var(--tinta-45)' }}>✕</button>
             </div>
 
             {/* Proveedor destino */}
             <div>
               <label className="text-xs font-semibold block mb-1" style={{ color: 'var(--cafe)' }}>Aplicar precios a</label>
               <select value={visionProvId} onChange={e => setVisionProvId(e.target.value)}
-                className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
-                style={{ border: '1px solid rgba(58,125,68,0.25)', background: 'rgba(255,255,255,0.7)' }}>
+                className="w-full rounded-[4px] px-3 py-2 text-sm focus:outline-none"
+                style={{ border: '1px solid var(--linea-fuerte)', background: 'var(--papel)' }}>
                 <option value="">Seleccionar proveedor...</option>
-                {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                {activos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
               </select>
             </div>
 
             {/* Drop zone */}
             {!visionPreview ? (
-              <label className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed cursor-pointer py-8 gap-2"
-                style={{ borderColor: 'rgba(127,79,36,0.3)', background: 'rgba(127,79,36,0.04)' }}>
-                <ScanLine size={28} style={{ color: 'rgba(127,79,36,0.5)' }} />
-                <span className="text-xs text-center" style={{ color: 'rgba(0,0,0,0.5)' }}>
+              <label className="flex flex-col items-center justify-center rounded-[6px] border-2 border-dashed cursor-pointer py-8 gap-2"
+                style={{ borderColor: 'var(--linea-fuerte)', background: 'var(--papel-hueco)' }}>
+                <ScanLine size={28} style={{ color: 'var(--tinta-45)' }} />
+                <span className="text-xs text-center" style={{ color: 'var(--tinta-45)' }}>
                   Arrastra una imagen o haz clic para seleccionar.<br />
                   También puedes tomar una foto desde tu celular.
                 </span>
@@ -479,10 +572,10 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
             ) : (
               <div className="space-y-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={visionPreview} alt="Cotización" className="w-full rounded-xl object-contain max-h-40" />
+                <img src={visionPreview} alt="Cotización" className="w-full rounded-[6px] object-contain max-h-40" />
                 {!visionData && (
                   <button onClick={escanearCotizacion} disabled={visionLoading || !visionProvId}
-                    className="w-full rounded-xl py-2.5 text-sm text-white font-bold disabled:opacity-40 flex items-center justify-center gap-2"
+                    className="w-full rounded-[6px] py-2.5 text-sm text-[var(--papel)] font-bold disabled:opacity-40 flex items-center justify-center gap-2"
                     style={{ background: 'var(--cafe)' }}>
                     {visionLoading ? (
                       <>
@@ -498,7 +591,7 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
             )}
 
             {visionError && (
-              <p className="text-xs rounded-lg px-3 py-2" style={{ background: 'rgba(220,38,38,0.08)', color: '#dc2626' }}>
+              <p className="text-xs rounded-[4px] px-3 py-2" style={{ background: 'rgba(220,38,38,0.08)', color: '#dc2626' }}>
                 {visionError}
               </p>
             )}
@@ -507,7 +600,7 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
             {visionData && (
               <div className="space-y-3">
                 {visionData.length === 0 ? (
-                  <p className="text-xs text-center" style={{ color: 'rgba(0,0,0,0.45)' }}>
+                  <p className="text-xs text-center" style={{ color: 'var(--tinta-45)' }}>
                     No se encontraron precios reconocibles en la imagen.
                   </p>
                 ) : (
@@ -515,29 +608,39 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
                     <p className="text-xs font-semibold" style={{ color: 'var(--verde-dark)' }}>
                       {visionData.length} precio{visionData.length !== 1 ? 's' : ''} detectado{visionData.length !== 1 ? 's' : ''}:
                     </p>
-                    <ul className="text-xs rounded-xl overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.07)' }}>
+                    <ul className="text-xs rounded-[6px] overflow-hidden" style={{ border: '1px solid var(--linea)' }}>
                       {visionData.map((item, i) => (
-                        <li key={i} className="flex justify-between px-3 py-2" style={{ background: i % 2 === 0 ? 'rgba(58,125,68,0.04)' : 'transparent' }}>
-                          <span style={{ color: '#1c1c1c' }}>{item.nombre_insumo}</span>
+                        <li key={i} className="flex justify-between px-3 py-2" style={{ background: i % 2 === 0 ? 'var(--papel-hueco)' : 'transparent' }}>
+                          <span style={{ color: 'var(--tinta)' }}>{item.nombre_insumo}</span>
                           <span className="font-semibold" style={{ color: 'var(--verde-dark)' }}>{formatCLP(item.precio_extraido)}</span>
                         </li>
                       ))}
                     </ul>
                     <button onClick={aplicarPrecios} disabled={!visionProvId}
-                      className="w-full rounded-xl py-2.5 text-sm text-white font-bold disabled:opacity-40"
+                      className="w-full rounded-[6px] py-2.5 text-sm text-[var(--papel)] font-bold disabled:opacity-40"
                       style={{ background: 'var(--verde)' }}>
                       Aplicar precios a la matriz
                     </button>
                   </>
                 )}
                 <button onClick={() => { setVisionFile(null); setVisionPreview(null); setVisionData(null) }}
-                  className="w-full text-xs py-1.5 rounded-lg" style={{ color: 'rgba(0,0,0,0.4)' }}>
+                  className="w-full text-xs py-1.5 rounded-[4px]" style={{ color: 'var(--tinta-45)' }}>
                   Escanear otra imagen
                 </button>
               </div>
             )}
           </div>
         </div>
+      )}
+
+      {aDesactivar && (
+        <ConfirmDialog
+          title={`Desactivar ${aDesactivar.nombre}`}
+          description="Deja de aparecer en el comparador y en las listas. No se borra nada: sus precios quedan guardados y puedes reactivarlo cuando quieras."
+          confirmLabel="Desactivar"
+          onConfirm={() => cambiarActivo(aDesactivar, false)}
+          onCancel={() => setADesactivar(null)}
+        />
       )}
     </div>
   )
@@ -552,20 +655,20 @@ function PrecioRow({ insumo, proveedores, precios, saving, errores, onBlur }: {
   onBlur: (provId: string, insumoId: string, value: string) => void
 }) {
   return (
-    <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+    <tr style={{ borderBottom: '1px solid var(--linea)' }}>
       <td
         className="px-4 py-2.5 font-medium whitespace-nowrap"
         style={{
           position: 'sticky', left: 0, zIndex: 10,
-          background: 'rgba(255,255,255,0.85)',
-          color: '#1c1c1c',
+          background: 'var(--papel)',
+          color: 'var(--tinta)',
           minWidth: '220px',
-          backdropFilter: 'blur(8px)',
+          backdropFilter: 'none',
         }}
       >
         {insumo.nombre}
       </td>
-      <td className="px-4 py-2.5 whitespace-nowrap text-xs" style={{ color: 'rgba(0,0,0,0.45)' }}>
+      <td className="px-4 py-2.5 whitespace-nowrap text-xs" style={{ color: 'var(--tinta-45)' }}>
         {insumo.formato_venta}
       </td>
       {proveedores.map(prov => {
@@ -604,7 +707,7 @@ function PrecioCell({ initialValue, isSaving, error, onBlur, big = false }: {
   return (
     <div className="relative flex items-center justify-end">
       {localVal && !isSaving && (
-        <span className={`absolute left-2 pointer-events-none ${big ? 'text-sm' : 'text-xs'}`} style={{ color: 'rgba(0,0,0,0.35)' }}>$</span>
+        <span className={`absolute left-2 pointer-events-none ${big ? 'text-sm' : 'text-xs'}`} style={{ color: 'var(--tinta-45)' }}>$</span>
       )}
       <input
         ref={inputRef}
@@ -618,13 +721,13 @@ function PrecioCell({ initialValue, isSaving, error, onBlur, big = false }: {
         disabled={isSaving}
         aria-invalid={Boolean(error)}
         title={error}
-        className={`w-full text-right rounded-lg transition-all ${big ? 'text-base font-semibold px-3 py-2.5' : 'text-sm px-2 py-1'}`}
+        className={`w-full text-right rounded-[4px] transition-all ${big ? 'text-base font-semibold px-3 py-2.5' : 'text-sm px-2 py-1'}`}
         style={{
-          background: error ? 'rgba(220,38,38,0.07)' : localVal ? 'rgba(58,125,68,0.07)' : 'rgba(0,0,0,0.04)',
+          background: error ? 'rgba(155,28,28,0.08)' : localVal ? 'var(--papel)' : 'var(--papel-hueco)',
           border: error
             ? '1px solid rgba(220,38,38,0.55)'
-            : localVal ? '1px solid rgba(58,125,68,0.25)' : `1px solid ${big ? 'rgba(0,0,0,0.12)' : 'transparent'}`,
-          color: error ? '#dc2626' : localVal ? 'var(--verde-dark)' : 'rgba(0,0,0,0.35)',
+            : localVal ? '1px solid var(--linea-fuerte)' : `1px solid ${big ? 'var(--linea)' : 'transparent'}`,
+          color: error ? '#dc2626' : localVal ? 'var(--verde-dark)' : 'var(--tinta-45)',
           fontWeight: localVal ? '600' : '400',
           opacity: isSaving ? 0.5 : 1,
         }}

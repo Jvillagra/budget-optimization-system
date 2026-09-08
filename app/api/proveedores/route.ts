@@ -32,23 +32,54 @@ export async function PATCH(req: NextRequest) {
 
   const body = await req.json().catch(() => null)
   const id = body?.id
-  const nombre = typeof body?.nombre === 'string' ? body.nombre.trim() : ''
-  if (typeof id !== 'string' || !nombre) {
-    return NextResponse.json({ error: 'id y nombre son requeridos' }, { status: 400 })
+  if (typeof id !== 'string') return NextResponse.json({ error: 'id es requerido' }, { status: 400 })
+
+  // Renombrar y desactivar/reactivar son el mismo PATCH: cada campo se toca
+  // solo si viene en el body, para que renombrar no reactive por accidente
+  // un proveedor apagado (ni al reves).
+  const cambios: { nombre?: string; es_activo?: boolean } = {}
+  if (body?.nombre !== undefined) {
+    const nombre = typeof body.nombre === 'string' ? body.nombre.trim() : ''
+    if (!nombre) return NextResponse.json({ error: 'El nombre no puede quedar vacio' }, { status: 400 })
+    cambios.nombre = nombre
+  }
+  if (body?.es_activo !== undefined) {
+    if (typeof body.es_activo !== 'boolean') {
+      return NextResponse.json({ error: 'es_activo debe ser booleano' }, { status: 400 })
+    }
+    cambios.es_activo = body.es_activo
+  }
+  if (Object.keys(cambios).length === 0) {
+    return NextResponse.json({ error: 'Nada que actualizar' }, { status: 400 })
   }
 
   const admin = getSupabaseAdmin()
-  const { data: previo } = await admin.from('proveedores').select('nombre').eq('id', id).maybeSingle()
+  const { data: previo } = await admin.from('proveedores').select('nombre, es_activo').eq('id', id).maybeSingle()
   if (!previo) return NextResponse.json({ error: 'Proveedor inexistente' }, { status: 404 })
 
-  const { error } = await admin.from('proveedores').update({ nombre }).eq('id', id)
+  // Desactivar es la version reversible de "eliminar": no se borra nada, se
+  // saca de los selectores. Pero si un segmento ya cerro su compra con este
+  // proveedor, apagarlo dejaria esa compra apuntando a un proveedor que la
+  // app ya no ofrece -- se bloquea hasta revertir la compra.
+  if (cambios.es_activo === false) {
+    const { data: comprometido } = await admin
+      .from('compras_segmento').select('segmento').eq('proveedor_id', id)
+    if (comprometido && comprometido.length > 0) {
+      return NextResponse.json(
+        { error: `No se puede desactivar: es el proveedor de la compra confirmada de ${comprometido.map(c => c.segmento).join(' y ')}.` },
+        { status: 409 }
+      )
+    }
+  }
+
+  const { error } = await admin.from('proveedores').update(cambios).eq('id', id)
   if (error) {
     console.error('proveedores PATCH', error)
     return NextResponse.json({ error: 'No se pudo actualizar el proveedor' }, { status: 400 })
   }
 
   await logAudit('proveedores', 'update', id, {
-    nombre_anterior: previo.nombre, nombre,
+    anterior: previo, cambios,
     actor: { email: ctx.email, userId: ctx.userId, role: ctx.role },
   })
   return NextResponse.json({ ok: true })

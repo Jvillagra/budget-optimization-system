@@ -39,13 +39,13 @@ export function ConfirmDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 motion-safe:animate-[fadeIn_150ms_ease-out]"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(23,24,21,0.55)] p-4 motion-safe:animate-[fadeIn_150ms_ease-out]"
       onClick={onCancel}
       role="presentation"
     >
       <div
-        className="relative max-w-sm w-full rounded-2xl overflow-hidden p-5 space-y-4 motion-safe:animate-[scaleIn_180ms_ease-out]"
-        style={{ background: '#f7f3ed', boxShadow: '0 12px 40px rgba(0,0,0,0.18)' }}
+        className="relative max-w-sm w-full rounded-[6px] overflow-hidden p-6 space-y-5 motion-safe:animate-[scaleIn_180ms_ease-out]"
+        style={{ background: 'var(--papel)', border: '1px solid var(--linea-fuerte)' }}
         onClick={e => e.stopPropagation()}
         role="alertdialog"
         aria-modal="true"
@@ -53,7 +53,7 @@ export function ConfirmDialog({
         aria-describedby="confirm-dialog-description"
       >
         <div className="space-y-1.5">
-          <p id="confirm-dialog-title" className="font-bold text-base" style={{ color: '#1c1c1c' }}>
+          <p id="confirm-dialog-title" className="titulo-md" style={{ color: 'var(--tinta)' }}>
             {title}
           </p>
           <p id="confirm-dialog-description" className="text-sm" style={{ color: 'var(--text-muted)' }}>

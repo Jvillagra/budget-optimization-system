@@ -1,11 +1,15 @@
 import type { Metadata, Viewport } from 'next'
-import { Geist } from 'next/font/google'
+import { Instrument_Sans, Newsreader } from 'next/font/google'
 import './globals.css'
 import Navbar, { MobileTabBar } from '@/components/Navbar'
 import { ProveedorProvider } from '@/lib/proveedor-context'
 import { getViewerContext } from '@/lib/roles'
 
-const geist = Geist({ subsets: ['latin'], variable: '--font-geist' })
+// Instrument Sans es variable (400..700): la escala editorial usa peso 520,
+// que solo existe con la fuente variable cargada. Newsreader entra solo en
+// cursiva 400, para el enfasis dentro de los titulos (<em>).
+const instrument = Instrument_Sans({ subsets: ['latin'], variable: '--font-instrument', display: 'swap' })
+const newsreader = Newsreader({ subsets: ['latin'], style: 'italic', weight: '400', variable: '--font-newsreader', display: 'swap' })
 
 export const metadata: Metadata = {
   title: 'Proyecto PAT — Comunidad Pedro Huisca',
@@ -30,7 +34,7 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: '#4f46e5',
+  themeColor: '#f4f0e7',
   width: 'device-width',
   initialScale: 1,
   minimumScale: 1,
@@ -48,30 +52,23 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const ctx = await getViewerContext()
 
   return (
-    <html lang="es" className={`${geist.variable} h-full antialiased`}>
+    <html lang="es" className={`${instrument.variable} ${newsreader.variable} h-full antialiased`}>
       <head />
       {/* .app-shell (globals.css) reserva el hueco de la barra de tabs
           incluyendo el safe area de iOS, y lo saca en desktop. */}
-      <body className="min-h-full bg-gray-50 flex flex-col app-shell">
+      <body className="min-h-full flex flex-col app-shell">
         <ProveedorProvider>
         <Navbar role={ctx.role} tieneBeneficiario={ctx.beneficiarioId !== null} />
         <main className="flex-1 mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
           {children}
         </main>
         <MobileTabBar role={ctx.role} tieneBeneficiario={ctx.beneficiarioId !== null} />
-        <footer style={{
-          background: 'rgba(255,255,255,0.70)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          borderTop: '1px solid rgba(200,200,200,0.45)',
-        }}>
-          <div className="mx-auto max-w-7xl px-4 py-5 text-center space-y-0.5">
-            <p className="text-xs font-medium" style={{ color: 'rgba(0,0,0,0.4)' }}>
-              Comunidad Pedro Huisca
-            </p>
-            <p className="text-xs font-semibold" style={{ color: 'rgba(0,0,0,0.55)' }}>
+        <footer style={{ borderTop: '1px solid var(--linea)' }}>
+          <div className="mx-auto max-w-7xl px-4 py-8 flex flex-wrap items-baseline justify-between gap-2">
+            <p className="eyebrow">Comunidad Pedro Huisca</p>
+            <p className="text-xs" style={{ color: 'var(--tinta-45)' }}>
               Desarrollado por{' '}
-              <span style={{ color: 'var(--verde-dark)', fontWeight: 700 }}>Neurobot Innovations</span>
+              <span style={{ color: 'var(--tinta)', fontWeight: 600 }}>Neurobot Innovations</span>
             </p>
           </div>
         </footer>

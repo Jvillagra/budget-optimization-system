@@ -16,7 +16,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   return (
     <div className="space-y-1.5">
       {label && (
-        <label htmlFor={inputId} className="block text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
+        <label htmlFor={inputId} className="eyebrow block mb-1.5">
           {label}
         </label>
       )}
@@ -25,17 +25,14 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         id={inputId}
         aria-invalid={!!error}
         className={cx(
-          'w-full min-h-[44px] rounded-xl border px-4 py-2.5 text-sm text-[#1c1c1c] transition-colors',
-          'placeholder:text-black/35',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1',
-          error
-            ? 'border-red-300 focus-visible:ring-red-400'
-            : 'border-black/12 bg-white/70 focus-visible:ring-[var(--verde)] focus-visible:border-[var(--verde)]',
+          'w-full min-h-[44px] rounded-[4px] border px-3.5 py-2.5 text-sm text-[var(--tinta)] transition-colors',
+          'placeholder:text-[var(--tinta-45)] bg-[var(--papel-hueco)]',
+          error ? 'border-[#9b1c1c]/50' : 'border-[var(--linea)] hover:border-[var(--linea-fuerte)]',
           className
         )}
         {...props}
       />
-      {error && <p className="text-xs text-red-700">{error}</p>}
+      {error && <p className="text-xs" style={{ color: '#9b1c1c' }}>{error}</p>}
     </div>
   )
 })

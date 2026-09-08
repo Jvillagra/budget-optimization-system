@@ -39,7 +39,7 @@ export const ESTADOS: { id: EstadoSocio; label: string; color: string; ink: stri
   { id: 'completo', label: 'Completos', color: 'var(--verde-dark)', ink: 'var(--verde-dark)' },
   { id: 'listo', label: 'Listos para marcar', color: 'var(--verde-light)', ink: 'var(--verde-dark)' },
   { id: 'faltan', label: 'Faltan fotos', color: 'var(--cafe)', ink: 'var(--cafe-dark)' },
-  { id: 'sin_fotos', label: 'Sin fotos', color: 'rgba(0,0,0,0.16)', ink: 'var(--text-muted)' },
+  { id: 'sin_fotos', label: 'Sin fotos', color: 'var(--linea-fuerte)', ink: 'var(--text-muted)' },
 ]
 
 const SEG_COLOR: Record<string, string> = {
@@ -58,7 +58,7 @@ function ProgresoDonut({ pct }: { pct: number }) {
   const avance = (Math.max(0, Math.min(100, pct)) / 100) * circunferencia
   return (
     <svg width={72} height={72} viewBox="0 0 72 72" className="shrink-0" role="img" aria-label={`${Math.round(pct)}% completo`}>
-      <circle cx="36" cy="36" r={r} fill="none" stroke="rgba(0,0,0,0.10)" strokeWidth="10" />
+      <circle cx="36" cy="36" r={r} fill="none" stroke="var(--linea)" strokeWidth="10" />
       {avance > 0 && (
         <circle
           cx="36" cy="36" r={r} fill="none"
@@ -86,7 +86,7 @@ function BarraApilada({ partes, alto = 14, label }: {
       role="img"
       aria-label={label}
       className="flex w-full overflow-hidden rounded-full"
-      style={{ height: alto, background: total === 0 ? 'rgba(0,0,0,0.08)' : 'transparent', gap: 2 }}
+      style={{ height: alto, background: total === 0 ? 'var(--linea)' : 'transparent', gap: 2 }}
     >
       {visibles.map(p => {
         const Tag = p.onClick ? 'button' : 'div'
@@ -122,7 +122,7 @@ function TotalCelda({ etiqueta, monto, detalle, color, destacado = false }: {
   destacado?: boolean
 }) {
   return (
-    <div className="p-3.5" style={{ background: destacado ? 'rgba(58,125,68,0.06)' : 'rgba(255,255,255,0.75)' }}>
+    <div className="p-3.5" style={{ background: destacado ? 'var(--papel-hueco)' : 'var(--papel)' }}>
       <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>{etiqueta}</p>
       <p className="text-xl sm:text-2xl font-bold leading-tight tabular-nums mt-0.5" style={{ color }}>
         {formatCLP(monto)}
@@ -134,7 +134,7 @@ function TotalCelda({ etiqueta, monto, detalle, color, destacado = false }: {
 
 function Tarjeta({ titulo, children, className = '' }: { titulo: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-xl p-3.5 space-y-2.5 ${className}`} style={{ background: 'rgba(255,255,255,0.75)' }}>
+    <div className={`rounded-[6px] p-3.5 space-y-2.5 ${className}`} style={{ background: 'var(--papel)' }}>
       <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>{titulo}</p>
       {children}
     </div>
@@ -146,10 +146,10 @@ function BarraFila({ nombre, valor, max, color, detalle }: { nombre: string; val
   return (
     <div>
       <div className="flex items-baseline justify-between gap-3">
-        <p className="text-sm font-semibold truncate" style={{ color: '#1c1c1c' }}>{nombre}</p>
+        <p className="text-sm font-semibold truncate" style={{ color: 'var(--tinta)' }}>{nombre}</p>
         <p className="text-sm shrink-0 tabular-nums" style={{ color: 'var(--text-muted)' }}>{detalle}</p>
       </div>
-      <div className="h-2 mt-1 rounded-full overflow-hidden" style={{ background: 'rgba(0,0,0,0.08)' }}>
+      <div className="h-2 mt-1 rounded-full overflow-hidden" style={{ background: 'var(--linea)' }}>
         <div className="h-full rounded-full motion-safe:transition-[width] motion-safe:duration-300 motion-safe:ease-out" style={{ width: `${pct}%`, background: color }} />
       </div>
     </div>
@@ -216,14 +216,14 @@ export function PanelControl({ filas, filtro, onFiltro }: {
       {/* 1. Avance + estado por etapa. La barra apilada y los chips son el
           mismo dato: los chips le ponen número y nombre a cada color (nunca
           color solo) y sirven de filtro. */}
-      <div className="rounded-xl p-3.5 space-y-3" style={{ background: 'rgba(255,255,255,0.75)' }}>
+      <div className="rounded-[6px] p-3.5 space-y-3" style={{ background: 'var(--papel)' }}>
         <div className="flex items-center gap-4">
           <ProgresoDonut pct={pct} />
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
               Avance de rendición
             </p>
-            <p className="text-2xl font-bold leading-tight tabular-nums" style={{ color: '#1c1c1c' }}>
+            <p className="text-2xl font-bold leading-tight tabular-nums" style={{ color: 'var(--tinta)' }}>
               {d.completos} <span className="text-base font-semibold" style={{ color: 'var(--text-muted)' }}>de {d.total} socios</span>
             </p>
             <p className="text-sm font-semibold" style={{ color: 'var(--verde-dark)' }}>{pct.toFixed(0)}% completo</p>
@@ -251,9 +251,9 @@ export function PanelControl({ filas, filtro, onFiltro }: {
                 type="button"
                 onClick={() => toggle(e.id)}
                 aria-pressed={activo}
-                className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-all active:scale-[0.98]"
+                className="flex items-center gap-2 rounded-[4px] px-2.5 py-2 text-left transition-all active:scale-[0.98]"
                 style={{
-                  background: activo ? 'rgba(58,125,68,0.12)' : 'rgba(0,0,0,0.035)',
+                  background: activo ? 'var(--papel-hueco)' : 'var(--papel-hueco)',
                   boxShadow: activo ? 'inset 0 0 0 1.5px var(--verde)' : 'none',
                   opacity: apagado ? 0.55 : 1,
                 }}
@@ -279,8 +279,8 @@ export function PanelControl({ filas, filtro, onFiltro }: {
 
       {/* 2. Plata: barra rendido/por rendir sobre el total cotizado, y las
           tres cifras que se reportan hacia afuera. */}
-      <div className="rounded-xl overflow-hidden" style={{ background: 'rgba(0,0,0,0.07)' }}>
-        <div className="p-3.5 pb-3 space-y-1.5" style={{ background: 'rgba(255,255,255,0.75)' }}>
+      <div className="rounded-[6px] overflow-hidden" style={{ background: 'var(--linea)' }}>
+        <div className="p-3.5 pb-3 space-y-1.5" style={{ background: 'var(--papel)' }}>
           <div className="flex items-baseline justify-between">
             <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Plata rendida</p>
             <p className="text-sm font-bold tabular-nums" style={{ color: 'var(--verde-dark)' }}>{pctRendido.toFixed(0)}%</p>
@@ -294,8 +294,8 @@ export function PanelControl({ filas, filtro, onFiltro }: {
             ]}
           />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-px" style={{ borderTop: '1px solid rgba(0,0,0,0.07)' }}>
-          <TotalCelda etiqueta="Total cotizado" monto={d.cotizado} detalle={`${d.total} socios`} color="#1c1c1c" destacado />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-px" style={{ borderTop: '1px solid var(--linea)' }}>
+          <TotalCelda etiqueta="Total cotizado" monto={d.cotizado} detalle={`${d.total} socios`} color="var(--tinta)" destacado />
           <TotalCelda etiqueta="Rendido" monto={d.rendido} detalle={`${d.completos} socio${d.completos === 1 ? '' : 's'} con compra completa`} color="var(--verde-dark)" />
           <TotalCelda etiqueta="Por rendir" monto={d.porRendir} detalle={`${d.total - d.completos} socio${d.total - d.completos === 1 ? '' : 's'} pendiente${d.total - d.completos === 1 ? '' : 's'}`} color="var(--cafe-dark)" />
         </div>
@@ -335,7 +335,7 @@ export function PanelControl({ filas, filtro, onFiltro }: {
         </Tarjeta>
 
         <Tarjeta titulo="Presupuesto" className="snap-start shrink-0 w-[78vw] max-w-xs sm:w-auto sm:max-w-none sm:shrink">
-          <p className="text-xl font-bold tabular-nums leading-tight" style={{ color: usoPresupuesto > 100 ? 'var(--cafe-dark)' : '#1c1c1c' }}>
+          <p className="text-xl font-bold tabular-nums leading-tight" style={{ color: usoPresupuesto > 100 ? 'var(--cafe-dark)' : 'var(--tinta)' }}>
             {usoPresupuesto.toFixed(0)}%
             <span className="text-xs font-medium ml-1.5" style={{ color: 'var(--text-muted)' }}>del presupuesto asignado</span>
           </p>
@@ -345,7 +345,7 @@ export function PanelControl({ filas, filtro, onFiltro }: {
             partes={[
               { nombre: 'Dentro del presupuesto', valor: Math.min(d.cotizado, d.presupuesto), color: 'var(--verde)' },
               { nombre: 'Excedente', valor: Math.max(0, d.cotizado - d.presupuesto), color: 'var(--cafe)' },
-              { nombre: 'Disponible', valor: Math.max(0, d.presupuesto - d.cotizado), color: 'rgba(0,0,0,0.10)' },
+              { nombre: 'Disponible', valor: Math.max(0, d.presupuesto - d.cotizado), color: 'var(--linea)' },
             ]}
           />
           <p className="text-xs tabular-nums" style={{ color: 'var(--text-muted)' }}>
@@ -365,7 +365,7 @@ export function PanelControl({ filas, filtro, onFiltro }: {
           {d.proveedores.map(p => (
             <BarraFila key={p.nombre} nombre={p.nombre} valor={p.n} max={d.total} color="var(--verde)" detalle={`${p.n}`} />
           ))}
-          <BarraFila nombre="Sin confirmar" valor={d.sinConfirmar} max={d.total} color="rgba(0,0,0,0.16)" detalle={`${d.sinConfirmar}`} />
+          <BarraFila nombre="Sin confirmar" valor={d.sinConfirmar} max={d.total} color="var(--linea-fuerte)" detalle={`${d.sinConfirmar}`} />
         </Tarjeta>
       </div>
     </div>

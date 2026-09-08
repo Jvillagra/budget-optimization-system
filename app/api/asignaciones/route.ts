@@ -2,6 +2,21 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getViewerContext, isStaff } from '@/lib/roles'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { logAudit } from '@/lib/audit'
+import { segmentosConfirmados } from '@/lib/compras-segmento'
+import type { Segmento } from '@/lib/types'
+
+/** 409 si el segmento del beneficiario ya tiene la compra confirmada: a esa
+ *  altura las cantidades son lo que se compro de verdad, y cambiarlas
+ *  descuadraria la rendicion. Se revierte la compra primero. */
+async function bloqueadoPorCompra(beneficiario_id: string): Promise<string | null> {
+  const { data: ben } = await getSupabaseAdmin()
+    .from('beneficiarios').select('segmento').eq('id', beneficiario_id).maybeSingle()
+  if (!ben) return null
+  const confirmados = await segmentosConfirmados()
+  return confirmados.has(ben.segmento as Segmento)
+    ? `${ben.segmento} ya tiene la compra confirmada. Revierte la compra para cambiar las cantidades.`
+    : null
+}
 
 // Toda escritura de negocio pasa por acá con el service_role key -- la anon
 // key del cliente ya NO tiene permiso de INSERT/UPDATE/DELETE en Postgres
@@ -23,6 +38,9 @@ export async function POST(req: NextRequest) {
   if (!Number.isInteger(cantidad) || cantidad <= 0) {
     return NextResponse.json({ error: 'cantidad debe ser un entero positivo' }, { status: 400 })
   }
+
+  const bloqueo = await bloqueadoPorCompra(beneficiario_id)
+  if (bloqueo) return NextResponse.json({ error: bloqueo }, { status: 409 })
 
   const { data, error } = await getSupabaseAdmin()
     .from('asignaciones')
@@ -59,6 +77,9 @@ export async function DELETE(req: NextRequest) {
     .eq('id', id)
     .maybeSingle()
   if (!previa) return NextResponse.json({ error: 'No encontrada' }, { status: 404 })
+
+  const bloqueo = await bloqueadoPorCompra((previa as { beneficiario_id: string }).beneficiario_id)
+  if (bloqueo) return NextResponse.json({ error: bloqueo }, { status: 409 })
 
   const { error } = await admin.from('asignaciones').delete().eq('id', id)
   if (error) {
