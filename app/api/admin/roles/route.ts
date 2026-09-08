@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getViewerContext, isStaff } from '@/lib/roles'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { logAudit } from '@/lib/audit'
+import { cargarRoles } from '@/lib/staff-data'
 
 // Owner y admin tienen los mismos permisos operativos (ver PRD v2), pero el
 // rol `owner` NO es administrable desde acá: no se puede crear, degradar ni
@@ -12,17 +13,8 @@ export async function GET() {
   const ctx = await getViewerContext()
   if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
 
-  const admin = getSupabaseAdmin()
-  const { data, error } = await admin.from('app_roles').select('user_id, role, created_at').order('created_at')
-  if (error) {
-    console.error('roles GET', error)
-    return NextResponse.json({ error: 'Error al cargar los roles' }, { status: 500 })
-  }
-
-  const { data: usersData } = await admin.auth.admin.listUsers()
-  const emailPorId = new Map((usersData?.users ?? []).map(u => [u.id, u.email]))
-  const roles = (data ?? []).map(r => ({ ...r, email: emailPorId.get(r.user_id) ?? '(sin login todavía)' }))
-
+  const roles = await cargarRoles()
+  if (!roles) return NextResponse.json({ error: 'Error al cargar los roles' }, { status: 500 })
   return NextResponse.json({ roles })
 }
 
