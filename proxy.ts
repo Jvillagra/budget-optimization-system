@@ -54,7 +54,15 @@ export async function proxy(req: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  // getClaims() verifica la firma del JWT localmente (el proyecto firma con
+  // llaves asimétricas ES256; la llave pública se cachea 10 min en memoria
+  // del proceso). Antes era getUser(), un round-trip a Supabase Auth EN
+  // CADA request -- páginas, RSC de navegación y llamadas /api/* -- y era la
+  // mayor parte del tiempo que tardaba cambiar de pestaña. Si el access
+  // token venció, getClaims() lo refresca con el refresh token (ahí sí hay
+  // red, pero una vez por hora, no por request).
+  const { data } = await supabase.auth.getClaims()
+  const user = data?.claims?.sub ? data.claims : null
 
   if (!user) {
     if (pathname.startsWith('/api')) {

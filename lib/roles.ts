@@ -22,11 +22,32 @@ export type ViewerContext =
  * contra Supabase más una o dos consultas. Ahora la primera resuelve y las
  * otras dos leen el mismo resultado.
  */
+// Rol resuelto por usuario, compartido ENTRE requests mientras la instancia
+// de la función siga caliente. Las dos consultas (app_roles + beneficiarios)
+// se hacían en cada página, cada RSC de navegación y cada /api/*, y el rol
+// de una persona cambia una vez cada muchos días. Un admin recién agregado
+// o quitado tarda hasta ROL_TTL_MS en verse reflejado: aceptable.
+const ROL_TTL_MS = 60_000
+const rolCache = new Map<string, { ctx: ViewerContext; at: number }>()
+
 export const getViewerContext = cache(async function getViewerContext(): Promise<ViewerContext> {
   const supabase = await getSupabaseServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  // Verificación local del JWT, sin round-trip a Supabase Auth -- ver el
+  // comentario en proxy.ts. `sub` y `email` vienen en los claims.
+  const { data } = await supabase.auth.getClaims()
+  const claims = data?.claims
+  const user = claims?.sub ? { id: claims.sub as string, email: claims.email as string | undefined } : null
   if (!user || !user.email) return { role: null, userId: null, email: null, beneficiarioId: null }
 
+  const cacheado = rolCache.get(user.id)
+  if (cacheado && Date.now() - cacheado.at < ROL_TTL_MS) return cacheado.ctx
+  const ctx = await resolverRol(user.id, user.email)
+  rolCache.set(user.id, { ctx, at: Date.now() })
+  return ctx
+})
+
+async function resolverRol(userId: string, userEmail: string): Promise<ViewerContext> {
+  const user = { id: userId, email: userEmail }
   const admin = getSupabaseAdmin()
   // Supabase Auth normaliza el email a minúsculas; beneficiarios.email es
   // `text unique`, que distingue Juan@x.com de juan@x.com. Sin normalizar,
@@ -68,7 +89,7 @@ export const getViewerContext = cache(async function getViewerContext(): Promise
   }
 
   return { role: null, userId: user.id, email: user.email, beneficiarioId: null }
-})
+}
 
 export function isStaff(ctx: ViewerContext): ctx is Extract<ViewerContext, { role: 'owner' | 'admin' }> {
   return ctx.role === 'owner' || ctx.role === 'admin'
