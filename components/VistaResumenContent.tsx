@@ -819,7 +819,7 @@ function PanelSegmento({
             variant="accent"
             onClick={onConfirmar}
             disabled={!puedeConfirmar || gasto <= 0}
-            className="w-full !py-3.5 !text-[15px]"
+            className="w-full sm:w-auto !py-3.5 !text-[15px] sm:!py-2.5 sm:!text-sm"
           >
             <Check size={17} strokeWidth={2.5} /> Marcar {nombre} como comprado
           </Button>
