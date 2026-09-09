@@ -187,6 +187,40 @@ body {
   }
 }
 
+/* Superficies de botón sólido (components/design-system/Button.tsx). El
+   relleno plano leía como bloque de color pegado sobre el papel; un degradado
+   vertical de un solo paso + una sombra corta le dan volumen sin caer en
+   skeuomorfismo. El degradado nunca aclara el fondo por debajo del tono base
+   de la paleta, así el contraste medido del sistema (papel sobre --marca
+   6.69:1, tinta sobre --acento 5.95:1) sigue siendo el piso. */
+.btn-solid {
+  box-shadow: 0 1px 2px rgba(31, 36, 25, 0.16);
+  transition: box-shadow 0.2s ease, transform 0.2s ease, filter 0.2s ease;
+}
+.btn-solid:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px -8px rgba(31, 36, 25, 0.45);
+}
+.btn-solid:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(31, 36, 25, 0.16);
+}
+.btn-solid:disabled { box-shadow: none; }
+@media (prefers-reduced-motion: reduce) {
+  .btn-solid:hover:not(:disabled) { transform: none; }
+}
+
+.btn-primary-solid {
+  background-image: linear-gradient(180deg, var(--marca) 0%, var(--marca-dark) 100%);
+}
+/* El acento va de un naranja apenas más claro arriba al tono base abajo:
+   aclarar solo sube el contraste con la tinta, nunca lo baja. */
+.btn-accent-solid {
+  background-image: linear-gradient(180deg,
+    color-mix(in oklab, var(--acento) 88%, white) 0%,
+    var(--acento) 100%);
+}
+
 /* Scrollbar sutil */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -197,4 +231,16 @@ body {
 :focus-visible {
   outline: 2px solid var(--marca);
   outline-offset: 2px;
+}
+
+/* Navegación (links del menú y sub-tabs). El anillo rectangular del sistema
+   dibujaba una caja alrededor de la palabra y quedaba pegado después de
+   hacer clic: se leía como "borde de la pestaña activa", no como foco. Acá
+   el indicador es superficie tenue + subrayado de marca -- sigue siendo
+   visible con teclado (requisito de foco visible), sin la caja. */
+.nav-item:focus-visible {
+  outline: none;
+  border-radius: 4px;
+  background: var(--papel-hueco);
+  box-shadow: inset 0 -2px 0 0 var(--marca);
 }

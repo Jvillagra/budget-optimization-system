@@ -167,47 +167,28 @@ export function PanelControl({ filas, filtro, onFiltro }: {
   const d = useMemo(() => {
     const porEstado: Record<EstadoSocio, number> = { completo: 0, listo: 0, faltan: 0, sin_fotos: 0 }
     const porSegmento: Record<string, { total: number; completos: number; monto: number; montoRendido: number }> = {}
-    const porProveedor = new Map<string, { nombre: string; n: number }>()
-    let cotizado = 0, rendido = 0, presupuesto = 0, bolsillo = 0, sobrePresupuesto = 0, parciales = 0, sinConfirmar = 0
+    let cotizado = 0, rendido = 0, parciales = 0
 
     for (const f of filas) {
       porEstado[estadoDe(f)]++
       cotizado += f.total
-      presupuesto += f.presupuestoBase
       if (!f.totalEsCompleto) parciales++
       if (f.compraCompleta) rendido += f.total
-      // Aporte de bolsillo: mismo criterio que /mi-dashboard (total - presupuesto,
-      // nunca negativo). Solo cuenta con cotización completa, un parcial no
-      // puede decir si el socio pasa o no el presupuesto.
-      if (f.totalEsCompleto && f.total > f.presupuestoBase) {
-        sobrePresupuesto++
-        bolsillo += f.total - f.presupuestoBase
-      }
-      if (f.proveedorCompraId) {
-        const p = porProveedor.get(f.proveedorCompraId) ?? { nombre: f.proveedorCompraNombre ?? 'Proveedor', n: 0 }
-        p.n++
-        porProveedor.set(f.proveedorCompraId, p)
-      } else {
-        sinConfirmar++
-      }
       const seg = porSegmento[f.segmento] ?? (porSegmento[f.segmento] = { total: 0, completos: 0, monto: 0, montoRendido: 0 })
       seg.total++
       seg.monto += f.total
       if (f.compraCompleta) { seg.completos++; seg.montoRendido += f.total }
     }
 
-    const proveedores = Array.from(porProveedor.values()).sort((a, b) => b.n - a.n)
     return {
-      porEstado, porSegmento, proveedores, sinConfirmar,
+      porEstado, porSegmento, parciales,
       cotizado, rendido, porRendir: cotizado - rendido,
-      presupuesto, bolsillo, sobrePresupuesto, parciales,
       total: filas.length, completos: porEstado.completo,
     }
   }, [filas])
 
   const pct = d.total > 0 ? (d.completos / d.total) * 100 : 0
   const pctRendido = d.cotizado > 0 ? (d.rendido / d.cotizado) * 100 : 0
-  const usoPresupuesto = d.presupuesto > 0 ? (d.cotizado / d.presupuesto) * 100 : 0
 
   function toggle(e: EstadoSocio) { onFiltro(filtro === e ? null : e) }
 
@@ -308,66 +289,28 @@ export function PanelControl({ filas, filtro, onFiltro }: {
         </p>
       )}
 
-      {/* 3. Tarjetas secundarias. En mobile van en carrusel horizontal con
-          snap (una y media a la vista, se intuye que hay más); en desktop,
-          tres columnas. */}
-      <div
-        className="flex gap-3 overflow-x-auto snap-x snap-mandatory -mx-3 px-3 pb-1 sm:grid sm:grid-cols-3 sm:overflow-visible sm:mx-0 sm:px-0 sm:pb-0"
-        style={{ scrollbarWidth: 'none' }}
-      >
-        <Tarjeta titulo="Por segmento" className="snap-start shrink-0 w-[78vw] max-w-xs sm:w-auto sm:max-w-none sm:shrink">
-          {Object.entries(d.porSegmento).map(([seg, s]) => (
-            <BarraFila
-              key={seg}
-              nombre={seg}
-              valor={s.completos}
-              max={s.total}
-              color={SEG_COLOR[seg] ?? 'var(--marca-calida)'}
-              detalle={`${s.completos}/${s.total}`}
-            />
-          ))}
-          {Object.entries(d.porSegmento).map(([seg, s]) => (
-            <p key={`${seg}-plata`} className="text-xs tabular-nums" style={{ color: 'var(--text-muted)' }}>
-              <span className="font-semibold" style={{ color: SEG_COLOR[seg] ?? 'var(--marca-calida)' }}>{seg}</span>
-              {' '}{formatCLP(s.montoRendido)} / {formatCLP(s.monto)}
-            </p>
-          ))}
-        </Tarjeta>
-
-        <Tarjeta titulo="Presupuesto" className="snap-start shrink-0 w-[78vw] max-w-xs sm:w-auto sm:max-w-none sm:shrink">
-          <p className="text-xl font-bold tabular-nums leading-tight" style={{ color: usoPresupuesto > 100 ? 'var(--alerta)' : 'var(--tinta)' }}>
-            {usoPresupuesto.toFixed(0)}%
-            <span className="text-xs font-medium ml-1.5" style={{ color: 'var(--text-muted)' }}>del presupuesto asignado</span>
-          </p>
-          <BarraApilada
-            alto={10}
-            label={`Cotizado ${formatCLP(d.cotizado)} sobre presupuesto ${formatCLP(d.presupuesto)}`}
-            partes={[
-              { nombre: 'Dentro del presupuesto', valor: Math.min(d.cotizado, d.presupuesto), color: 'var(--verde)' },
-              { nombre: 'Excedente', valor: Math.max(0, d.cotizado - d.presupuesto), color: 'var(--marca-calida)' },
-              { nombre: 'Disponible', valor: Math.max(0, d.presupuesto - d.cotizado), color: 'var(--linea)' },
-            ]}
+      {/* 3. Avance por proyecto. Antes acá había un carrusel de tres tarjetas:
+          "Presupuesto" y "Proveedor de compra" se sacaron (2026-09-09) porque
+          duplicaban lo que ya dicen /precios y el detalle de cada socio, y
+          competían con el dato que sí se mira desde acá. */}
+      <Tarjeta titulo="Por segmento">
+        {Object.entries(d.porSegmento).map(([seg, s]) => (
+          <BarraFila
+            key={seg}
+            nombre={seg}
+            valor={s.completos}
+            max={s.total}
+            color={SEG_COLOR[seg] ?? 'var(--marca-calida)'}
+            detalle={`${s.completos}/${s.total}`}
           />
-          <p className="text-xs tabular-nums" style={{ color: 'var(--text-muted)' }}>
-            {formatCLP(d.cotizado)} de {formatCLP(d.presupuesto)}
+        ))}
+        {Object.entries(d.porSegmento).map(([seg, s]) => (
+          <p key={`${seg}-plata`} className="text-xs tabular-nums" style={{ color: 'var(--text-muted)' }}>
+            <span className="font-semibold" style={{ color: SEG_COLOR[seg] ?? 'var(--marca-calida)' }}>{seg}</span>
+            {' '}{formatCLP(s.montoRendido)} / {formatCLP(s.monto)}
           </p>
-          <p className="text-sm font-semibold" style={{ color: d.sobrePresupuesto > 0 ? 'var(--alerta)' : 'var(--verde-dark)' }}>
-            {d.sobrePresupuesto === 0
-              ? 'Nadie sobre su presupuesto'
-              : `${d.sobrePresupuesto} socio${d.sobrePresupuesto === 1 ? '' : 's'} sobre presupuesto · ${formatCLP(d.bolsillo)} de bolsillo`}
-          </p>
-        </Tarjeta>
-
-        <Tarjeta titulo="Proveedor de compra" className="snap-start shrink-0 w-[78vw] max-w-xs sm:w-auto sm:max-w-none sm:shrink">
-          {d.proveedores.length === 0 && (
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Ninguno confirmado todavía.</p>
-          )}
-          {d.proveedores.map(p => (
-            <BarraFila key={p.nombre} nombre={p.nombre} valor={p.n} max={d.total} color="var(--verde)" detalle={`${p.n}`} />
-          ))}
-          <BarraFila nombre="Sin confirmar" valor={d.sinConfirmar} max={d.total} color="var(--linea-fuerte)" detalle={`${d.sinConfirmar}`} />
-        </Tarjeta>
-      </div>
+        ))}
+    </Tarjeta>
     </div>
   )
 }

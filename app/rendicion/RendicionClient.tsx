@@ -289,7 +289,7 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className="flex items-center gap-2 px-1 mr-8 pb-3 -mb-px text-sm font-semibold transition-colors"
+              className="nav-item flex items-center gap-2 px-1 mr-8 pb-3 -mb-px text-sm font-semibold transition-colors"
               style={{
                 color: active ? 'var(--tinta)' : 'var(--tinta-45)',
                 borderBottom: active ? '2px solid var(--tinta)' : '2px solid transparent',

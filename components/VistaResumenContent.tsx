@@ -332,34 +332,22 @@ export function VistaResumenContent() {
                 {hayPrecios ? formatCLP(totalGasto) : '—'}
               </p>
 
-              {/* Barra proporcional CP / INV: el gráfico del total, antes de
-                  bajar al detalle de cada proyecto. */}
+              {/* Reparto CP / INV. Antes era una barra apilada de 56px de alto
+                  con el porcentaje escrito adentro en blanco: leía como una
+                  cinta de progreso (que no es -- ninguno de los dos lados
+                  "avanza") y el monto de cada proyecto no aparecía. El anillo
+                  muestra la misma proporción y deja lugar para la cifra. */}
               {hayPrecios && totalGasto > 0 && (
-                <div className="mt-8">
-                  <div className="flex h-14 w-full overflow-hidden rounded-[4px]" style={{ border: '1px solid var(--linea-fuerte)' }}>
-                    {porSegmento.map(({ sigla, gasto }, i) => {
-                      const pct = (gasto / totalGasto) * 100
-                      if (pct <= 0) return null
-                      return (
-                        <div
-                          key={sigla}
-                          className="flex items-center justify-center text-xs font-bold transition-[width] duration-700"
-                          style={{
-                            width: `${pct}%`,
-                            // CP = terracota, INV = verde bosque: los mismos dos
-                            // colores identifican a cada proyecto en toda la app
-                            // (dashboard, panel de proyecto, chips de segmento).
-                            background: i === 0 ? 'var(--marca-calida)' : 'var(--marca)',
-                            color: 'var(--papel)',
-                            borderLeft: i === 1 ? '1px solid var(--papel)' : undefined,
-                          }}
-                        >
-                          {pct >= 12 && `${sigla} ${Math.round(pct)}%`}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
+                <DonutSplit
+                  total={totalGasto}
+                  partes={porSegmento.map(({ sigla, nombre, gasto, seg }) => ({
+                    sigla, nombre, gasto,
+                    // CP = terracota, INV = verde bosque: los mismos dos colores
+                    // identifican a cada proyecto en toda la app (dashboard,
+                    // panel de proyecto, chips de segmento).
+                    color: seg === 'Invernadero' ? 'var(--marca)' : 'var(--marca-calida)',
+                  }))}
+                />
               )}
             </section>
           </Reveal>
@@ -383,22 +371,58 @@ export function VistaResumenContent() {
 
           {/* ---- Polines: total general, el insumo que comparten ---------- */}
           <Reveal delay={120}>
-            <section className="p-6 rounded-[6px]" style={{ background: 'var(--marca)', color: 'var(--papel)' }}>
-              <div className="flex flex-wrap items-end justify-between gap-6">
+            {/* Antes era un rectángulo de verde plano con las tres cifras
+                sueltas: no se veía de dónde salía el total ni cuánto pesaba
+                cada proyecto. Ahora el panel va en verde-tinta (la superficie
+                oscura del sistema), abre con una franja partida en la misma
+                proporción que las cifras, y cada sigla lleva su barra. */}
+            <section
+              className="relative overflow-hidden rounded-[8px]"
+              style={{
+                background: 'var(--tinta)',
+                backgroundImage: 'radial-gradient(120% 120% at 100% 0%, rgba(232,134,43,0.16) 0%, transparent 58%)',
+                color: 'var(--papel)',
+              }}
+            >
+              <div className="flex h-[3px] w-full" aria-hidden>
+                {porSegmento.map(s => (
+                  <div
+                    key={s.seg}
+                    style={{
+                      flex: `${s.polines} 1 0%`,
+                      background: colorEnOscuro(s.seg),
+                      minWidth: s.polines > 0 ? 8 : 0,
+                    }}
+                  />
+                ))}
+              </div>
+              <div className="p-6 sm:p-8 flex flex-wrap items-end justify-between gap-x-10 gap-y-8">
                 <div>
-                  <p className="eyebrow" style={{ color: 'rgba(244,240,231,0.82)' }}>Total de polines</p>
+                  <p className="eyebrow" style={{ color: 'rgba(244,240,231,0.72)' }}>Total de polines</p>
                   <p className="titulo-lg mt-2 tabular-nums">{totalPolines || '—'}</p>
-                  <p className="text-xs mt-2" style={{ color: 'rgba(244,240,231,0.82)' }}>
+                  <p className="text-xs mt-2" style={{ color: 'rgba(244,240,231,0.72)' }}>
                     Sumando los dos proyectos
                   </p>
                 </div>
-                <div className="flex gap-8">
-                  {porSegmento.map(s => (
-                    <div key={s.seg}>
-                      <p className="eyebrow" style={{ color: 'rgba(244,240,231,0.82)' }}>{s.sigla}</p>
-                      <p className="titulo-md mt-1 tabular-nums">{s.polines || '—'}</p>
-                    </div>
-                  ))}
+                <div className="flex flex-wrap gap-x-10 gap-y-6">
+                  {porSegmento.map(s => {
+                    const pct = totalPolines > 0 ? (s.polines / totalPolines) * 100 : 0
+                    return (
+                      <div key={s.seg} className="min-w-[104px]">
+                        <p className="eyebrow" style={{ color: 'rgba(244,240,231,0.72)' }}>{s.sigla}</p>
+                        <p className="titulo-md mt-1 tabular-nums">{s.polines || '—'}</p>
+                        <div className="h-[3px] w-full mt-3 rounded-full" style={{ background: 'rgba(244,240,231,0.18)' }}>
+                          <div
+                            className="h-full rounded-full motion-safe:transition-[width] motion-safe:duration-700 motion-safe:ease-out"
+                            style={{ width: `${pct}%`, background: colorEnOscuro(s.seg) }}
+                          />
+                        </div>
+                        <p className="text-xs mt-2 tabular-nums" style={{ color: 'rgba(244,240,231,0.72)' }}>
+                          {Math.round(pct)}% del total
+                        </p>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             </section>
@@ -530,11 +554,93 @@ export function VistaResumenContent() {
   )
 }
 
+/** Color de proyecto sobre la superficie oscura del panel de polines. El
+ *  verde bosque (#3f5c1c) y el terracota (#8b5a2b) del sistema están hechos
+ *  para leerse sobre papel crema; sobre --tinta (#1f2419) quedan casi
+ *  invisibles, así que ahí se usan aclarados con el mismo crema. */
+function colorEnOscuro(seg: Segmento) {
+  return seg === 'Invernadero'
+    ? 'color-mix(in oklab, var(--marca) 52%, var(--papel))'
+    : 'color-mix(in oklab, var(--marca-calida) 58%, var(--papel))'
+}
+
 /** "Polines" es el único insumo que comparten los dos proyectos y el que
  *  Juan mira primero para comprar. El match va por nombre porque el catálogo
  *  no tiene una columna de familia. */
 function esPolin(nombre: string) {
   return nombre.trim().toLowerCase().startsWith('polines')
+}
+
+/** Anillo de reparto entre los dos proyectos. SVG puro, sin librería de
+ *  gráficos: son dos arcos, y /rendicion ya evita recharts a propósito por
+ *  peso de JS (ver app/rendicion/GraficosRendicion.tsx). Cada arco deja un
+ *  hueco de 4px para que los dos tonos no se toquen. */
+function DonutSplit({ partes, total }: {
+  partes: { sigla: string; nombre: string; gasto: number; color: string }[]
+  total: number
+}) {
+  const size = 168
+  const grosor = 20
+  const r = (size - grosor) / 2
+  const circunferencia = 2 * Math.PI * r
+  const hueco = 4
+  const visibles = partes.filter(p => p.gasto > 0)
+
+  let acumulado = 0
+  const arcos = visibles.map(p => {
+    const largo = (p.gasto / total) * circunferencia
+    const arco = { ...p, largo: Math.max(0, largo - hueco), offset: acumulado }
+    acumulado += largo
+    return arco
+  })
+
+  return (
+    <div className="mt-8 flex flex-wrap items-center gap-x-10 gap-y-6">
+      <svg
+        width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0"
+        role="img"
+        aria-label={visibles.map(p => `${p.nombre}: ${formatCLP(p.gasto)}, ${Math.round((p.gasto / total) * 100)}%`).join('. ')}
+      >
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--linea)" strokeWidth={grosor} />
+        {arcos.map(a => (
+          <circle
+            key={a.sigla}
+            cx={size / 2} cy={size / 2} r={r} fill="none"
+            stroke={a.color} strokeWidth={grosor}
+            strokeDasharray={`${a.largo} ${circunferencia - a.largo}`}
+            strokeDashoffset={-a.offset}
+            transform={`rotate(-90 ${size / 2} ${size / 2})`}
+            className="motion-safe:transition-[stroke-dasharray,stroke-dashoffset] motion-safe:duration-700 motion-safe:ease-out"
+          />
+        ))}
+        <text
+          x="50%" y="50%" textAnchor="middle" dominantBaseline="central"
+          className="text-[11px] font-semibold uppercase"
+          style={{ fill: 'var(--tinta-45)', letterSpacing: '0.14em' }}
+        >
+          Reparto
+        </text>
+      </svg>
+
+      <dl className="min-w-[210px] flex-1 space-y-3">
+        {visibles.map(p => {
+          const pct = (p.gasto / total) * 100
+          return (
+            <div key={p.sigla} className="flex items-baseline justify-between gap-4 pb-3" style={{ borderBottom: '1px solid var(--linea)' }}>
+              <dt className="flex items-center gap-2.5 text-sm" style={{ color: 'var(--tinta-70)' }}>
+                <span aria-hidden className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: p.color }} />
+                {p.nombre}
+              </dt>
+              <dd className="text-right">
+                <span className="text-base font-semibold tabular-nums" style={{ color: 'var(--tinta)' }}>{formatCLP(p.gasto)}</span>
+                <span className="ml-2 text-xs tabular-nums" style={{ color: 'var(--tinta-45)' }}>{Math.round(pct)}%</span>
+              </dd>
+            </div>
+          )
+        })}
+      </dl>
+    </div>
+  )
 }
 
 function TagSegmento({ tag }: { tag: 'CP' | 'INV' }) {
@@ -634,8 +740,13 @@ function PanelSegmento({
         </div>
       ) : (
         <div className="pt-2 mt-auto">
-          <Button variant="accent" onClick={onConfirmar} disabled={!puedeConfirmar || gasto <= 0} className="w-full">
-            <Check size={15} strokeWidth={2.5} /> Marcar {nombre} como comprado
+          <Button
+            variant="accent"
+            onClick={onConfirmar}
+            disabled={!puedeConfirmar || gasto <= 0}
+            className="w-full !py-3.5 !text-[15px]"
+          >
+            <Check size={17} strokeWidth={2.5} /> Marcar {nombre} como comprado
           </Button>
           <p className="text-xs mt-2" style={{ color: 'var(--tinta-70)' }}>
             Márcalo cuando la compra ya esté hecha: congela los precios y las cantidades de este proyecto.

@@ -125,7 +125,7 @@ export default function Navbar({ role, tieneBeneficiario }: { role: NavRole; tie
                 href={link.href}
                 onPointerEnter={() => precargar(link.href, link.chunk)}
                 onFocus={() => precargar(link.href, link.chunk)}
-                className="px-1 mx-2.5 py-1.5 text-sm font-medium transition-colors"
+                className="nav-item px-1 mx-2.5 py-1.5 text-sm font-medium transition-colors"
                 style={pathname === link.href
                   ? { color: 'var(--tinta)', fontWeight: 600, boxShadow: 'inset 0 -2px 0 0 var(--tinta)' }
                   : { color: 'var(--tinta-45)' }}
@@ -239,7 +239,7 @@ export function MobileTabBar({ role, tieneBeneficiario }: { role: NavRole; tiene
             // click, y esos 100ms son justo el pedido del chunk.
             onTouchStart={() => precargar(link.href, link.chunk)}
             onPointerEnter={() => precargar(link.href, link.chunk)}
-            className="relative flex flex-1 min-w-0 flex-col items-center justify-center gap-0.5 px-1 py-2 text-[10px] font-medium"
+            className="nav-item relative flex flex-1 min-w-0 flex-col items-center justify-center gap-0.5 px-1 py-2 text-[10px] font-medium"
             style={{ color: active ? 'var(--tinta)' : 'var(--tinta-45)' }}
             aria-current={active ? 'page' : undefined}
           >
