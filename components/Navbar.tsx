@@ -7,6 +7,7 @@ import { useState, useEffect, useRef } from 'react'
 import {
   Download, LogOut, ClipboardList, Users, Tag, Calculator, ShieldCheck, ShoppingBag,
 } from 'lucide-react'
+import { Button, IconButton } from '@/components/design-system'
 
 // "Resumen" (ex /vista-resumen) se consolidó como sub-tab dentro de
 // /rendicion -- ver components/VistaResumenContent.tsx -- para que la barra
@@ -70,6 +71,7 @@ export default function Navbar({ role, tieneBeneficiario }: { role: NavRole; tie
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [isIOS, setIsIOS] = useState(false)
   const [showIOSHint, setShowIOSHint] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
   const links = linksParaViewer(role, tieneBeneficiario)
   const precargar = usePrecargaEnIntencion()
 
@@ -92,7 +94,20 @@ export default function Navbar({ role, tieneBeneficiario }: { role: NavRole; tie
     const standalone = window.matchMedia('(display-mode: standalone)').matches
     if (ios && !standalone) setIsIOS(true)
 
-    return () => window.removeEventListener('beforeinstallprompt', handler)
+    // La cabecera solo se separa del contenido cuando hay algo desplazado
+    // debajo. El listener es pasivo y solo escribe estado cuando cruza el
+    // umbral: no re-renderiza en cada píxel de scroll.
+    const onScroll = () => setScrolled(prev => {
+      const ahora = window.scrollY > 4
+      return prev === ahora ? prev : ahora
+    })
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler)
+      window.removeEventListener('scroll', onScroll)
+    }
   }, [])
 
   async function handleInstall() {
@@ -102,33 +117,46 @@ export default function Navbar({ role, tieneBeneficiario }: { role: NavRole; tie
   }
 
   return (
-    <header className="sticky top-0 z-40" style={{
-      background: 'var(--papel)',
-      borderBottom: '1px solid var(--linea)',
-    }}>
+    <header
+      className="app-header sticky top-0 z-40"
+      data-scrolled={scrolled}
+      style={{
+        background: 'var(--papel)',
+        borderBottom: '1px solid var(--linea)',
+      }}
+    >
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-14 items-center justify-between gap-3">
+        <div className="flex h-14 sm:h-16 items-center justify-between gap-3">
 
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 shrink-0">
-            <Image src="/logo.png" alt="Proyecto PAT" width={30} height={30} className="rounded-[4px]" />
-            <span className="text-sm font-semibold tracking-tight" style={{ color: 'var(--tinta)' }}>
-              Proyecto PAT
-            </span>
-          </Link>
+          {/* Marca. El separador vertical existe solo en escritorio: es lo que
+              hace que el logo lea como firma y no como el primer ítem del
+              menú. */}
+          <div className="flex items-center gap-4 min-w-0">
+            <Link href="/" className="nav-item flex items-center gap-2.5 shrink-0 rounded-full">
+              <Image src="/logo.png" alt="Proyecto PAT" width={32} height={32} className="rounded-full" />
+              <span
+                className="text-[15px] font-semibold tracking-[-0.01em]"
+                style={{ color: 'var(--tinta)' }}
+              >
+                Proyecto PAT
+              </span>
+            </Link>
+            {links.length > 0 && (
+              <span aria-hidden className="hidden sm:block h-6 w-px" style={{ background: 'var(--linea)' }} />
+            )}
+          </div>
 
-          {/* Desktop nav */}
-          <nav className="hidden sm:flex gap-1">
+          {/* Menú de escritorio */}
+          <nav className="hidden sm:flex items-center gap-1">
             {links.map(link => (
               <Link
                 key={link.href}
                 href={link.href}
                 onPointerEnter={() => precargar(link.href, link.chunk)}
                 onFocus={() => precargar(link.href, link.chunk)}
-                className="nav-item px-1 mx-2.5 py-1.5 text-sm font-medium transition-colors"
-                style={pathname === link.href
-                  ? { color: 'var(--tinta)', fontWeight: 600, boxShadow: 'inset 0 -2px 0 0 var(--tinta)' }
-                  : { color: 'var(--tinta-45)' }}
+                className="nav-item nav-pill px-3.5 h-9 text-sm"
+                data-activo={pathname === link.href}
+                aria-current={pathname === link.href ? 'page' : undefined}
               >
                 {link.label}
               </Link>
@@ -138,22 +166,14 @@ export default function Navbar({ role, tieneBeneficiario }: { role: NavRole; tie
           {/* Desktop right actions */}
           <div className="hidden sm:flex items-center gap-2">
             {installPrompt && (
-              <button
-                onClick={handleInstall}
-                className="flex items-center gap-1.5 rounded-[4px] px-3 py-1.5 text-xs font-semibold"
-                style={{ background: 'var(--papel-hueco)', color: 'var(--verde-dark)', border: '1px solid var(--linea-fuerte)' }}
-              >
-                <Download size={13} /> Instalar app
-              </button>
+              <Button size="sm" variant="secondary" onClick={handleInstall} className="rounded-full">
+                <Download size={14} /> Instalar app
+              </Button>
             )}
             {links.length > 0 && (
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-1.5 rounded-[4px] px-3 py-1.5 text-xs font-semibold"
-                style={{ color: 'var(--cafe)' }}
-              >
-                <LogOut size={13} /> Salir
-              </button>
+              <Button size="sm" variant="ghost" onClick={handleLogout} className="rounded-full">
+                <LogOut size={14} /> Salir
+              </Button>
             )}
           </div>
 
@@ -161,36 +181,21 @@ export default function Navbar({ role, tieneBeneficiario }: { role: NavRole; tie
           <div className="flex sm:hidden items-center gap-2">
             {/* iOS install hint */}
             {isIOS && (
-              <button
-                onClick={() => setShowIOSHint(v => !v)}
-                className="flex items-center justify-center gap-1 rounded-[4px] min-h-[44px] min-w-[44px] text-xs font-semibold"
-                style={{ background: 'var(--papel-hueco)', color: 'var(--verde-dark)', border: '1px solid var(--linea-fuerte)' }}
-                aria-label="Instalar app"
-              >
-                <Download size={16} />
-              </button>
+              <IconButton onClick={() => setShowIOSHint(v => !v)} aria-label="Instalar app">
+                <Download size={18} />
+              </IconButton>
             )}
             {/* Android/Chrome install */}
             {installPrompt && (
-              <button
-                onClick={handleInstall}
-                className="flex items-center justify-center gap-1 rounded-[4px] min-h-[44px] min-w-[44px] text-xs font-semibold"
-                style={{ background: 'var(--papel-hueco)', color: 'var(--verde-dark)', border: '1px solid var(--linea-fuerte)' }}
-                aria-label="Instalar app"
-              >
-                <Download size={16} />
-              </button>
+              <IconButton onClick={handleInstall} aria-label="Instalar app">
+                <Download size={18} />
+              </IconButton>
             )}
             {/* Salir */}
             {links.length > 0 && (
-              <button
-                onClick={handleLogout}
-                className="flex items-center justify-center rounded-[4px] min-h-[44px] min-w-[44px]"
-                style={{ color: 'var(--cafe)' }}
-                aria-label="Salir"
-              >
+              <IconButton onClick={handleLogout} aria-label="Salir">
                 <LogOut size={18} />
-              </button>
+              </IconButton>
             )}
           </div>
         </div>
@@ -239,18 +244,19 @@ export function MobileTabBar({ role, tieneBeneficiario }: { role: NavRole; tiene
             // click, y esos 100ms son justo el pedido del chunk.
             onTouchStart={() => precargar(link.href, link.chunk)}
             onPointerEnter={() => precargar(link.href, link.chunk)}
-            className="nav-item relative flex flex-1 min-w-0 flex-col items-center justify-center gap-0.5 px-1 py-2 text-[10px] font-medium"
-            style={{ color: active ? 'var(--tinta)' : 'var(--tinta-45)' }}
+            className="nav-item flex flex-1 min-w-0 flex-col items-center justify-center gap-1 px-1 pt-2 pb-1.5 text-[10px] font-medium"
+            style={{ color: active ? 'var(--marca-dark)' : 'var(--tinta-70)' }}
             aria-current={active ? 'page' : undefined}
           >
-            {active && (
-              <span
-                aria-hidden
-                className="absolute top-0 h-0.5 w-8"
-                style={{ background: 'var(--marca)' }}
-              />
-            )}
-            <Icon size={20} strokeWidth={active ? 2.5 : 2} />
+            {/* La pastilla es el mismo indicador que el menú de escritorio,
+                acá detrás del ícono: la barra de 2px pegada al borde superior
+                quedaba tapada por la sombra del contenido al hacer scroll. */}
+            <span
+              className="nav-pill flex h-7 w-12 items-center justify-center"
+              data-activo={active}
+            >
+              <Icon size={19} strokeWidth={active ? 2.4 : 2} />
+            </span>
             <span className="w-full truncate text-center">{link.corto}</span>
           </Link>
         )

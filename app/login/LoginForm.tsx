@@ -174,22 +174,23 @@ export function LoginForm() {
             </form>
 
             <div className="flex items-center justify-center gap-4 text-sm pt-1" style={{ color: 'var(--text-muted)' }}>
-              <button
+              <Button
                 type="button"
+                variant="link"
                 onClick={enviarLink}
-                disabled={loading || cooldown > 0 || !email}
-                className="font-medium underline underline-offset-2 min-h-[44px] disabled:no-underline disabled:opacity-60"
+                cargando={loading}
+                disabled={cooldown > 0 || !email}
               >
-                {loading ? 'Enviando…' : cooldown > 0 ? `Reenviar en ${cooldown}s` : 'Reenviar correo'}
-              </button>
+                {cooldown > 0 ? `Reenviar en ${cooldown}s` : 'Reenviar correo'}
+              </Button>
               <span aria-hidden>·</span>
-              <button
+              <Button
                 type="button"
+                variant="link"
                 onClick={() => { setEnviado(false); setCodigo(''); setCodigoError(null); setError(null) }}
-                className="font-medium underline underline-offset-2 min-h-[44px]"
               >
                 Cambiar email
-              </button>
+              </Button>
             </div>
             {error && <Alert tone="error">{error}</Alert>}
           </motion.div>

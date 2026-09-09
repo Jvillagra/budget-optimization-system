@@ -193,21 +193,57 @@ body {
    skeuomorfismo. El degradado nunca aclara el fondo por debajo del tono base
    de la paleta, así el contraste medido del sistema (papel sobre --marca
    6.69:1, tinta sobre --acento 5.95:1) sigue siendo el piso. */
+/* Base de TODO control con forma de botón (Button, IconButton, Chip). El
+   hundido de 1px al presionar es el único movimiento: reemplaza al
+   `active:scale-[0.98]` que cada pantalla repetía a mano. */
+.btn-base {
+  position: relative;
+  cursor: pointer;
+  transition: background-color 0.16s ease, color 0.16s ease,
+              border-color 0.16s ease, box-shadow 0.16s ease,
+              filter 0.16s ease, transform 0.08s ease;
+}
+.btn-base:active:not(:disabled) { transform: translateY(1px); }
+@media (prefers-reduced-motion: reduce) {
+  .btn-base { transition: none; }
+  .btn-base:active:not(:disabled) { transform: none; }
+}
+
+/* El botón sólido ya no se despega del papel al pasar el mouse: levantarlo y
+   proyectarle una sombra larga lo dejaba con aspecto de estar presionado o
+   elegido. Ahora el hover solo oscurece un punto el degradado, que es lo que
+   hace un botón de verdad. */
 .btn-solid {
   box-shadow: 0 1px 2px rgba(31, 36, 25, 0.16);
-  transition: box-shadow 0.2s ease, transform 0.2s ease, filter 0.2s ease;
 }
-.btn-solid:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 18px -8px rgba(31, 36, 25, 0.45);
+.btn-solid:hover:not(:disabled) { filter: brightness(0.94); }
+.btn-solid:active:not(:disabled) { filter: brightness(0.90); }
+.btn-solid:disabled { box-shadow: none; filter: none; }
+
+/* Acción de texto: el subrayado se dibuja con box-shadow y no con
+   text-decoration para poder separarlo de la línea base y engrosarlo en
+   hover sin mover el texto. */
+.btn-link {
+  box-shadow: inset 0 -1px 0 0 color-mix(in oklab, var(--marca-dark) 45%, transparent);
 }
-.btn-solid:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow: 0 1px 2px rgba(31, 36, 25, 0.16);
+.btn-link:hover:not(:disabled) {
+  box-shadow: inset 0 -2px 0 0 var(--marca-dark);
 }
-.btn-solid:disabled { box-shadow: none; }
+.btn-link:disabled { box-shadow: none; }
+
+/* Spinner del estado `cargando` de Button. currentColor: sirve igual sobre
+   verde, sobre naranja y sobre papel. */
+.btn-spinner {
+  width: 1em;
+  height: 1em;
+  border-radius: 999px;
+  border: 2px solid color-mix(in oklab, currentColor 30%, transparent);
+  border-top-color: currentColor;
+  animation: girar 0.7s linear infinite;
+}
+@keyframes girar { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
-  .btn-solid:hover:not(:disabled) { transform: none; }
+  .btn-spinner { animation-duration: 2.4s; }
 }
 
 .btn-primary-solid {
@@ -233,14 +269,92 @@ body {
   outline-offset: 2px;
 }
 
+/* Nada de "seleccionado" pegado en los controles. Tres cosas distintas
+   producían esa sensación y se apagan las tres:
+     1. El flash gris de tap de Android/iOS sobre cualquier botón o link.
+     2. La selección de texto: un doble clic (o dos toques seguidos en el
+        celular) pintaba de azul la etiqueta del botón, como si fuera texto.
+     3. El foco que queda tras hacer clic con el mouse. :focus-visible ya
+        debería evitarlo, pero un control que recupera el foco al cerrarse un
+        diálogo vuelve a quedar marcado: se anula explícitamente el foco que
+        NO es de teclado.
+   El anillo de teclado se conserva intacto -- es requisito de accesibilidad,
+   no un adorno. */
+button,
+a,
+label,
+select,
+summary,
+[role='button'],
+[role='tab'] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+[role='button'],
+[role='tab'],
+.nav-item {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+button:focus:not(:focus-visible),
+a:focus:not(:focus-visible),
+[role='button']:focus:not(:focus-visible) {
+  outline: none;
+}
+
 /* Navegación (links del menú y sub-tabs). El anillo rectangular del sistema
    dibujaba una caja alrededor de la palabra y quedaba pegado después de
    hacer clic: se leía como "borde de la pestaña activa", no como foco. Acá
    el indicador es superficie tenue + subrayado de marca -- sigue siendo
    visible con teclado (requisito de foco visible), sin la caja. */
+/* Navegación: una sola forma para el menú de escritorio, la barra inferior
+   del celular y las sub-tabs de /rendicion. Antes cada una tenía su propio
+   indicador (subrayado tinta, barra superior de 2px, borde inferior) y las
+   tres convivían en la misma pantalla.
+
+   La pastilla resuelve además el reclamo de fondo: el "elegido" ahora es un
+   relleno con forma propia, no una línea que se confunde con el foco del
+   navegador. --marca-dark sobre --marca-hueco da 8.9:1, muy por encima del
+   AA que exige la vista cansada del uso en terreno. */
+.nav-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  color: var(--tinta-70);
+  font-weight: 500;
+  transition: background-color 0.18s ease, color 0.18s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.nav-pill:hover { background: var(--papel-hueco); color: var(--tinta); }
+.nav-pill[data-activo='true'] {
+  background: var(--marca-hueco);
+  color: var(--marca-dark);
+  font-weight: 600;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-pill { transition: none; }
+}
+
+/* La cabecera se despega del contenido solo cuando hay contenido debajo:
+   sin scroll es una línea de 1px como el resto del sistema. Sin blur ni
+   sombra de color -- ver la nota de .glass. */
+.app-header {
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+.app-header[data-scrolled='true'] {
+  border-bottom-color: var(--linea-fuerte);
+  box-shadow: 0 1px 12px -6px rgba(31, 36, 25, 0.35);
+}
+
 .nav-item:focus-visible {
+  outline: 2px solid var(--marca);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+.nav-item:focus:not(:focus-visible) {
   outline: none;
-  border-radius: 4px;
-  background: var(--papel-hueco);
-  box-shadow: inset 0 -2px 0 0 var(--marca);
+  background: transparent;
 }

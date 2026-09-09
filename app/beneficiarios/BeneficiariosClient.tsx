@@ -6,6 +6,7 @@ import type { Beneficiario, CatalogoInsumo, Asignacion, AyudaMemoria, Proveedor 
 import { buildPrecioMap, calcularCostoCarrito, formatCLP, PRESUPUESTO_BASE } from '@/lib/business-logic'
 import { useProveedor, proveedorPorDefecto, STORAGE_KEY } from '@/lib/proveedor-context'
 import type { DatosStaff } from '@/lib/staff-data'
+import { Button, IconButton, Chip } from '@/components/design-system'
 
 type Filtro = 'todos' | 'Invernadero' | 'Cierre Perimetral'
 
@@ -147,13 +148,9 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
     <div className="rounded-[6px] p-8 glass text-center space-y-3">
       <p className="text-sm font-semibold" style={{ color: 'var(--alerta)' }}>Error al cargar los datos</p>
       <p className="text-xs" style={{ color: 'var(--tinta-45)' }}>Revisa tu conexión e intenta nuevamente.</p>
-      <button
-        onClick={() => { setLoadError(false); setLoading(true); window.location.reload() }}
-        className="text-sm font-semibold px-4 py-2 rounded-[4px]"
-        style={{ background: 'var(--verde)', color: 'var(--papel)' }}
-      >
+      <Button onClick={() => { setLoadError(false); setLoading(true); window.location.reload() }}>
         Reintentar
-      </button>
+      </Button>
     </div>
   )
 
@@ -182,16 +179,9 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
             </div>
             <div className="flex gap-1">
               {(['todos', 'Invernadero', 'Cierre Perimetral'] as const).map(f => (
-                <button
-                  key={f}
-                  onClick={() => setFiltro(f)}
-                  className="text-xs px-3 py-2 min-h-[38px] rounded-[4px] border transition-all font-semibold"
-                  style={filtro === f
-                    ? { background: 'var(--marca)', color: 'var(--papel)', borderColor: 'var(--marca)' }
-                    : { color: 'var(--tinta-70)', borderColor: 'var(--linea)' }}
-                >
+                <Chip key={f} activo={filtro === f} onClick={() => setFiltro(f)}>
                   {f}
-                </button>
+                </Chip>
               ))}
             </div>
           </div>
@@ -287,13 +277,9 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
                   {benSeleccionado.segmento}
                 </span>
               </div>
-              <button
-                onClick={() => setSheetOpen(false)}
-                className="rounded-full p-2"
-                style={{ background: 'var(--linea)', color: 'var(--tinta-45)' }}
-              >
-                <X size={16} />
-              </button>
+              <IconButton onClick={() => setSheetOpen(false)} aria-label="Cerrar">
+                <X size={18} />
+              </IconButton>
             </div>
             {/* Scrollable content */}
             <div className="overflow-y-auto flex-1 p-4 space-y-3">
@@ -449,13 +435,14 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
                           <span style={{ color: 'var(--verde-dark)' }}>{formatCLP(costo)}</span>
                         )}
                       </div>
-                      <button
+                      <IconButton
                         onClick={() => eliminar(a.id)}
-                        className="shrink-0 p-1 rounded-[4px]"
-                        style={{ color: 'var(--alerta)', background: 'var(--acento-hueco)' }}
+                        tone="peligro"
+                        className="h-9 w-9"
+                        aria-label={`Quitar ${a.insumo_id}`}
                       >
                         <TrashIcon />
-                      </button>
+                      </IconButton>
                     </li>
                   )
                 })}
@@ -498,14 +485,14 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
                       className="w-20 rounded-[4px] px-3 py-2 text-sm focus:outline-none"
                       style={{ border: '1px solid var(--linea-fuerte)', background: 'var(--papel)' }}
                     />
-                    <button
+                    <Button
                       onClick={agregar}
-                      disabled={!insumoForm || sinPrecio || agregando}
-                      className="flex-1 rounded-[4px] text-sm text-[var(--papel)] font-semibold py-2 disabled:opacity-40"
-                      style={{ background: 'var(--verde)' }}
+                      disabled={!insumoForm || sinPrecio}
+                      cargando={agregando}
+                      className="flex-1"
                     >
-                      {agregando ? '...' : 'agregar'}
-                    </button>
+                      Agregar
+                    </Button>
                   </div>
                 </>
               )

@@ -1,11 +1,11 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { ScanLine, Pencil, EyeOff, RotateCcw } from 'lucide-react'
+import { ScanLine, Pencil, EyeOff, RotateCcw, X } from 'lucide-react'
 import type { CatalogoInsumo, Proveedor, CompraSegmento } from '@/lib/types'
 import { formatCLP } from '@/lib/business-logic'
 import type { DatosStaff } from '@/lib/staff-data'
-import { Button, Alert, ConfirmDialog } from '@/components/design-system'
+import { Button, Alert, ConfirmDialog, IconButton } from '@/components/design-system'
 import { PageHeader } from '@/components/Editorial'
 
 type PrecioMap = Map<string, number | null>
@@ -290,7 +290,9 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
       {visionResultado && (
         <Alert tone="info" className="mb-4 flex items-start justify-between gap-3">
           <span>{visionResultado}</span>
-          <button onClick={() => setVisionResultado(null)} aria-label="Cerrar aviso">✕</button>
+          <IconButton onClick={() => setVisionResultado(null)} className="h-8 w-8 -mr-1" aria-label="Cerrar aviso">
+            <X size={16} />
+          </IconButton>
         </Alert>
       )}
 
@@ -484,13 +486,15 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
                           style={{ background: 'var(--papel)' }}
                         />
                       ) : (
-                        <button
+                        <Button
+                          variant="link"
+                          size="sm"
                           onClick={() => { setEditingId(p.id); setEditNombre(p.nombre) }}
-                          className="hover:underline"
+                          className="min-h-0 font-semibold text-[inherit]"
                           title="Editar nombre"
                         >
                           {p.nombre}
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </th>
@@ -542,8 +546,13 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
                 <ScanLine size={18} style={{ color: 'var(--cafe)' }} />
                 <h2 className="font-bold text-sm" style={{ color: 'var(--tinta)' }}>Escanear Cotización (IA)</h2>
               </div>
-              <button onClick={() => { setShowVision(false); setVisionFile(null); setVisionPreview(null); setVisionData(null) }}
-                className="text-lg leading-none" style={{ color: 'var(--tinta-45)' }}>✕</button>
+              <IconButton
+                onClick={() => { setShowVision(false); setVisionFile(null); setVisionPreview(null); setVisionData(null) }}
+                className="-mr-2"
+                aria-label="Cerrar el escaneo"
+              >
+                <X size={18} />
+              </IconButton>
             </div>
 
             {/* Proveedor destino */}
@@ -574,18 +583,16 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={visionPreview} alt="Cotización" className="w-full rounded-[6px] object-contain max-h-40" />
                 {!visionData && (
-                  <button onClick={escanearCotizacion} disabled={visionLoading || !visionProvId}
-                    className="w-full rounded-[6px] py-2.5 text-sm text-[var(--papel)] font-bold disabled:opacity-40 flex items-center justify-center gap-2"
-                    style={{ background: 'var(--marca-calida)' }}>
-                    {visionLoading ? (
-                      <>
-                        <span className="inline-block w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                        Analizando cotización...
-                      </>
-                    ) : (
-                      <><ScanLine size={15} /> Escanear</>
-                    )}
-                  </button>
+                  <Button
+                    onClick={escanearCotizacion}
+                    disabled={!visionProvId}
+                    cargando={visionLoading}
+                    className="w-full"
+                  >
+                    {visionLoading
+                      ? 'Analizando cotización…'
+                      : <><ScanLine size={15} /> Escanear</>}
+                  </Button>
                 )}
               </div>
             )}
@@ -616,17 +623,19 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
                         </li>
                       ))}
                     </ul>
-                    <button onClick={aplicarPrecios} disabled={!visionProvId}
-                      className="w-full rounded-[6px] py-2.5 text-sm text-[var(--papel)] font-bold disabled:opacity-40"
-                      style={{ background: 'var(--verde)' }}>
+                    <Button onClick={aplicarPrecios} disabled={!visionProvId} className="w-full">
                       Aplicar precios a la matriz
-                    </button>
+                    </Button>
                   </>
                 )}
-                <button onClick={() => { setVisionFile(null); setVisionPreview(null); setVisionData(null) }}
-                  className="w-full text-xs py-1.5 rounded-[4px]" style={{ color: 'var(--tinta-45)' }}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => { setVisionFile(null); setVisionPreview(null); setVisionData(null) }}
+                  className="w-full"
+                >
                   Escanear otra imagen
-                </button>
+                </Button>
               </div>
             )}
           </div>

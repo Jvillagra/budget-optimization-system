@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { X, ImageOff, CheckCircle2, RotateCcw, Upload, ChevronDown, ClipboardList, BarChart3, Trash2, Lock } from 'lucide-react'
 import { formatCLP } from '@/lib/business-logic'
 import { FOTOS_REQUERIDAS } from '@/lib/constants'
-import { Card, Button, Badge, Input, Alert, Skeleton, ConfirmDialog } from '@/components/design-system'
+import { Card, Button, Badge, Input, Alert, Skeleton, ConfirmDialog, IconButton } from '@/components/design-system'
 import { PageHeader } from '@/components/Editorial'
 import { VistaResumenContent } from '@/components/VistaResumenContent'
 import { PanelControl, ESTADOS, estadoDe, type EstadoSocio } from './GraficosRendicion'
@@ -375,8 +375,10 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
           : 'Consolidado de la compra de los dos proyectos, con el total de cada uno.'}
       />
 
-      {/* Sub-tabs Lista/Resumen -- ver comentario en RendicionPageInner */}
-      <div className="flex" style={{ borderBottom: '1px solid var(--linea)' }}>
+      {/* Sub-tabs Lista/Resumen -- ver comentario en RendicionPageInner. Misma
+          pastilla que el menu principal: antes eran un borde inferior, o sea
+          un tercer indicador de "elegido" distinto conviviendo en la pantalla. */}
+      <div className="flex gap-1">
         {([
           { id: 'lista' as const, label: 'Lista', icon: ClipboardList },
           { id: 'resumen' as const, label: 'Resumen', icon: BarChart3 },
@@ -386,13 +388,11 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
           return (
             <button
               key={t.id}
+              type="button"
               onClick={() => setTab(t.id)}
-              className="nav-item flex items-center gap-2 px-1 mr-8 pb-3 -mb-px text-sm font-semibold transition-colors"
-              style={{
-                color: active ? 'var(--tinta)' : 'var(--tinta-45)',
-                borderBottom: active ? '2px solid var(--tinta)' : '2px solid transparent',
-              }}
-              aria-current={active ? 'page' : undefined}
+              className="nav-item nav-pill px-4 h-9 text-sm"
+              data-activo={active}
+              aria-pressed={active}
             >
               <Icon size={15} /> {t.label}
             </button>
@@ -576,9 +576,9 @@ function DetalleCotizacionModal({ f, onClose }: { f: FilaRendicion; onClose: () 
             <p className="font-bold text-base" style={{ color: 'var(--tinta)' }}>{f.nombre}</p>
             <Badge tone={f.segmento === 'Invernadero' ? 'verde' : 'terracota'} className="mt-1 !text-xs">{f.segmento}</Badge>
           </div>
-          <button onClick={onClose} className="rounded-full p-2" style={{ background: 'var(--linea)', color: 'var(--tinta-45)' }} aria-label="Cerrar">
-            <X size={16} />
-          </button>
+          <IconButton onClick={onClose} aria-label="Cerrar">
+            <X size={18} />
+          </IconButton>
         </div>
 
         <div className="overflow-y-auto flex-1 p-5 space-y-4">
@@ -667,16 +667,12 @@ function Lightbox({ nombre, fotos, index, onClose, onNavigate, onEliminar }: {
             {/* Borrar desde acá y no desde la miniatura: es donde la foto se
                 ve completa, así que se decide mirándola, y sirve igual en
                 mobile y en desktop sin ensuciar la grilla. */}
-            <button
-              onClick={() => onEliminar(foto)}
-              className="flex items-center gap-1.5 text-[var(--papel)]/80 hover:text-[var(--papel)] px-3 py-2 rounded-[4px] text-sm font-semibold"
-              style={{ border: '1px solid rgba(255,255,255,0.3)' }}
-            >
+            <Button variant="inverso" size="sm" onClick={() => onEliminar(foto)}>
               <Trash2 size={15} /> Eliminar
-            </button>
-            <button onClick={onClose} className="text-[var(--papel)]/80 hover:text-[var(--papel)] p-2" aria-label="Cerrar">
+            </Button>
+            <IconButton tone="inverso" onClick={onClose} aria-label="Cerrar">
               <X size={20} />
-            </button>
+            </IconButton>
           </div>
         </div>
         <div className="rounded-[6px] overflow-hidden bg-black/20" style={{ maxHeight: '75vh' }}>
@@ -689,7 +685,7 @@ function Lightbox({ nombre, fotos, index, onClose, onNavigate, onEliminar }: {
               <button
                 key={i}
                 onClick={() => onNavigate(i)}
-                className="w-1.5 h-1.5 rounded-full transition-all"
+                className="btn-base w-1.5 h-1.5 rounded-full"
                 style={{ background: i === index ? 'var(--papel)' : 'var(--papel-hueco)' }}
                 aria-label={`Ver foto ${i + 1}`}
               />
@@ -785,7 +781,7 @@ function FilaCard({
       {/* Total cotizado */}
       <button
         onClick={onVerCotizacion}
-        className="w-full flex items-center justify-between text-base"
+        className="btn-base w-full flex items-center justify-between text-base"
         style={{ borderTop: '1px solid var(--linea)', paddingTop: '0.75rem' }}
       >
         <span className="underline underline-offset-2" style={{ color: 'var(--text-muted)' }}>
@@ -820,7 +816,7 @@ function FilaCard({
                 <button
                   key={foto.id}
                   onClick={() => onOpenLightbox(i)}
-                  className="w-11 h-11 rounded-[4px] overflow-hidden shrink-0 transition-transform active:scale-95"
+                  className="btn-base w-11 h-11 rounded-[4px] overflow-hidden shrink-0"
                   style={{ border: '1px solid var(--linea)' }}
                   aria-label={`Ver foto ${i + 1} de ${f.nombre}`}
                 >
@@ -929,15 +925,16 @@ function FilaCard({
       )}
 
       {/* Detalle -- proveedor estimado/confirmado, configuración ocasional */}
-      <button
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={onToggleExpanded}
-        className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold py-2"
-        style={{ color: 'var(--verde-dark)' }}
+        className="w-full"
         aria-expanded={expanded}
       >
         {expanded ? 'Ocultar detalle' : 'Ver detalle de proveedor'}
         <ChevronDown size={16} className={expanded ? 'rotate-180 transition-transform' : 'transition-transform'} />
-      </button>
+      </Button>
 
       {expanded && (
         <div className="space-y-3 pt-1" style={{ borderTop: '1px solid var(--linea)' }}>

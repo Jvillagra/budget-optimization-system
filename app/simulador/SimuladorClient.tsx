@@ -7,6 +7,7 @@ import type { Proveedor, Beneficiario, CatalogoInsumo, AyudaMemoria, KPISimulaci
 import { buildPrecioMap, calcularKPI, formatCLP } from '@/lib/business-logic'
 import type { DatosStaff } from '@/lib/staff-data'
 import { PageHeader } from '@/components/Editorial'
+import { Button } from '@/components/design-system'
 
 // Los graficos viven fuera del bundle inicial -- ver ./SimuladorCharts.tsx.
 // Solo aparecen despues de apretar "Simular", asi que ni siquiera se
@@ -195,14 +196,9 @@ export default function SimuladorClient({ initial }: { initial: DatosStaff | nul
             </div>
           ))}
         </div>
-        <button
-          onClick={simular}
-          disabled={!provA || !provB}
-          className="w-full rounded-[4px] px-6 py-3 min-h-[48px] text-sm text-[var(--papel)] font-bold disabled:opacity-40"
-          style={{ background: 'var(--marca)' }}
-        >
+        <Button onClick={simular} disabled={!provA || !provB} size="lg" bloqueEnMovil>
           Simular
-        </button>
+        </Button>
       </div>
 
       {/* Resultados */}

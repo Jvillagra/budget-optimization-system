@@ -3,6 +3,7 @@
 import { useMemo } from 'react'
 import { formatCLP } from '@/lib/business-logic'
 import { FOTOS_REQUERIDAS } from '@/lib/constants'
+import { Button } from '@/components/design-system'
 
 // Panel de control de /rendicion. Todo es SVG/CSS puro a propósito: esta es
 // la ruta que el staff abre en celulares de terreno y recharts costaba
@@ -232,10 +233,14 @@ export function PanelControl({ filas, filtro, onFiltro }: {
                 type="button"
                 onClick={() => toggle(e.id)}
                 aria-pressed={activo}
-                className="flex items-center gap-2 rounded-[4px] px-2.5 py-2 text-left transition-all active:scale-[0.98]"
+                // El estado elegido se marca con el anillo de marca, no
+                // repintando el fondo: antes ambos ternarios devolvian
+                // papel-hueco, asi que activo e inactivo se veian igual.
+                className="btn-base flex items-center gap-2 rounded-[6px] border px-2.5 py-2 text-left min-h-[52px]"
                 style={{
-                  background: activo ? 'var(--papel-hueco)' : 'var(--papel-hueco)',
-                  boxShadow: activo ? 'inset 0 0 0 1.5px var(--verde)' : 'none',
+                  background: activo ? 'var(--papel-hueco)' : 'transparent',
+                  borderColor: activo ? 'var(--marca)' : 'var(--linea)',
+                  boxShadow: activo ? 'inset 0 0 0 1px var(--marca)' : 'none',
                   opacity: apagado ? 0.55 : 1,
                 }}
               >
@@ -247,14 +252,9 @@ export function PanelControl({ filas, filtro, onFiltro }: {
           })}
         </div>
         {filtro !== null && (
-          <button
-            type="button"
-            onClick={() => onFiltro(null)}
-            className="text-xs font-semibold underline underline-offset-2"
-            style={{ color: 'var(--verde-dark)' }}
-          >
+          <Button type="button" variant="link" onClick={() => onFiltro(null)} className="text-xs self-start">
             Ver todos los socios
-          </button>
+          </Button>
         )}
       </div>
 

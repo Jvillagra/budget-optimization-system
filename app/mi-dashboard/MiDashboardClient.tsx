@@ -7,7 +7,7 @@ import type { Beneficiario, Asignacion, Proveedor, PrecioProveedor } from '@/lib
 import { buildPrecioMap, calcularCostoCarrito, formatCLP, PRESUPUESTO_BASE } from '@/lib/business-logic'
 import { useProveedor, proveedorPorDefecto } from '@/lib/proveedor-context'
 import { FOTOS_REQUERIDAS } from '@/lib/constants'
-import { Card, Alert, ConfirmDialog, Skeleton } from '@/components/design-system'
+import { Card, Alert, ConfirmDialog, Skeleton, IconButton, Chip } from '@/components/design-system'
 import { cx } from '@/components/design-system/cx'
 
 // El gráfico vive fuera del bundle inicial -- ver app/mi-dashboard/ComposicionChart.tsx.
@@ -229,20 +229,14 @@ export default function MiDashboardClient({ inicial }: { inicial: MiDashboardIni
       {proveedores.length > 0 && (
         <div className="flex gap-2 flex-wrap">
           {proveedores.map(p => (
-            <button
+            <Chip
               key={p.id}
+              activo={proveedorId === p.id}
               onClick={() => setProveedorId(p.id)}
-              className={cx(
-                'px-3.5 py-2 min-h-[40px] rounded-[4px] text-sm font-semibold border transition-colors',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[var(--verde)]',
-                proveedorId === p.id ? 'text-[var(--papel)] border-transparent' : 'border-[var(--linea)]'
-              )}
-              style={proveedorId === p.id
-                ? { background: 'var(--marca)' }
-                : { color: 'var(--tinta-70)' }}
+              className="text-sm"
             >
               {p.nombre}
-            </button>
+            </Chip>
           ))}
         </div>
       )}
@@ -323,13 +317,14 @@ export default function MiDashboardClient({ inicial }: { inicial: MiDashboardIni
               <div key={f.id} className="relative group aspect-square rounded-[4px] overflow-hidden" style={{ background: 'var(--linea)' }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={f.thumbUrl} alt="Comprobante de compra" loading="lazy" decoding="async" className="w-full h-full object-cover" />
-                <button
+                <IconButton
                   onClick={() => setFotoAEliminar(f)}
-                  className="absolute top-1 right-1 bg-[rgba(23,24,21,0.55)] text-[var(--papel)] rounded-full p-2 min-h-[36px] min-w-[36px] flex items-center justify-center transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                  tone="inverso"
+                  className="absolute top-1 right-1 h-9 w-9 bg-[rgba(23,24,21,0.6)]"
                   aria-label="Eliminar foto"
                 >
-                  <Trash2 size={14} />
-                </button>
+                  <Trash2 size={15} />
+                </IconButton>
               </div>
             ))}
             {fotos.length < MAX_FOTOS && (
