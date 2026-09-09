@@ -10,6 +10,46 @@ import { PageHeader } from '@/components/Editorial'
 import { VistaResumenContent } from '@/components/VistaResumenContent'
 import { PanelControl, ESTADOS, estadoDe, type EstadoSocio } from './GraficosRendicion'
 
+/** Lista de nombres para el diálogo de confirmación. Con 20 socios listos,
+ *  volcarlos todos convertía la descripción en un párrafo que nadie lee y que
+ *  empujaba los botones fuera de la pantalla en un celular. Se nombran los
+ *  primeros y se cuenta el resto: lo que la persona necesita verificar es el
+ *  orden de magnitud y que reconoce a quiénes va, no la lista completa. */
+function nombresResumidos(nombres: string[], tope = 5) {
+  if (nombres.length <= tope) return nombres.join(', ')
+  return `${nombres.slice(0, tope).join(', ')} y ${nombres.length - tope} más`
+}
+
+type CausaError = 'red' | 'sesion' | 'servidor'
+
+/** Traduce un fallo de fetch a una causa accionable. Un throw del propio
+ *  fetch (TypeError) es siempre de red: el navegador no llego a hablar con
+ *  el servidor. Un 401/403 es sesion vencida, que se arregla volviendo a
+ *  entrar, no reintentando. */
+function causaDe(res: Response | null, navegadorOnline: boolean): CausaError {
+  if (!res) return navegadorOnline ? 'servidor' : 'red'
+  if (res.status === 401 || res.status === 403) return 'sesion'
+  return 'servidor'
+}
+
+const COPY_ERROR: Record<CausaError, { titulo: string; detalle: string; accion: string }> = {
+  red: {
+    titulo: 'Sin conexión',
+    detalle: 'No pudimos contactar al servidor. Las fotos y los datos que ya se guardaron están a salvo: no se pierde nada por esperar a tener señal.',
+    accion: 'Reintentar',
+  },
+  sesion: {
+    titulo: 'Tu sesión expiró',
+    detalle: 'Por seguridad la sesión se cierra sola cada cierto tiempo. Nada de lo que hiciste se perdió; solo hay que volver a entrar.',
+    accion: 'Ir a iniciar sesión',
+  },
+  servidor: {
+    titulo: 'No pudimos cargar la rendición',
+    detalle: 'El servidor respondió con un error. Lo que ya estaba guardado sigue guardado; esto es un problema de lectura, no de tus datos.',
+    accion: 'Reintentar',
+  },
+}
+
 // lib/r2.ts es server-only, así que se duplica la constante acá (mismo
 // patrón que ya usa app/mi-dashboard/page.tsx).
 const MAX_FOTOS_POR_SOCIO = 5
@@ -76,7 +116,13 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
   const [filas, setFilas] = useState<FilaRendicion[]>(initialFilas)
   const [proveedores, setProveedores] = useState<ProveedorOpcion[]>(initialProveedores)
   const [loading, setLoading] = useState(false)
-  const [loadError, setLoadError] = useState(initialError)
+  // El error de carga distingue causa: sin conexion, sesion vencida y fallo
+  // de servidor piden acciones distintas de la persona, y "Error al cargar"
+  // a secas no dice ninguna. La escena real de este producto (terreno, senal
+  // mala; ver PRODUCT.md) hace que "sin conexion" sea el caso mas frecuente,
+  // no el borde. El error que llega del servidor ya renderizado no puede ser
+  // de red por definicion: si el HTML llego, hubo conexion.
+  const [loadError, setLoadError] = useState<CausaError | null>(initialError ? 'servidor' : null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [lightbox, setLightbox] = useState<{ nombre: string; fotos: Foto[]; index: number } | null>(null)
   const [detalle, setDetalle] = useState<FilaRendicion | null>(null)
@@ -91,6 +137,9 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
   // un admin no habia forma de sacarla.
   const [fotoAEliminar, setFotoAEliminar] = useState<{ foto: Foto; beneficiarioId: string; nombre: string } | null>(null)
   const [borrandoFoto, setBorrandoFoto] = useState(false)
+  // Marcado en lote de los socios que ya tienen sus comprobantes completos.
+  const [confirmandoLote, setConfirmandoLote] = useState(false)
+  const [lote, setLote] = useState<{ hechos: number; total: number; fallidos: number } | null>(null)
 
   function toggleExpanded(id: string) {
     setExpandedIds(prev => {
@@ -102,15 +151,22 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
 
   async function cargar() {
     setLoading(true)
-    setLoadError(false)
+    setLoadError(null)
+    // El fetch se atrapa aparte del parseo: un throw acá es red caída, un
+    // res.ok falso es el servidor contestando mal. Colapsarlos en un solo
+    // catch era lo que producía el mensaje genérico.
+    const res = await fetch('/api/rendicion').catch(() => null)
+    if (!res || !res.ok) {
+      setLoadError(causaDe(res, typeof navigator === 'undefined' || navigator.onLine))
+      setLoading(false)
+      return
+    }
     try {
-      const res = await fetch('/api/rendicion')
-      if (!res.ok) throw new Error('load failed')
       const { beneficiarios, proveedores: provs } = await res.json()
       setFilas(beneficiarios ?? [])
       setProveedores(provs ?? [])
     } catch {
-      setLoadError(true)
+      setLoadError('servidor')
     } finally {
       setLoading(false)
     }
@@ -151,6 +207,38 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
       setFilas(prev => prev.map(f => f.id === id ? { ...f, compraCompleta: data.compra_completa, compraCompletaAt: data.compra_completa_at } : f))
     }
     setBusyId(null)
+  }
+
+  /** Marca completos, de una sola pasada, a todos los socios que ya reunieron
+   *  sus comprobantes. El staff repite exactamente esta decisión hasta 29
+   *  veces por ciclo y hasta ahora solo podía hacerlo tarjeta por tarjeta.
+   *
+   *  Secuencial y no en paralelo a propósito: con señal mala 20 peticiones
+   *  simultáneas se pisan entre sí y no hay forma de decir cuáles pasaron.
+   *  Así cada una que entra actualiza su fila de inmediato, el progreso es
+   *  real ("12 de 20") y una caída a mitad de camino deja el trabajo hecho
+   *  hasta ahí, no un estado desconocido. */
+  async function marcarLote(ids: string[]) {
+    setConfirmandoLote(false)
+    setLote({ hechos: 0, total: ids.length, fallidos: 0 })
+    let hechos = 0
+    let fallidos = 0
+    for (const id of ids) {
+      const res = await fetch(`/api/rendicion/${id}/completar`, { method: 'POST' }).catch(() => null)
+      if (res?.ok) {
+        const { data } = await res.json()
+        setFilas(prev => prev.map(f => f.id === id
+          ? { ...f, compraCompleta: data.compra_completa, compraCompletaAt: data.compra_completa_at }
+          : f))
+        hechos++
+      } else {
+        fallidos++
+      }
+      setLote({ hechos, total: ids.length, fallidos })
+    }
+    // El resultado queda en pantalla unos segundos: si algo falló, la persona
+    // tiene que poder leer cuántos quedaron sin marcar antes de que se vaya.
+    setTimeout(() => setLote(null), fallidos > 0 ? 8000 : 3000)
   }
 
   async function eliminarFoto() {
@@ -253,12 +341,18 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
     </div>
   )
 
-  if (loadError) return (
-    <Card className="p-8 text-center space-y-3">
-      <p className="text-sm font-semibold" style={{ color: 'var(--alerta)' }}>Error al cargar la rendición</p>
-      <Button onClick={cargar}>Reintentar</Button>
-    </Card>
-  )
+  if (loadError) {
+    const copy = COPY_ERROR[loadError]
+    return (
+      <Card className="p-8 text-center space-y-3 max-w-md mx-auto">
+        <p className="text-base font-semibold" style={{ color: 'var(--alerta)' }}>{copy.titulo}</p>
+        <p className="text-sm" style={{ color: 'var(--tinta-70)' }}>{copy.detalle}</p>
+        <Button onClick={loadError === 'sesion' ? () => window.location.assign('/login?next=/rendicion') : cargar}>
+          {copy.accion}
+        </Button>
+      </Card>
+    )
+  }
 
   const q = busqueda.trim().toLowerCase()
   const filasFiltradas = filas.filter(f =>
@@ -266,6 +360,10 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
     (filtroEstado === null || estadoDe(f) === filtroEstado)
   )
   const etiquetaFiltro = ESTADOS.find(e => e.id === filtroEstado)?.label
+  // Socios que ya reunieron sus comprobantes y solo esperan la marca. Con uno
+  // solo no se ofrece el lote: la tarjeta ya tiene su botón y una barra extra
+  // para una acción sería ruido.
+  const listosParaMarcar = filas.filter(f => estadoDe(f) === 'listo')
 
   return (
     <div className="space-y-6">
@@ -311,6 +409,57 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
       <Card className="p-3 sm:p-4">
         <PanelControl filas={filas} filtro={filtroEstado} onFiltro={setFiltroEstado} />
       </Card>
+
+      {/* Acción por lote. Aparece solo cuando hay algo que hacer con ella, y
+          desaparece sola cuando ya no queda nadie listo -- no es una barra de
+          herramientas permanente. */}
+      {listosParaMarcar.length > 1 && !lote && (
+        <Card className="p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold" style={{ color: 'var(--tinta)' }}>
+              {listosParaMarcar.length} socios ya tienen sus {FOTOS_REQUERIDAS} comprobantes
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--tinta-70)' }}>
+              Solo falta marcarlos. Se puede revertir uno por uno después.
+            </p>
+          </div>
+          <Button onClick={() => setConfirmandoLote(true)} className="shrink-0">
+            <CheckCircle2 size={16} /> Marcar los {listosParaMarcar.length}
+          </Button>
+        </Card>
+      )}
+
+      {lote && (
+        <Card className="p-3.5 sm:p-4 space-y-2">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-sm font-semibold" style={{ color: 'var(--tinta)' }}>
+              {lote.hechos < lote.total
+                ? `Marcando… ${lote.hechos} de ${lote.total}`
+                : lote.fallidos > 0
+                  ? `${lote.hechos} marcados · ${lote.fallidos} no se pudieron`
+                  : `Listo: ${lote.hechos} socios marcados`}
+            </p>
+            <p className="text-sm tabular-nums shrink-0" style={{ color: 'var(--tinta-70)' }}>
+              {Math.round((lote.hechos + lote.fallidos) / lote.total * 100)}%
+            </p>
+          </div>
+          <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--linea)' }}>
+            <div
+              className="h-full rounded-full motion-safe:transition-[width] motion-safe:duration-300"
+              style={{
+                width: `${(lote.hechos + lote.fallidos) / lote.total * 100}%`,
+                background: lote.fallidos > 0 ? 'var(--alerta)' : 'var(--marca)',
+              }}
+            />
+          </div>
+          {lote.hechos === lote.total - lote.fallidos && lote.fallidos > 0 && (
+            <p className="text-xs" style={{ color: 'var(--tinta-70)' }}>
+              Los que fallaron siguen pendientes en la lista, sin ningún cambio. Puedes marcarlos
+              desde su tarjeta o reintentar el lote.
+            </p>
+          )}
+        </Card>
+      )}
 
       {/* Búsqueda — con 30+ beneficiarios el único mecanismo de navegación
           antes de esto era scroll; filtra ambas vistas (mobile y desktop). */}
@@ -384,6 +533,17 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
         <DetalleCotizacionModal f={detalle} onClose={() => setDetalle(null)} />
       )}
 
+      {confirmandoLote && (
+        <ConfirmDialog
+          title={`Marcar ${listosParaMarcar.length} socios como completos`}
+          description={`${nombresResumidos(listosParaMarcar.map(f => f.nombre))} ya tienen sus ${FOTOS_REQUERIDAS} comprobantes. Vas a dejar registrada su rendición como completa. Cada uno se puede revertir después desde su tarjeta.`}
+          confirmLabel={`Sí, marcar los ${listosParaMarcar.length}`}
+          danger={false}
+          onConfirm={() => marcarLote(listosParaMarcar.map(f => f.id))}
+          onCancel={() => setConfirmandoLote(false)}
+        />
+      )}
+
       {fotoAEliminar && (
         <ConfirmDialog
           title="Eliminar esta foto"
@@ -414,7 +574,7 @@ function DetalleCotizacionModal({ f, onClose }: { f: FilaRendicion; onClose: () 
         <div className="flex items-start justify-between px-5 pt-4 pb-3 shrink-0" style={{ borderBottom: '1px solid var(--linea)' }}>
           <div>
             <p className="font-bold text-base" style={{ color: 'var(--tinta)' }}>{f.nombre}</p>
-            <Badge tone={f.segmento === 'Invernadero' ? 'verde' : 'cafe'} className="mt-1 !text-xs">{f.segmento}</Badge>
+            <Badge tone={f.segmento === 'Invernadero' ? 'verde' : 'terracota'} className="mt-1 !text-xs">{f.segmento}</Badge>
           </div>
           <button onClick={onClose} className="rounded-full p-2" style={{ background: 'var(--linea)', color: 'var(--tinta-45)' }} aria-label="Cerrar">
             <X size={16} />
@@ -601,7 +761,7 @@ function FilaCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-base font-bold truncate" style={{ color: 'var(--tinta)' }}>{f.nombre}</p>
-          <Badge tone={f.segmento === 'Invernadero' ? 'verde' : 'cafe'} className="mt-1 !text-xs">
+          <Badge tone={f.segmento === 'Invernadero' ? 'verde' : 'terracota'} className="mt-1 !text-xs">
             {f.segmento}
           </Badge>
         </div>
@@ -610,7 +770,7 @@ function FilaCard({
             solo -- que fue exactamente la confusion que hubo con una socia
             marcada en agosto y revisada en septiembre. */}
         <div className="shrink-0 text-right">
-          <Badge tone={f.compraCompleta ? 'verde' : 'neutral'} className="!text-sm !px-3 !py-1.5">
+          <Badge tone={f.compraCompleta ? 'solido' : 'neutral'} className="!text-sm !px-3 !py-1.5">
             {f.compraCompleta && <CheckCircle2 size={14} />}
             {f.compraCompleta ? 'Completo' : 'Pendiente'}
           </Badge>

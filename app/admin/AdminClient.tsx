@@ -135,7 +135,7 @@ export default function AdminClient({ initial }: { initial: RoleRow[] | null }) 
               <div key={r.user_id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
                 <span className="flex items-center gap-2 min-w-0" style={{ color: 'var(--tinta)' }}>
                   <span className="truncate">{r.email}</span>
-                  <Badge tone={r.role === 'owner' ? 'verde' : 'cafe'} className="shrink-0">
+                  <Badge tone={r.role === 'owner' ? 'solido' : 'hueco'} className="shrink-0">
                     {ROL_LABEL[r.role] ?? r.role}
                   </Badge>
                 </span>

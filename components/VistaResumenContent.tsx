@@ -37,14 +37,84 @@ interface BaseData {
   preciosCongelados: PrecioCongelado[]
 }
 
+/** Cache del payload de /api/data a nivel de modulo, con revalidacion.
+ *
+ *  Este componente es la sub-tab "Resumen" de /rendicion: cada vez que el
+ *  staff volvia de Lista a Resumen se desmontaba y se volvia a montar, y en
+ *  cada montaje pedia /api/data de nuevo y BLOQUEABA la vista con tres
+ *  bloques de skeleton. En la escena real de este producto (celular en
+ *  terreno, senal mala; ver PRODUCT.md) esa espera no es un parpadeo
+ *  cosmetico: es una peticion mas que se puede colgar con la pantalla vacia.
+ *
+ *  La estrategia es stale-while-revalidate, no cache a secas. Un cache a
+ *  secas arreglaba el parpadeo y creaba un problema peor: el consolidado se
+ *  arma con las asignaciones que se editan en /beneficiarios, asi que volver
+ *  de esa pantalla habria mostrado cifras viejas sin ninguna senal de que lo
+ *  eran. Aca lo cacheado se pinta de inmediato y ademas se revalida en
+ *  segundo plano, sin bloquear: nunca hay espera en blanco y nunca hay dato
+ *  viejo que sobreviva a la respuesta.
+ *
+ *  `FRESCO_MS` corta la revalidacion cuando el dato acaba de llegar, que es
+ *  exactamente el caso de alternar Lista/Resumen dos veces seguidas: ahi no
+ *  se emite ninguna peticion.
+ *
+ *  Vive en el modulo y no en un estado de React a proposito: tiene que
+ *  sobrevivir al desmontaje del componente, que es justo lo que pasa al
+ *  cambiar de pestana. `enVuelo` evita que dos montajes rapidos disparen dos
+ *  peticiones. */
+const FRESCO_MS = 15_000
+
+let datosCache: BaseData | null = null
+let datosCacheAt = 0
+let datosEnVuelo: Promise<BaseData> | null = null
+
+async function pedirDatos(): Promise<BaseData> {
+  if (datosEnVuelo) return datosEnVuelo
+  datosEnVuelo = (async () => {
+    const res = await fetch('/api/data')
+    if (!res.ok) throw new Error('load failed')
+    const d = await res.json()
+    const datos: BaseData = {
+      beneficiarios: d.beneficiarios ?? [],
+      proveedores: d.proveedores ?? [],
+      asignaciones: d.asignaciones ?? [],
+      precios: d.preciosProveedor ?? [],
+      compras: d.compras ?? [],
+      preciosCongelados: d.preciosCongelados ?? [],
+    }
+    datosCache = datos
+    datosCacheAt = Date.now()
+    return datos
+  })()
+  try {
+    return await datosEnVuelo
+  } finally {
+    datosEnVuelo = null
+  }
+}
+
+/** true cuando el cache es lo bastante reciente como para no revalidar. */
+function cacheFresco() {
+  return datosCache !== null && Date.now() - datosCacheAt < FRESCO_MS
+}
+
+/** Invalida el cache tras una mutacion, para que la proxima lectura no pueda
+ *  devolver el estado anterior ni siquiera dentro de la ventana fresca. */
+function invalidarDatos() {
+  datosCache = null
+  datosCacheAt = 0
+}
+
 /** Consolidado de compra (ex /vista-resumen), embebido como sub-tab de
  * /rendicion -- ver app/rendicion/page.tsx. Se mantiene como componente
  * propio (no inline) porque también lo usa app/vista-resumen/page.tsx, que
  * queda como redirect para no romper enlaces guardados. */
 export function VistaResumenContent() {
   const { proveedorId, setProveedorId, isLoaded } = useProveedor()
-  const [baseData, setBaseData] = useState<BaseData | null>(null)
-  const [loading, setLoading] = useState(true)
+  // Si el cache ya tiene datos, el primer render los pinta: no hay skeleton
+  // al volver de Lista a Resumen, que era el sintoma visible del problema.
+  const [baseData, setBaseData] = useState<BaseData | null>(datosCache)
+  const [loading, setLoading] = useState(datosCache === null)
   const [loadError, setLoadError] = useState(false)
   const [copiado, setCopiado] = useState(false)
   const [confirmando, setConfirmando] = useState<Segmento | null>(null)
@@ -54,32 +124,35 @@ export function VistaResumenContent() {
 
   async function cargar() {
     try {
-      const res = await fetch('/api/data')
-      if (!res.ok) throw new Error('load failed')
-      const d = await res.json()
-      setBaseData({
-        beneficiarios: d.beneficiarios ?? [],
-        proveedores: d.proveedores ?? [],
-        asignaciones: d.asignaciones ?? [],
-        precios: d.preciosProveedor ?? [],
-        compras: d.compras ?? [],
-        preciosCongelados: d.preciosCongelados ?? [],
-      })
+      const d = await pedirDatos()
+      setBaseData(d)
       if (!proveedorId) {
-        const porDefecto = proveedorPorDefecto((d.proveedores ?? []).filter((p: Proveedor) => p.es_activo))
+        const porDefecto = proveedorPorDefecto(d.proveedores.filter((p: Proveedor) => p.es_activo))
         if (porDefecto) setProveedorId(porDefecto.id)
       }
+      setLoadError(false)
       setLoading(false)
     } catch {
-      setLoadError(true)
+      // Un fallo de revalidacion con datos ya pintados no borra la pantalla:
+      // lo que se ve sigue siendo valido, solo puede no ser lo ultimo. La
+      // pantalla de error queda para el caso en que no hay nada que mostrar.
+      if (!datosCache) setLoadError(true)
       setLoading(false)
     }
   }
 
   // Carga inicial. `cargar` se recrea en cada render pero solo debe correr
   // al montar; las recargas posteriores las disparan confirmar/revertir.
+  // Con el cache caliente esto no dispara ninguna peticion: solo resuelve el
+  // proveedor por defecto si todavia no hay uno elegido.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { cargar() }, [])
+  useEffect(() => {
+    // Con el cache fresco (alternar de pestana) no se pide nada; con el cache
+    // tibio se revalida en segundo plano mientras lo cacheado ya esta en
+    // pantalla; sin cache es la carga normal y bloqueante.
+    if (cacheFresco()) return
+    cargar()
+  }, [])
 
   const compraDe = useMemo(() => {
     const m = new Map<Segmento, CompraSegmento>()
@@ -194,6 +267,7 @@ export function VistaResumenContent() {
     if (!res?.ok) {
       setAccionError((await res?.json().catch(() => null))?.error ?? 'No se pudo confirmar la compra.')
     } else {
+      invalidarDatos()
       await cargar()
     }
     setBusy(false); setConfirmando(null)
@@ -205,6 +279,7 @@ export function VistaResumenContent() {
     if (!res?.ok) {
       setAccionError((await res?.json().catch(() => null))?.error ?? 'No se pudo revertir la compra.')
     } else {
+      invalidarDatos()
       await cargar()
     }
     setBusy(false); setRevirtiendo(null)
@@ -288,7 +363,7 @@ export function VistaResumenContent() {
                   {compra ? (
                     <span
                       className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide px-2 py-1 rounded-[3px] shrink-0"
-                      style={{ background: 'var(--acento)', color: 'var(--tinta)' }}
+                      style={{ background: 'var(--marca)', color: 'var(--papel)' }}
                     >
                       <Check size={11} strokeWidth={3} /> Comprado
                     </span>
@@ -696,7 +771,7 @@ function PanelSegmento({
         </div>
         {compra
           ? <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-[3px]"
-                  style={{ background: 'var(--acento)', color: 'var(--tinta)' }}>
+                  style={{ background: 'var(--marca)', color: 'var(--papel)' }}>
               <Check size={11} strokeWidth={3} /> Comprado
             </span>
           : <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-[3px]"
