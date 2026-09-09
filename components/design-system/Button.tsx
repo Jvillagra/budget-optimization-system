@@ -1,5 +1,6 @@
-import { ButtonHTMLAttributes, forwardRef } from 'react'
+import { ButtonHTMLAttributes, MouseEvent, forwardRef } from 'react'
 import { cx } from './cx'
+import { soltarFocoDePuntero } from './foco'
 
 export type ButtonVariant = 'primary' | 'accent' | 'secondary' | 'danger' | 'ghost' | 'link' | 'inverso'
 export type ButtonSize = 'sm' | 'md' | 'lg'
@@ -45,13 +46,14 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = 'primary', size = 'md', className, bloqueEnMovil, cargando, disabled, children, ...props },
+  { variant = 'primary', size = 'md', className, bloqueEnMovil, cargando, disabled, children, onClick, ...props },
   ref
 ) {
   return (
     <button
       ref={ref}
       disabled={disabled || cargando}
+      onClick={(e: MouseEvent<HTMLButtonElement>) => { onClick?.(e); soltarFocoDePuntero(e) }}
       aria-busy={cargando || undefined}
       className={cx(
         'btn-base inline-flex items-center justify-center rounded-[6px] font-semibold tracking-[0.01em]',

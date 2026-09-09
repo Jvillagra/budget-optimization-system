@@ -10,6 +10,14 @@ import { Button, IconButton, Chip } from '@/components/design-system'
 
 type Filtro = 'todos' | 'Invernadero' | 'Cierre Perimetral'
 
+// El valor 'todos' es el del estado y no se toca; lo que se muestra es otra
+// cosa. Los otros dos ya vienen con la mayuscula del segmento.
+const ETIQUETA_FILTRO: Record<Filtro, string> = {
+  todos: 'Todos',
+  Invernadero: 'Invernadero',
+  'Cierre Perimetral': 'Cierre Perimetral',
+}
+
 // `initial` viene del Server Component (app/beneficiarios/page.tsx): los
 // datos llegan dentro del RSC y no hay fetch al montar. Si viene null
 // (falló la carga server-side) se intenta /api/data como antes.
@@ -180,7 +188,7 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
             <div className="flex gap-1">
               {(['todos', 'Invernadero', 'Cierre Perimetral'] as const).map(f => (
                 <Chip key={f} activo={filtro === f} onClick={() => setFiltro(f)}>
-                  {f}
+                  {ETIQUETA_FILTRO[f]}
                 </Chip>
               ))}
             </div>

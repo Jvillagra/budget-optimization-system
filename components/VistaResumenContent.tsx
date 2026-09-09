@@ -819,9 +819,13 @@ function PanelSegmento({
             variant="accent"
             onClick={onConfirmar}
             disabled={!puedeConfirmar || gasto <= 0}
+            // El nombre del proyecto ya esta en el encabezado de la tarjeta,
+            // a dos lineas de aca: repetirlo en el boton daba un rotulo de
+            // seis palabras. Sigue completo en el nombre accesible.
+            aria-label={`Confirmar la compra de ${nombre}`}
             className="w-full sm:w-auto !py-3.5 !text-[15px] sm:!py-2.5 sm:!text-sm"
           >
-            <Check size={17} strokeWidth={2.5} /> Marcar {nombre} como comprado
+            <Check size={17} strokeWidth={2.5} /> Confirmar compra
           </Button>
           <p className="text-xs mt-2" style={{ color: 'var(--tinta-70)' }}>
             Márcalo cuando la compra ya esté hecha: congela los precios y las cantidades de este proyecto.
@@ -831,7 +835,6 @@ function PanelSegmento({
               Elige primero un proveedor en Beneficiarios.
             </p>
           )}
-          <p className="sr-only">Marcar la compra de {seg} como realizada</p>
         </div>
       )}
     </div>

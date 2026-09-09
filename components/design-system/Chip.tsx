@@ -1,5 +1,6 @@
-import { ButtonHTMLAttributes, forwardRef } from 'react'
+import { ButtonHTMLAttributes, MouseEvent, forwardRef } from 'react'
 import { cx } from './cx'
+import { soltarFocoDePuntero } from './foco'
 
 /** Chip de filtro o de eleccion dentro de un grupo (filtros de socios,
  *  proveedor en /mi-dashboard, leyenda de los graficos). Es un control con
@@ -14,7 +15,7 @@ export interface ChipProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 export const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
-  { activo, className, type = 'button', ...props },
+  { activo, className, type = 'button', onClick, ...props },
   ref
 ) {
   return (
@@ -22,6 +23,7 @@ export const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
       ref={ref}
       type={type}
       aria-pressed={activo}
+      onClick={(e: MouseEvent<HTMLButtonElement>) => { onClick?.(e); soltarFocoDePuntero(e) }}
       className={cx(
         'btn-base inline-flex items-center justify-center gap-2 rounded-full border',
         'px-4 min-h-[40px] text-xs font-semibold tracking-[0.01em]',

@@ -7,7 +7,7 @@ import { useState, useEffect, useRef } from 'react'
 import {
   Download, LogOut, ClipboardList, Users, Tag, Calculator, ShieldCheck, ShoppingBag,
 } from 'lucide-react'
-import { Button, IconButton } from '@/components/design-system'
+import { Button, IconButton, soltarFocoDePuntero } from '@/components/design-system'
 
 // "Resumen" (ex /vista-resumen) se consolidó como sub-tab dentro de
 // /rendicion -- ver components/VistaResumenContent.tsx -- para que la barra
@@ -154,6 +154,7 @@ export default function Navbar({ role, tieneBeneficiario }: { role: NavRole; tie
                 href={link.href}
                 onPointerEnter={() => precargar(link.href, link.chunk)}
                 onFocus={() => precargar(link.href, link.chunk)}
+                onClick={soltarFocoDePuntero}
                 className="nav-item nav-pill px-3.5 h-9 text-sm"
                 data-activo={pathname === link.href}
                 aria-current={pathname === link.href ? 'page' : undefined}
@@ -244,6 +245,7 @@ export function MobileTabBar({ role, tieneBeneficiario }: { role: NavRole; tiene
             // click, y esos 100ms son justo el pedido del chunk.
             onTouchStart={() => precargar(link.href, link.chunk)}
             onPointerEnter={() => precargar(link.href, link.chunk)}
+            onClick={soltarFocoDePuntero}
             className="nav-item flex flex-1 min-w-0 flex-col items-center justify-center gap-1 px-1 pt-2 pb-1.5 text-[10px] font-medium"
             style={{ color: active ? 'var(--marca-dark)' : 'var(--tinta-70)' }}
             aria-current={active ? 'page' : undefined}

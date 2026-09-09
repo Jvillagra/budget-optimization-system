@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { X, ImageOff, CheckCircle2, RotateCcw, Upload, ChevronDown, ClipboardList, BarChart3, Trash2, Lock } from 'lucide-react'
+import { X, ImageOff, CheckCircle2, RotateCcw, ImageUp, ChevronDown, ClipboardList, BarChart3, Trash2, Lock } from 'lucide-react'
 import { formatCLP } from '@/lib/business-logic'
 import { FOTOS_REQUERIDAS } from '@/lib/constants'
-import { Card, Button, Badge, Input, Alert, Skeleton, ConfirmDialog, IconButton } from '@/components/design-system'
+import { Card, Button, Badge, Input, Alert, Skeleton, ConfirmDialog, IconButton, soltarFocoDePuntero } from '@/components/design-system'
 import { PageHeader } from '@/components/Editorial'
 import { VistaResumenContent } from '@/components/VistaResumenContent'
 import { PanelControl, ESTADOS, estadoDe, type EstadoSocio } from './GraficosRendicion'
@@ -389,7 +389,7 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
             <button
               key={t.id}
               type="button"
-              onClick={() => setTab(t.id)}
+              onClick={e => { setTab(t.id); soltarFocoDePuntero(e) }}
               className="nav-item nav-pill px-4 h-9 text-sm"
               data-activo={active}
               aria-pressed={active}
@@ -833,7 +833,7 @@ function FilaCard({
               style={{ borderColor: 'var(--linea-fuerte)', color: 'var(--text-muted)' }}
               aria-label={`Subir foto por ${f.nombre}`}
             >
-              <Upload size={16} />
+              <ImageUp size={16} />
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
@@ -864,7 +864,7 @@ function FilaCard({
       {f.compraCompleta ? (
         <Button
           variant="secondary"
-          className="w-full !text-base !py-3"
+          className="w-full"
           onClick={onRevertir}
           disabled={busy}
         >
@@ -873,7 +873,7 @@ function FilaCard({
       ) : suficientesFotos ? (
         <Button
           variant="primary"
-          className="w-full !text-base !py-3"
+          className="w-full"
           onClick={onMarcarCompleto}
           disabled={busy}
         >
@@ -885,11 +885,15 @@ function FilaCard({
            foto hacia creer que el admin no podia cerrar una rendicion. Se
            muestra bloqueada, con el requisito escrito debajo. */
         <div className="space-y-2">
+          {/* Es un <label> y no un <Button> porque tiene que envolver al
+              <input type="file">, pero usa las mismas clases del sistema:
+              antes era un bloque de 48px con texto de 16px, mas pesado que
+              cualquier otra accion de la app. */}
           <label
-            className="inline-flex w-full items-center justify-center gap-2 rounded-[4px] font-semibold text-base py-3 min-h-[48px] cursor-pointer transition-all active:scale-[0.97]"
-            style={{ background: 'var(--marca)', color: 'var(--papel)', opacity: subiendo ? 0.5 : 1 }}
+            className="btn-base btn-solid btn-primary-solid inline-flex w-full items-center justify-center gap-2 rounded-[6px] px-5 py-2.5 min-h-[44px] text-sm font-semibold tracking-[0.01em] text-[var(--papel)] cursor-pointer"
+            style={{ opacity: subiendo ? 0.5 : 1 }}
           >
-            <Upload size={17} />
+            <ImageUp size={16} />
             {subiendo ? 'Subiendo…' : 'Agregar foto'}
             <input
               type="file"

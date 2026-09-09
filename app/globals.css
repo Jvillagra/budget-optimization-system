@@ -223,11 +223,14 @@ body {
 /* Acción de texto: el subrayado se dibuja con box-shadow y no con
    text-decoration para poder separarlo de la línea base y engrosarlo en
    hover sin mover el texto. */
+/* currentColor y no --marca-dark: la misma accion de texto va sobre papel
+   (verde) y sobre la cabecera verde de la tabla de precios (papel). Un
+   subrayado fijo en verde oscuro sobre verde de marca era invisible. */
 .btn-link {
-  box-shadow: inset 0 -1px 0 0 color-mix(in oklab, var(--marca-dark) 45%, transparent);
+  box-shadow: inset 0 -1px 0 0 color-mix(in oklab, currentColor 40%, transparent);
 }
 .btn-link:hover:not(:disabled) {
-  box-shadow: inset 0 -2px 0 0 var(--marca-dark);
+  box-shadow: inset 0 -2px 0 0 currentColor;
 }
 .btn-link:disabled { box-shadow: none; }
 

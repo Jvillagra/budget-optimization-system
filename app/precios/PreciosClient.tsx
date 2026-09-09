@@ -490,7 +490,12 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
                           variant="link"
                           size="sm"
                           onClick={() => { setEditingId(p.id); setEditNombre(p.nombre) }}
-                          className="min-h-0 font-semibold text-[inherit]"
+                          // !text-: la variante `link` trae su propio color
+                          // verde y sobre la cabecera de marca quedaba a 1.4:1.
+                          // El ! es lo unico deterministico -- entre dos
+                          // utilidades de color gana la que Tailwind emite
+                          // ultima, no la que va ultima en el className.
+                          className="min-h-0 font-semibold !text-[var(--papel)]"
                           title="Editar nombre"
                         >
                           {p.nombre}

@@ -1,4 +1,5 @@
 export { Button } from './Button'
+export { soltarFocoDePuntero } from './foco'
 export type { ButtonProps, ButtonVariant, ButtonSize } from './Button'
 export { IconButton } from './IconButton'
 export type { IconButtonProps, IconButtonTone } from './IconButton'
