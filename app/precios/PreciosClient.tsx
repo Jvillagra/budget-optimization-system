@@ -263,7 +263,7 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
   return (
     <div className="space-y-4">
       <PageHeader
-        eyebrow="02 / Maestro de precios"
+        eyebrow="03 / Maestro de precios"
         titulo={<>Lo que cuesta<br /><em>cada material.</em></>}
         bajada="Un precio por proveedor y por insumo. La celda vacía significa que ese proveedor todavía no lo cotizó."
         acciones={

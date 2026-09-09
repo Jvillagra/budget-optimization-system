@@ -172,7 +172,7 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div>
-              <p className="eyebrow mb-2">01 / Beneficiarios</p>
+              <p className="eyebrow mb-2">02 / Beneficiarios</p>
               <h1 className="titulo-md">
                 {beneficiarios.length} <em>socios.</em>
               </h1>

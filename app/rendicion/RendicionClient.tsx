@@ -368,7 +368,7 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="03 / Rendición"
+        eyebrow="01 / Rendición"
         titulo={tab === 'lista' ? <>Quién ya<br /><em>rindió.</em></> : <>Todo lo que<br /><em>hay que comprar.</em></>}
         bajada={tab === 'lista'
           ? <>Cada socio necesita {FOTOS_REQUERIDAS} fotos de sus comprobantes para quedar completo.</>
