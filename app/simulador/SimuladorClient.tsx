@@ -1,24 +1,29 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { TrendingUp, Wallet, Package, Users, Layers } from 'lucide-react'
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, Cell,
-  PieChart, Pie, ResponsiveContainer, LabelList,
-} from 'recharts'
 import type { Proveedor, Beneficiario, CatalogoInsumo, AyudaMemoria, KPISimulacion, ResultadoSimulacion } from '@/lib/types'
 import { buildPrecioMap, calcularKPI, formatCLP } from '@/lib/business-logic'
 import type { DatosStaff } from '@/lib/staff-data'
 import { PageHeader } from '@/components/Editorial'
 
-// Colores de los graficos (recharts no lee variables CSS). Tinta y acento
-// del sistema editorial: se distinguen por valor, no solo por matiz, asi que
-// tambien funcionan impresos en blanco y negro.
-// Colores de marca en literal porque recharts recibe strings, no var(): el
-// SVG del grafico no resuelve custom properties. Deben seguir a globals.css:
-// --marca / --marca-calida / --alerta.
+// Los graficos viven fuera del bundle inicial -- ver ./SimuladorCharts.tsx.
+// Solo aparecen despues de apretar "Simular", asi que ni siquiera se
+// descargan si alguien entra a mirar la pantalla y se va.
+const PolinesChart = dynamic(() => import('./SimuladorCharts').then(m => m.PolinesChart), {
+  ssr: false,
+  loading: () => <div className="w-full h-[200px] rounded-[6px] animate-pulse" style={{ background: 'var(--linea)' }} />,
+})
+const ComposicionDonut = dynamic(() => import('./SimuladorCharts').then(m => m.ComposicionDonut), {
+  ssr: false,
+  loading: () => <div className="w-[100px] h-[100px] rounded-full animate-pulse" style={{ background: 'var(--linea)' }} />,
+})
+
+// Tinta y acento del sistema editorial: se distinguen por valor, no solo por
+// matiz, asi que tambien funcionan impresos en blanco y negro. Deben seguir a
+// globals.css: --marca / --marca-calida / --alerta.
 const VERDE = '#3f5c1c'
-const CAFE = '#8b5a2b'
 const PIE_COLORS = [VERDE, '#d8d2c4', '#a33124']
 
 type DesgloseItem = { nombre: string; corto: string; total: number; unidad: string }
@@ -261,22 +266,7 @@ export default function SimuladorClient({ initial }: { initial: DatosStaff | nul
                 El precio del polin define cuántos puede comprar cada socio con su saldo
               </p>
               <div className="flex-1 flex items-end">
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={polinesData} margin={{ top: 20, right: 20, left: 0, bottom: 0 }}>
-                    <XAxis dataKey="proveedor" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                    <Tooltip
-                      formatter={(v, _name, props) => [`${(v as number).toLocaleString('es-CL')} un.`, props.payload?.nombreCompleto ?? '']}
-                      contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid var(--linea)' }}
-                    />
-                    <Bar dataKey="polines" radius={[6, 6, 0, 0]} maxBarSize={80}>
-                      <LabelList dataKey="polines" position="top" style={{ fontSize: 13, fontWeight: 700 }} formatter={(v: unknown) => typeof v === 'number' ? v.toLocaleString('es-CL') : String(v)} />
-                      {polinesData.map((entry, i) => (
-                        <Cell key={i} fill={entry.es_ganador ? VERDE : CAFE} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                <PolinesChart data={polinesData} />
               </div>
             </div>
           </div>
@@ -296,14 +286,7 @@ export default function SimuladorClient({ initial }: { initial: DatosStaff | nul
               return (
                 <div key={kpi.proveedor.id} className="rounded-[6px] p-4 glass flex items-center gap-4">
                   <div className="shrink-0">
-                    <ResponsiveContainer width={100} height={100}>
-                      <PieChart>
-                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={28} outerRadius={44} dataKey="value" strokeWidth={0}>
-                          {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i]} />)}
-                        </Pie>
-                        <Tooltip formatter={(v) => formatCLP(v as number)} />
-                      </PieChart>
-                    </ResponsiveContainer>
+                    <ComposicionDonut data={pieData} />
                   </div>
                   <div className="space-y-1 min-w-0">
                     <p className="text-xs font-bold truncate" style={{ color: kpi.es_ganador ? 'var(--verde-dark)' : 'var(--cafe)' }}>

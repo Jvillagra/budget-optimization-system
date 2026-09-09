@@ -26,7 +26,8 @@ const COLORES: Record<string, string> = {
 }
 const MAX_FOTOS = 5
 
-type Foto = { id: string; uploaded_at: string; url: string }
+// `thumbUrl` = miniatura de 800px para la grilla. Ver lib/imagen.ts.
+type Foto = { id: string; uploaded_at: string; url: string; thumbUrl: string }
 
 // Foto de perfil vía Gravatar (ver app/api/mi-dashboard/route.ts) con fallback
 // a iniciales -- Gravatar responde 404 si el socio nunca configuró una, así
@@ -321,7 +322,7 @@ export default function MiDashboardClient({ inicial }: { inicial: MiDashboardIni
             {fotos.map(f => (
               <div key={f.id} className="relative group aspect-square rounded-[4px] overflow-hidden" style={{ background: 'var(--linea)' }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={f.url} alt="Comprobante de compra" className="w-full h-full object-cover" />
+                <img src={f.thumbUrl} alt="Comprobante de compra" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                 <button
                   onClick={() => setFotoAEliminar(f)}
                   className="absolute top-1 right-1 bg-[rgba(23,24,21,0.55)] text-[var(--papel)] rounded-full p-2 min-h-[36px] min-w-[36px] flex items-center justify-center transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"

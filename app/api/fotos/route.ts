@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getViewerContext, isStaff } from '@/lib/roles'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
-import { urlFirmadaLectura, borrarFoto, objetoMeta, MAX_FOTOS_POR_SOCIO, MAX_BYTES, TIPOS_PERMITIDOS } from '@/lib/r2'
+import { urlsFirmadasFoto, keyMiniatura, borrarFoto, objetoMeta, descargarObjeto, subirObjeto, SUFIJO_OPTIMIZADA, SUFIJO_MINIATURA, MAX_FOTOS_POR_SOCIO, MAX_BYTES, TIPOS_PERMITIDOS } from '@/lib/r2'
+import { convertirAWebp } from '@/lib/imagen'
 import { logAudit } from '@/lib/audit'
 import { FOTOS_REQUERIDAS } from '@/lib/constants'
+
+// La confirmación de subida ahora también baja la foto de R2, la recodifica
+// a WebP y la vuelve a subir (ver lib/imagen.ts). Con el máximo de 8MB por
+// archivo eso son un par de segundos, muy por encima de los 10s por defecto
+// de una función serverless en el plan Hobby.
+export const maxDuration = 60
 
 // GET: lista de fotos con URL firmada de lectura.
 //  - socio: siempre las suyas.
@@ -39,7 +46,7 @@ export async function GET(req: NextRequest) {
     (data ?? []).map(async f => ({
       id: f.id,
       uploaded_at: f.uploaded_at,
-      url: await urlFirmadaLectura(f.r2_key),
+      ...(await urlsFirmadasFoto(f.r2_key)),
     }))
   )
 
@@ -96,16 +103,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Ya tienes el máximo de ${MAX_FOTOS_POR_SOCIO} fotos.` }, { status: 400 })
   }
 
+  // A WebP antes de registrar nada: la fila apunta siempre al objeto que la
+  // app va a servir. Se hace acá y no antes del cupo para no gastar CPU
+  // recodificando una foto que igual se iba a rechazar.
+  //
+  // Si algo de esto falla se sigue con el original -- una foto que el socio
+  // ya subió no se pierde por un problema de codificación. Lo peor que pasa
+  // es que esa foto quede pesada, y queda el log para detectarlo.
+  const keyFinal = await aWebpEnR2(key)
+
   const { data, error } = await admin
     .from('fotos_compra')
-    .insert({ beneficiario_id: beneficiarioId, r2_key: key })
+    .insert({ beneficiario_id: beneficiarioId, r2_key: keyFinal })
     .select('id, uploaded_at')
     .single()
 
   if (error || !data) {
     // Si la fila no se pudo crear (incluido el trigger de tope por socio de
     // 009), el objeto en R2 quedaría huérfano y nadie lo borraría nunca.
-    await borrarFoto(key).catch(err => console.error('no se pudo limpiar objeto huérfano', key, err))
+    const huerfanos = [keyFinal, keyMiniatura(keyFinal)].filter((k): k is string => k !== null)
+    await Promise.all(huerfanos.map(k =>
+      borrarFoto(k).catch(err => console.error('no se pudo limpiar objeto huérfano', k, err))))
     console.error('fotos POST insert', error)
     const esTope = error?.message?.includes('máximo') || error?.code === 'P0001'
     return NextResponse.json(
@@ -116,7 +134,7 @@ export async function POST(req: NextRequest) {
 
   // Si quien sube es staff en nombre de otro, se deja trazado quién ejecutó
   // la acción (no solo el beneficiario dueño de la foto).
-  const payload: Record<string, unknown> = { beneficiario_id: beneficiarioId, r2_key: key }
+  const payload: Record<string, unknown> = { beneficiario_id: beneficiarioId, r2_key: keyFinal }
   if (isStaff(ctx)) payload.actor = { email: ctx.email, userId: ctx.userId, role: ctx.role }
 
   await logAudit('fotos_compra', 'insert', data.id, payload)
@@ -157,11 +175,15 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: 'No se pudo eliminar la foto' }, { status: 400 })
   }
 
-  await borrarFoto(foto.r2_key).catch(err => {
+  // Las dos versiones: la que se sirve y su miniatura (ver lib/imagen.ts).
+  // Si solo se borrara la principal, la miniatura quedaría en R2 para
+  // siempre sin que nadie la referencie.
+  const objetos = [foto.r2_key, keyMiniatura(foto.r2_key)].filter((k): k is string => k !== null)
+  await Promise.all(objetos.map(k => borrarFoto(k).catch(err => {
     // La fila ya no está: la rendición quedó consistente. El objeto huérfano
     // se limpia con la regla de ciclo de vida del bucket.
-    console.error('fila borrada pero el objeto sigue en R2', foto.r2_key, err)
-  })
+    console.error('fila borrada pero el objeto sigue en R2', k, err)
+  })))
 
   // El payload en null no servía para nada: se borraba una foto y no quedaba
   // registro de cuál, con un row_id que ya no resuelve a ninguna fila.
@@ -230,4 +252,50 @@ export async function DELETE(req: NextRequest) {
     fotosRestantes: countError ? null : restantes ?? 0,
     compraCompleta,
   })
+}
+
+/**
+ * Reemplaza en R2 el objeto recién subido por su versión WebP y devuelve la
+ * key que hay que registrar. Ante cualquier problema devuelve la original:
+ * el flujo de subida nunca falla por culpa de la conversión.
+ */
+async function aWebpEnR2(key: string): Promise<string> {
+  const original = await descargarObjeto(key)
+  if (!original) {
+    console.error('[WEBP] no se pudo descargar para convertir', key)
+    return key
+  }
+
+  const res = await convertirAWebp(original)
+  if (!res.convertida) {
+    console.info('[WEBP] se deja el original', key, res.motivo)
+    return key
+  }
+
+  // Misma carpeta (`<beneficiarioId>/`) y mismo UUID que el original: la
+  // validación de key del POST y del DELETE sigue valiendo tal cual.
+  const raiz = key.replace(/\.[^./]+$/, '')
+  const keyPrincipal = raiz + SUFIJO_OPTIMIZADA
+  const keyMini = raiz + SUFIJO_MINIATURA
+  try {
+    // La miniatura primero: si falla, no queda una foto marcada como `.opt`
+    // (o sea, "tiene miniatura") apuntando a una miniatura que no existe.
+    await subirObjeto(keyMini, res.miniatura, res.contentType)
+    await subirObjeto(keyPrincipal, res.principal, res.contentType)
+  } catch (err) {
+    console.error('[WEBP] no se pudo subir la version convertida', keyPrincipal, err)
+    await borrarFoto(keyMini).catch(() => {})
+    await borrarFoto(keyPrincipal).catch(() => {})
+    return key
+  }
+
+  // Recién ahora: mientras el original exista, un fallo arriba no deja al
+  // socio sin foto.
+  await borrarFoto(key).catch(err => console.error('[WEBP] quedo el original sin borrar', key, err))
+
+  const ahorro = Math.round((1 - res.principal.byteLength / original.byteLength) * 100)
+  console.info('[WEBP]', key, '->', keyPrincipal,
+    `${(original.byteLength / 1024).toFixed(0)}KB -> ${(res.principal.byteLength / 1024).toFixed(0)}KB (-${ahorro}%)`,
+    `+ miniatura ${(res.miniatura.byteLength / 1024).toFixed(0)}KB`)
+  return keyPrincipal
 }

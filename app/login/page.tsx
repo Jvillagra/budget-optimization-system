@@ -42,7 +42,7 @@ function LoginForm() {
     setLoading(true)
     setError(null)
 
-    const supabase = getSupabaseBrowserClient()
+    const supabase = await getSupabaseBrowserClient()
     const next = params.get('next') || '/'
     // El template del correo arma el link como `{{ .RedirectTo }}&token_hash=...`:
     // emailRedirectTo es obligatorio y tiene que traer `?` (ver
