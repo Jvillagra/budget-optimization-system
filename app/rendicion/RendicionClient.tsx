@@ -14,7 +14,9 @@ import { PanelControl, ESTADOS, estadoDe, type EstadoSocio } from './GraficosRen
 // patrón que ya usa app/mi-dashboard/page.tsx).
 const MAX_FOTOS_POR_SOCIO = 5
 
-type Foto = { id: string; uploaded_at: string; url: string }
+// `thumbUrl` = miniatura de 800px (la que va en la grilla de 44px); `url` =
+// version de 2400px, solo al abrir el lightbox. Ver lib/imagen.ts.
+type Foto = { id: string; uploaded_at: string; url: string; thumbUrl: string }
 type ProveedorOpcion = { id: string; nombre: string }
 type ItemCotizacion = {
   id: string
@@ -663,7 +665,7 @@ function FilaCard({
                   aria-label={`Ver foto ${i + 1} de ${f.nombre}`}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={foto.url} alt="" className="w-full h-full object-cover" />
+                  <img src={foto.thumbUrl} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                 </button>
               ))}
               <ProgresoFotos count={f.fotosCount} />

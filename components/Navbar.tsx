@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Download, LogOut, ClipboardList, Users, Tag, Calculator, ShieldCheck, ShoppingBag,
 } from 'lucide-react'
@@ -14,14 +14,34 @@ import {
 // para llegar a Admin) quede en 5.
 // `corto` es la etiqueta de la barra inferior: ahí cada tab tiene ~60px en un
 // celular chico y "Beneficiarios" se cortaba a "Benefi…", que no se entiende.
+//
+// `chunk` precarga el JS de la pantalla destino en cuanto la persona muestra
+// intención de ir (hover en desktop, primer contacto del dedo en mobile).
+// El <Link> de Next ya prefetchea el RSC, pero en una ruta dinámica con
+// loading.tsx solo llega hasta ese esqueleto: el bundle del componente de
+// página se descarga recién al navegar, y eso era el salto en blanco al
+// cambiar de pestaña. Un import() dinámico sí baja exactamente ese chunk y
+// lo deja en caché, sin sumar nada al bundle de la barra.
 const STAFF_LINKS = [
-  { href: '/rendicion', label: 'Rendición', corto: 'Rendición', icon: ClipboardList },
-  { href: '/beneficiarios', label: 'Beneficiarios', corto: 'Socios', icon: Users },
-  { href: '/precios', label: 'Precios', corto: 'Precios', icon: Tag },
-  { href: '/simulador', label: 'Simulador', corto: 'Simular', icon: Calculator },
-  { href: '/admin', label: 'Admin', corto: 'Admin', icon: ShieldCheck },
+  { href: '/rendicion', label: 'Rendición', corto: 'Rendición', icon: ClipboardList, chunk: () => import('@/app/rendicion/RendicionClient') },
+  { href: '/beneficiarios', label: 'Beneficiarios', corto: 'Socios', icon: Users, chunk: () => import('@/app/beneficiarios/BeneficiariosClient') },
+  { href: '/precios', label: 'Precios', corto: 'Precios', icon: Tag, chunk: () => import('@/app/precios/PreciosClient') },
+  { href: '/simulador', label: 'Simulador', corto: 'Simular', icon: Calculator, chunk: () => import('@/app/simulador/SimuladorClient') },
+  { href: '/admin', label: 'Admin', corto: 'Admin', icon: ShieldCheck, chunk: () => import('@/app/admin/AdminClient') },
 ]
-const SOCIO_LINKS = [{ href: '/mi-dashboard', label: 'Mi compra', corto: 'Mi compra', icon: ShoppingBag }]
+const SOCIO_LINKS = [{ href: '/mi-dashboard', label: 'Mi compra', corto: 'Mi compra', icon: ShoppingBag, chunk: () => import('@/app/mi-dashboard/MiDashboardClient') }]
+
+/** Devuelve el handler de precarga para un link. Una sola vez por destino:
+ *  el segundo hover ya no dispara nada. Un fallo (offline, chunk viejo tras
+ *  un deploy) se ignora a propósito -- la navegación normal lo reintenta. */
+function usePrecargaEnIntencion() {
+  const yaPedidos = useRef<Set<string>>(new Set())
+  return (href: string, chunk: () => Promise<unknown>) => {
+    if (yaPedidos.current.has(href)) return
+    yaPedidos.current.add(href)
+    chunk().catch(() => {})
+  }
+}
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>
@@ -51,6 +71,7 @@ export default function Navbar({ role, tieneBeneficiario }: { role: NavRole; tie
   const [isIOS, setIsIOS] = useState(false)
   const [showIOSHint, setShowIOSHint] = useState(false)
   const links = linksParaViewer(role, tieneBeneficiario)
+  const precargar = usePrecargaEnIntencion()
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' })
@@ -102,6 +123,8 @@ export default function Navbar({ role, tieneBeneficiario }: { role: NavRole; tie
               <Link
                 key={link.href}
                 href={link.href}
+                onPointerEnter={() => precargar(link.href, link.chunk)}
+                onFocus={() => precargar(link.href, link.chunk)}
                 className="px-1 mx-2.5 py-1.5 text-sm font-medium transition-colors"
                 style={pathname === link.href
                   ? { color: 'var(--tinta)', fontWeight: 600, boxShadow: 'inset 0 -2px 0 0 var(--tinta)' }
@@ -192,6 +215,7 @@ export default function Navbar({ role, tieneBeneficiario }: { role: NavRole; tie
 export function MobileTabBar({ role, tieneBeneficiario }: { role: NavRole; tieneBeneficiario: boolean }) {
   const pathname = usePathname()
   const links = linksParaViewer(role, tieneBeneficiario)
+  const precargar = usePrecargaEnIntencion()
 
   if (links.length === 0) return null
 
@@ -211,6 +235,10 @@ export function MobileTabBar({ role, tieneBeneficiario }: { role: NavRole; tiene
           <Link
             key={link.href}
             href={link.href}
+            // En mobile no hay hover: el touchstart llega ~100ms antes que el
+            // click, y esos 100ms son justo el pedido del chunk.
+            onTouchStart={() => precargar(link.href, link.chunk)}
+            onPointerEnter={() => precargar(link.href, link.chunk)}
             className="relative flex flex-1 min-w-0 flex-col items-center justify-center gap-0.5 px-1 py-2 text-[10px] font-medium"
             style={{ color: active ? 'var(--tinta)' : 'var(--tinta-45)' }}
             aria-current={active ? 'page' : undefined}

@@ -85,3 +85,58 @@ export async function urlFirmadaLectura(key: string, expiresInSeconds = 300) {
   const command = new GetObjectCommand({ Bucket: getBucket(), Key: key })
   return getSignedUrl(client, command, { expiresIn: expiresInSeconds })
 }
+
+/** Descarga el objeto completo a memoria. null si no existe. Se usa para
+ *  reprocesar a WebP lo recién subido (ver lib/imagen.ts): el archivo sube
+ *  directo del navegador a R2, así que este es el único momento en que el
+ *  servidor lo tiene entre manos. */
+export async function descargarObjeto(key: string): Promise<Buffer | null> {
+  const client = getClient()
+  try {
+    const res = await client.send(new GetObjectCommand({ Bucket: getBucket(), Key: key }))
+    if (!res.Body) return null
+    return Buffer.from(await res.Body.transformToByteArray())
+  } catch {
+    return null
+  }
+}
+
+export async function subirObjeto(key: string, body: Buffer, contentType: string) {
+  const client = getClient()
+  await client.send(new PutObjectCommand({
+    Bucket: getBucket(),
+    Key: key,
+    Body: body,
+    ContentType: contentType,
+    ContentLength: body.byteLength,
+  }))
+}
+
+// Sufijos de las dos versiones que produce la conversión a WebP (ver
+// lib/imagen.ts). El marcador `.opt` no es decorativo: es lo que permite
+// saber, mirando SOLO la key, si esa foto tiene miniatura -- sin agregar una
+// columna a `fotos_compra` ni hacer un HEAD contra R2 por foto. Las fotos
+// anteriores a la conversión terminan en .jpg/.png/.heic y quedan fuera; una
+// key nunca puede terminar en `.opt.webp` por accidente.
+const SUFIJO_OPTIMIZADA = '.opt.webp'
+const SUFIJO_MINIATURA = '.thumb.webp'
+
+export { SUFIJO_OPTIMIZADA, SUFIJO_MINIATURA }
+
+/** Key de la miniatura de una foto, o null si esa foto no tiene (subida
+ *  antes de que existiera la conversión, o conversión fallida). */
+export function keyMiniatura(key: string): string | null {
+  if (!key.endsWith(SUFIJO_OPTIMIZADA)) return null
+  return key.slice(0, -SUFIJO_OPTIMIZADA.length) + SUFIJO_MINIATURA
+}
+
+/** Las dos URLs firmadas de una foto. `thumbUrl` cae a la principal cuando no
+ *  hay miniatura, así el que consume no necesita saber nada de esto. */
+export async function urlsFirmadasFoto(key: string, expiresInSeconds = 300) {
+  const thumbKey = keyMiniatura(key)
+  const [url, thumbUrl] = await Promise.all([
+    urlFirmadaLectura(key, expiresInSeconds),
+    thumbKey ? urlFirmadaLectura(thumbKey, expiresInSeconds) : null,
+  ])
+  return { url, thumbUrl: thumbUrl ?? url }
+}

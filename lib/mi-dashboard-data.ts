@@ -1,7 +1,7 @@
 import 'server-only'
 import { createHash } from 'crypto'
 import { getSupabaseAdmin } from './supabase-admin'
-import { urlFirmadaLectura } from './r2'
+import { urlsFirmadasFoto } from './r2'
 import type { Beneficiario, Asignacion, Proveedor, PrecioProveedor } from './types'
 
 // Datos propios de un socio. Los consumen /api/mi-dashboard y la página
@@ -19,7 +19,9 @@ function gravatarUrl(email: string): string {
   return `https://www.gravatar.com/avatar/${hash}?s=160&d=404`
 }
 
-export type FotoSocio = { id: string; uploaded_at: string; url: string }
+/** `thumbUrl` = miniatura de 800px para la grilla; `url` = 2400px al abrir.
+ *  Ver lib/imagen.ts. En una foto vieja las dos son la misma. */
+export type FotoSocio = { id: string; uploaded_at: string; url: string; thumbUrl: string }
 
 export type MiDashboardData = {
   beneficiario: Beneficiario
@@ -89,7 +91,7 @@ export async function cargarFotosDeBeneficiario(beneficiarioId: string): Promise
     (data ?? []).map(async f => ({
       id: f.id,
       uploaded_at: f.uploaded_at,
-      url: await urlFirmadaLectura(f.r2_key),
+      ...(await urlsFirmadasFoto(f.r2_key)),
     }))
   )
 }

@@ -1,6 +1,6 @@
 import 'server-only'
 import { getSupabaseAdmin } from './supabase-admin'
-import { urlFirmadaLectura } from './r2'
+import { urlsFirmadasFoto } from './r2'
 import { elegirMejorProveedor } from './business-logic'
 import { EMAIL_QA_SOCIO } from './constants'
 import type { Asignacion, Proveedor, PrecioProveedor, FotoCompra, Beneficiario } from './types'
@@ -147,9 +147,11 @@ export async function cargarRendicion(): Promise<
 }
 
 
-/** Foto ya lista para el navegador: la key de R2 reemplazada por una URL
- *  firmada de lectura. */
-export type FotoFirmada = { id: string; uploaded_at: string; url: string }
+/** Foto ya lista para el navegador: la key de R2 reemplazada por URLs
+ *  firmadas de lectura. `thumbUrl` es la version de 800px que va en la
+ *  grilla; `url`, la de 2400px del lightbox (ver lib/imagen.ts). En una foto
+ *  vieja, sin miniatura, las dos son la misma. */
+export type FotoFirmada = { id: string; uploaded_at: string; url: string; thumbUrl: string }
 export type FilaRendicionUI = Omit<FilaRendicion, 'fotos'> & { fotos: FotoFirmada[] }
 
 // Una hora, no cinco minutos: staff deja la pantalla de rendición abierta
@@ -174,7 +176,7 @@ export async function cargarRendicionUI(): Promise<
         fotos.map(async f => ({
           id: f.id,
           uploaded_at: f.uploaded_at,
-          url: await urlFirmadaLectura(f.r2_key, TTL_LECTURA_SEGUNDOS),
+          ...(await urlsFirmadasFoto(f.r2_key, TTL_LECTURA_SEGUNDOS)),
         }))
       ),
     }))
