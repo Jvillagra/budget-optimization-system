@@ -146,6 +146,42 @@ body {
   box-shadow: none;
 }
 
+/* ---- Impresión -------------------------------------------------------
+   La pestaña "Por revisar" se lleva a terreno en papel: se imprime desde el
+   navegador y tiene que salir una hoja usable, no una captura de la app.
+   Fuera el cromo (menús, botones, barras) y fuera los fondos de color, que
+   en una impresora salen como manchas grises sobre las que no se lee. */
+@media print {
+  .app-header,
+  .no-print,
+  nav,
+  footer { display: none !important; }
+
+  :root {
+    --papel: #fff;
+    --papel-hueco: #fff;
+    --tinta: #000;
+    --tinta-70: #333;
+    --tinta-45: #555;
+    --text-muted: #333;
+    --linea: #bbb;
+    --linea-fuerte: #666;
+  }
+
+  body { background: #fff; }
+  .app-shell { padding-bottom: 0 !important; }
+
+  /* Un caso no se parte entre dos hojas: la pregunta que hay que hacerle al
+     socio tiene que quedar junto a su nombre. */
+  .print-bloque { break-inside: avoid; page-break-inside: avoid; }
+  .print-hoja { max-width: none; }
+
+  /* Las filas de la tabla de cobro se leen en blanco y negro: el monto va en
+     negrita, no en terracota. */
+  table { border-collapse: collapse; }
+  th, td { color: #000 !important; }
+}
+
 /* ---- Material translúcido (estilo Apple) -------------------------------
    Solo para el CROMO (barra superior, barra inferior de móvil) y para los
    velos de modal. Nunca para una superficie de lectura: el texto va sobre

@@ -41,6 +41,14 @@ export function esPolietileno(insumo: CatalogoInsumo): boolean {
   return normalizar(insumo.nombre).startsWith(PREFIJO_POLIETILENO)
 }
 
+/** Familia "malla" por nombre, igual que las otras dos. Se usa en la
+ *  revisión de carritos (lib/revision-carritos.ts), que compara rollos de
+ *  malla entre socios. Acepta el nombre suelto y no un CatalogoInsumo porque
+ *  ahí lo único que llega es el nombre del ítem cotizado. */
+export function esNombreDeMalla(nombre: string): boolean {
+  return normalizar(nombre).startsWith('malla')
+}
+
 /** Elige de forma determinista entre varios candidatos (orden estable por
  *  nombre y luego id): el `find` anterior dependía del orden en que Postgres
  *  devolviera las filas, que no está garantizado sin ORDER BY. */
@@ -254,4 +262,164 @@ export function cotizarCarrito(
 export function aporteDeBolsillo(cot: { total: number; totalEsCompleto: boolean }, presupuestoBase: number): number | null {
   if (!cot.totalEsCompleto) return null
   return Math.max(0, cot.total - presupuestoBase)
+}
+
+// ---------------------------------------------------------------------------
+// Revisión automática de carritos: las reglas que marcan un carrito como
+// "raro" para que alguien lo confirme con el socio ANTES de comprar.
+//
+// Nació de una revisión a mano de los 29 socios (2026-09-13) que encontró
+// carritos a medio cargar y cantidades fuera de lo común. Hacerla a mano no
+// escala ni se repite: acá las reglas corren solas cada vez que se abre la
+// pestaña, sobre los datos del momento.
+//
+// Ninguna regla corrige nada. Marcan y explican: la respuesta la tiene el
+// socio, no el sistema.
+
+/** Debajo de este uso del presupuesto, el carrito se ve a medio cargar.
+ *  80% y no 90% para no marcar a quien simplemente no llegó a gastar el
+ *  saldo: la app deja restos de hasta ~$1.800 por el precio de un polín. */
+export const UMBRAL_USO_PRESUPUESTO = 0.8
+
+/** Desvío contra la mediana de su segmento a partir del cual los rollos de
+ *  malla se consideran fuera de lo normal. */
+export const DESVIO_MALLA = 0.5
+
+/** Mínimo de socios con malla en el segmento para que exista una "cantidad
+ *  normal" contra la cual comparar. Con dos carritos no hay normalidad. */
+const MINIMO_PARA_COMPARAR = 3
+
+export interface CarritoRevisable {
+  id: string
+  nombre: string
+  segmento: string
+  presupuestoBase: number
+  total: number
+  totalEsCompleto: boolean
+  itemsSinPrecio: number
+  items: { insumoNombre: string; cantidad: number }[]
+}
+
+export type MotivoCaso = 'sin_carrito' | 'sin_precio' | 'presupuesto_sin_usar' | 'mallas_fuera_de_rango'
+
+export interface Hallazgo {
+  motivo: MotivoCaso
+  severidad: 'alta' | 'media'
+  /** Qué pasa, en una línea. */
+  titulo: string
+  /** La cifra que lo respalda. Nunca un juicio: el número y nada más. */
+  detalle: string
+  /** Qué hay que preguntarle al socio. */
+  pregunta: string
+}
+
+export interface CasoRevision {
+  id: string
+  nombre: string
+  segmento: string
+  severidad: 'alta' | 'media'
+  hallazgos: Hallazgo[]
+}
+
+function mediana(valores: number[]): number {
+  const orden = [...valores].sort((a, b) => a - b)
+  const medio = Math.floor(orden.length / 2)
+  return orden.length % 2 === 0 ? (orden[medio - 1] + orden[medio]) / 2 : orden[medio]
+}
+
+function rollosDeMalla(c: CarritoRevisable): number {
+  return c.items.reduce((s, i) => s + (esNombreDeMalla(i.insumoNombre) ? i.cantidad : 0), 0)
+}
+
+/**
+ * Mediana de rollos de malla por segmento, contando SOLO a los socios que
+ * llevan malla: incluir a los que no llevan ninguna hundiría la mediana y
+ * marcaría como raro a todo el mundo.
+ *
+ * Deliberadamente NO se comparan los polines. Los polines son el saldo --
+ * la simulación gasta en polines lo que sobra después de la malla (ver
+ * polinesQueCaben en business-logic) -- así que 4 polines y 48 polines son
+ * los dos correctos según qué malla eligió cada socio. Compararlos marcaría
+ * como anómalo a medio programa. La malla sí es una elección.
+ */
+function medianasDeMalla(carritos: CarritoRevisable[]): Map<string, number> {
+  const porSegmento = new Map<string, number[]>()
+  for (const c of carritos) {
+    const rollos = rollosDeMalla(c)
+    if (rollos <= 0) continue
+    const arr = porSegmento.get(c.segmento) ?? []
+    arr.push(rollos)
+    porSegmento.set(c.segmento, arr)
+  }
+
+  const medianas = new Map<string, number>()
+  for (const [segmento, valores] of porSegmento) {
+    if (valores.length >= MINIMO_PARA_COMPARAR) medianas.set(segmento, mediana(valores))
+  }
+  return medianas
+}
+
+export function revisarCarritos(carritos: CarritoRevisable[]): CasoRevision[] {
+  const medianas = medianasDeMalla(carritos)
+  const casos: CasoRevision[] = []
+
+  for (const c of carritos) {
+    const hallazgos: Hallazgo[] = []
+
+    if (c.items.length === 0) {
+      hallazgos.push({
+        motivo: 'sin_carrito',
+        severidad: 'alta',
+        titulo: 'No tiene ningún producto cargado',
+        detalle: `${formatCLP(c.presupuestoBase)} de presupuesto sin asignar`,
+        pregunta: 'Hay que cargarle el carrito en la pestaña Beneficiarios antes de que pueda comprar.',
+      })
+    } else if (!c.totalEsCompleto) {
+      hallazgos.push({
+        motivo: 'sin_precio',
+        severidad: 'alta',
+        titulo: `${c.itemsSinPrecio} producto${c.itemsSinPrecio === 1 ? '' : 's'} sin precio cotizado`,
+        detalle: `El total de ${formatCLP(c.total)} es parcial: no incluye lo que falta cotizar`,
+        pregunta: 'Falta cargar ese precio en la pestaña Precios. Hasta entonces no se sabe si el presupuesto alcanza.',
+      })
+    } else if (c.total < c.presupuestoBase * UMBRAL_USO_PRESUPUESTO) {
+      const usado = Math.round((c.total / c.presupuestoBase) * 100)
+      hallazgos.push({
+        motivo: 'presupuesto_sin_usar',
+        severidad: 'alta',
+        titulo: `Usa solo el ${usado}% de su presupuesto`,
+        detalle: `${formatCLP(c.total)} de ${formatCLP(c.presupuestoBase)} · le sobran ${formatCLP(c.presupuestoBase - c.total)}`,
+        pregunta: '¿El carrito quedó a medio cargar, o pidió solo eso? Es plata del programa que se pierde si no se usa.',
+      })
+    }
+
+    const rollos = rollosDeMalla(c)
+    const normal = medianas.get(c.segmento)
+    if (rollos > 0 && normal !== undefined && Math.abs(rollos - normal) / normal >= DESVIO_MALLA) {
+      hallazgos.push({
+        motivo: 'mallas_fuera_de_rango',
+        severidad: 'media',
+        titulo: `Lleva ${rollos} rollo${rollos === 1 ? '' : 's'} de malla`,
+        detalle: `El resto de ${c.segmento} lleva ${normal % 1 === 0 ? normal : normal.toFixed(1)}`,
+        pregunta: 'Conviene confirmar los metros de cierre que necesita antes de comprar: la malla es lo que define cuánto le queda para polines.',
+      })
+    }
+
+    if (hallazgos.length > 0) {
+      casos.push({
+        id: c.id,
+        nombre: c.nombre,
+        segmento: c.segmento,
+        severidad: hallazgos.some(h => h.severidad === 'alta') ? 'alta' : 'media',
+        hallazgos,
+      })
+    }
+  }
+
+  // Los urgentes primero, y dentro de cada grupo por nombre: el orden tiene
+  // que ser el mismo en cada carga, o la lista impresa de ayer no se puede
+  // comparar con la de hoy.
+  return casos.sort((a, b) =>
+    (a.severidad === b.severidad ? 0 : a.severidad === 'alta' ? -1 : 1) || a.nombre.localeCompare(b.nombre)
+  )
 }

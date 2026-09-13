@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { X, ImageOff, CheckCircle2, RotateCcw, ImageUp, ChevronDown, ClipboardList, BarChart3, Trash2, Lock } from 'lucide-react'
+import { X, ImageOff, CheckCircle2, RotateCcw, ImageUp, ChevronDown, ClipboardList, BarChart3, AlertTriangle, Trash2, Lock } from 'lucide-react'
 import { formatCLP } from '@/lib/business-logic'
 import { FOTOS_REQUERIDAS } from '@/lib/constants'
 import { Card, Button, Badge, Input, Alert, Skeleton, ConfirmDialog, IconButton, soltarFocoDePuntero } from '@/components/design-system'
 import { PageHeader } from '@/components/Editorial'
+import { RevisionContent } from './RevisionContent'
 import { VistaResumenContent } from '@/components/VistaResumenContent'
 import { PanelControl, ESTADOS, estadoDe, type EstadoSocio } from './GraficosRendicion'
 
@@ -155,7 +156,10 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
   initialError: boolean
 }) {
   const searchParams = useSearchParams()
-  const [tab, setTab] = useState<'lista' | 'resumen'>(searchParams.get('tab') === 'resumen' ? 'resumen' : 'lista')
+  const [tab, setTab] = useState<'lista' | 'revisar' | 'resumen'>(() => {
+    const t = searchParams.get('tab')
+    return t === 'resumen' || t === 'revisar' ? t : 'lista'
+  })
   // Datos ya resueltos en el servidor (app/rendicion/page.tsx): la pantalla
   // pinta con contenido en el primer frame, sin skeleton ni fetch al montar.
   const [filas, setFilas] = useState<FilaRendicion[]>(initialFilas)
@@ -412,20 +416,29 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
 
   return (
     <div className="space-y-6">
+      {/* Cada pestaña tiene su propio título: un ternario "lista o lo otro"
+          le ponía a "Por revisar" el encabezado del consolidado de compra. */}
       <PageHeader
         eyebrow="01 / Rendición"
-        titulo={tab === 'lista' ? <>Quién ya<br /><em>rindió.</em></> : <>Todo lo que<br /><em>hay que comprar.</em></>}
-        bajada={tab === 'lista'
-          ? <>Cada socio necesita {FOTOS_REQUERIDAS} fotos de sus comprobantes para quedar completo.</>
-          : 'Consolidado de la compra de los dos proyectos, con el total de cada uno.'}
+        titulo={
+          tab === 'lista' ? <>Quién ya<br /><em>rindió.</em></>
+          : tab === 'revisar' ? <>Qué preguntar y<br /><em>qué cobrar.</em></>
+          : <>Todo lo que<br /><em>hay que comprar.</em></>
+        }
+        bajada={
+          tab === 'lista' ? <>Cada socio necesita {FOTOS_REQUERIDAS} fotos de sus comprobantes para quedar completo.</>
+          : tab === 'revisar' ? 'Los carritos que no cuadran y el aporte que hay que pedirle a cada socio. Se recalcula solo.'
+          : 'Consolidado de la compra de los dos proyectos, con el total de cada uno.'
+        }
       />
 
       {/* Sub-tabs Lista/Resumen -- ver comentario en RendicionPageInner. Misma
           pastilla que el menu principal: antes eran un borde inferior, o sea
           un tercer indicador de "elegido" distinto conviviendo en la pantalla. */}
-      <div className="flex gap-1">
+      <div className="flex gap-1 no-print">
         {([
           { id: 'lista' as const, label: 'Lista', icon: ClipboardList },
+          { id: 'revisar' as const, label: 'Por revisar', icon: AlertTriangle },
           { id: 'resumen' as const, label: 'Resumen', icon: BarChart3 },
         ]).map(t => {
           const Icon = t.icon
@@ -444,6 +457,8 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
           )
         })}
       </div>
+
+      {tab === 'revisar' && <RevisionContent filas={filas} />}
 
       {tab === 'resumen' && <VistaResumenContent />}
 
