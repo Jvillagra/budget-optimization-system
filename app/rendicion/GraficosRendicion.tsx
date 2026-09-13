@@ -18,6 +18,7 @@ export type FilaGrafico = {
   proveedorCompraNombre: string | null
   total: number
   totalEsCompleto: boolean
+  aporteBolsillo: number | null
   fotosCount: number
   compraCompleta: boolean
 }
@@ -169,10 +170,15 @@ export function PanelControl({ filas, filtro, onFiltro }: {
     const porEstado: Record<EstadoSocio, number> = { completo: 0, listo: 0, faltan: 0, sin_fotos: 0 }
     const porSegmento: Record<string, { total: number; completos: number; monto: number; montoRendido: number }> = {}
     let cotizado = 0, rendido = 0, parciales = 0
+    // Aporte de bolsillo: lo que los socios tienen que poner de su plata
+    // porque su compra pasó del presupuesto. No es plata del programa, por
+    // eso se cuenta aparte de `cotizado`/`rendido`.
+    let aporteTotal = 0, sociosConAporte = 0
 
     for (const f of filas) {
       porEstado[estadoDe(f)]++
       cotizado += f.total
+      if (f.aporteBolsillo !== null && f.aporteBolsillo > 0) { aporteTotal += f.aporteBolsillo; sociosConAporte++ }
       if (!f.totalEsCompleto) parciales++
       if (f.compraCompleta) rendido += f.total
       const seg = porSegmento[f.segmento] ?? (porSegmento[f.segmento] = { total: 0, completos: 0, monto: 0, montoRendido: 0 })
@@ -184,6 +190,7 @@ export function PanelControl({ filas, filtro, onFiltro }: {
     return {
       porEstado, porSegmento, parciales,
       cotizado, rendido, porRendir: cotizado - rendido,
+      aporteTotal, sociosConAporte,
       total: filas.length, completos: porEstado.completo,
     }
   }, [filas])
@@ -280,6 +287,35 @@ export function PanelControl({ filas, filtro, onFiltro }: {
           <TotalCelda etiqueta="Rendido" monto={d.rendido} detalle={`${d.completos} socio${d.completos === 1 ? '' : 's'} con compra completa`} color="var(--verde-dark)" />
           <TotalCelda etiqueta="Por rendir" monto={d.porRendir} detalle={`${d.total - d.completos} socio${d.total - d.completos === 1 ? '' : 's'} pendiente${d.total - d.completos === 1 ? '' : 's'}`} color="var(--cafe-dark)" />
         </div>
+      </div>
+
+      {/* Aporte de bolsillo. Va en su propio bloque y no como cuarta celda
+          del grid de arriba a propósito: esa fila es plata del programa
+          (cotizado / rendido / por rendir) y esta es plata que los socios
+          tienen que poner de su bolsillo. Mezclarlas hace que se sumen sin
+          querer. Es la cifra que María Inés usa para cobrar. */}
+      <div
+        className="rounded-[6px] p-3.5 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2"
+        style={{ background: 'var(--papel)', border: '1px solid var(--linea)' }}
+      >
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+            Aporte de bolsillo por cobrar
+          </p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+            {d.sociosConAporte === 0
+              ? 'Ningún socio pasó su presupuesto'
+              : d.sociosConAporte === 1
+                ? `1 de ${d.total} socios tiene que poner plata`
+                : `${d.sociosConAporte} de ${d.total} socios tienen que poner plata`}
+          </p>
+        </div>
+        <p
+          className="text-2xl font-bold tabular-nums leading-none"
+          style={{ color: d.aporteTotal > 0 ? 'var(--cafe-dark)' : 'var(--text-muted)' }}
+        >
+          {formatCLP(d.aporteTotal)}
+        </p>
       </div>
 
       {d.parciales > 0 && (

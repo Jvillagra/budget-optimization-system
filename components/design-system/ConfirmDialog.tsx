@@ -39,7 +39,7 @@ export function ConfirmDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(23,24,21,0.55)] p-4 motion-safe:animate-[fadeIn_150ms_ease-out]"
+      className="fixed inset-0 z-50 flex items-center justify-center material-scrim p-4 motion-safe:animate-[fadeIn_150ms_ease-out]"
       onClick={onCancel}
       role="presentation"
     >

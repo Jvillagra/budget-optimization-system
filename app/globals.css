@@ -146,6 +146,57 @@ body {
   box-shadow: none;
 }
 
+/* ---- Material translúcido (estilo Apple) -------------------------------
+   Solo para el CROMO (barra superior, barra inferior de móvil) y para los
+   velos de modal. Nunca para una superficie de lectura: el texto va sobre
+   papel opaco, que es exactamente lo que hace Apple -- el material vive en
+   las capas que se mueven, no en la que hay que leer.
+
+   Los valores van en rgba literal y no en color-mix() a propósito: estas
+   dos reglas tienen que resolver aunque color-mix falle, porque de ellas
+   depende que se lea el menú.
+
+   `saturate()` antes del blur no es decoración: al desenfocar, el color de
+   lo que pasa por debajo se lava, y sin recuperar saturación el material
+   se ve gris sucio en vez de crema. */
+.material-chrome {
+  background: rgba(244, 240, 231, 0.82);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+}
+
+/* Velo de modal: claro y desenfocado, no negro. Lo que separa las capas es
+   el desenfoque, no la oscuridad -- por eso el panel del modal lleva sombra
+   propia (.panel-modal). */
+.material-scrim {
+  background: rgba(244, 240, 231, 0.55);
+  -webkit-backdrop-filter: saturate(180%) blur(16px);
+  backdrop-filter: saturate(180%) blur(16px);
+}
+
+.panel-modal {
+  box-shadow: 0 24px 64px -16px rgba(31, 36, 25, 0.45), 0 0 0 1px var(--linea);
+}
+
+/* Sin backdrop-filter el translúcido dejaría el texto sobre lo que haya
+   detrás, sin difuminar: se cae a opaco. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .material-chrome { background: var(--papel); }
+  .material-scrim { background: rgba(244, 240, 231, 0.94); }
+}
+
+/* Quien pidió menos transparencia en su sistema operativo la recibe: misma
+   jerarquía, sin material. */
+@media (prefers-reduced-transparency: reduce) {
+  .material-chrome,
+  .material-scrim {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .material-chrome { background: var(--papel); }
+  .material-scrim { background: rgba(244, 240, 231, 0.94); }
+}
+
 /* Lightbox de /rendicion -- entrada rápida, solo transform/opacity, dentro
    del presupuesto de UI (<300ms); motion-safe: ya gatea prefers-reduced-motion. */
 @keyframes fadeIn {

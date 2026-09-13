@@ -446,17 +446,24 @@ export function VistaResumenContent() {
 
           {/* ---- Polines: total general, el insumo que comparten ---------- */}
           <Reveal delay={120}>
-            {/* Antes era un rectángulo de verde plano con las tres cifras
-                sueltas: no se veía de dónde salía el total ni cuánto pesaba
-                cada proyecto. Ahora el panel va en verde-tinta (la superficie
-                oscura del sistema), abre con una franja partida en la misma
-                proporción que las cifras, y cada sigla lleva su barra. */}
+            {/* Estructura: una franja partida en la misma proporción que las
+                cifras, y cada sigla con su barra, para que se vea de dónde
+                sale el total y cuánto pesa cada proyecto.
+
+                2026-09-13: el panel dejó de ir en verde-tinta. Esa superficie
+                casi negra era la única de la pantalla y se leía como un
+                bloque ajeno, no como el cierre del resumen; además obligaba a
+                aclarar los colores de proyecto (había un colorEnOscuro() solo
+                para esto) y a escribir cada texto en crema translúcido. Ahora
+                es papel hundido con borde, como el resto de las superficies,
+                y los verdes/terracotas de marca se usan tal cual. */}
             <section
               className="relative overflow-hidden rounded-[8px]"
               style={{
-                background: 'var(--tinta)',
-                backgroundImage: 'radial-gradient(120% 120% at 100% 0%, rgba(232,134,43,0.16) 0%, transparent 58%)',
-                color: 'var(--papel)',
+                background: 'var(--papel-hueco)',
+                backgroundImage: 'radial-gradient(120% 120% at 100% 0%, var(--acento-hueco) 0%, transparent 62%)',
+                border: '1px solid var(--linea)',
+                color: 'var(--tinta)',
               }}
             >
               <div className="flex h-[3px] w-full" aria-hidden>
@@ -465,7 +472,7 @@ export function VistaResumenContent() {
                     key={s.seg}
                     style={{
                       flex: `${s.polines} 1 0%`,
-                      background: colorEnOscuro(s.seg),
+                      background: colorDeSegmento(s.seg),
                       minWidth: s.polines > 0 ? 8 : 0,
                     }}
                   />
@@ -473,9 +480,9 @@ export function VistaResumenContent() {
               </div>
               <div className="p-6 sm:p-8 flex flex-wrap items-end justify-between gap-x-10 gap-y-8">
                 <div>
-                  <p className="eyebrow" style={{ color: 'rgba(244,240,231,0.72)' }}>Total de polines</p>
+                  <p className="eyebrow" style={{ color: 'var(--text-muted)' }}>Total de polines</p>
                   <p className="titulo-lg mt-2 tabular-nums">{totalPolines || '—'}</p>
-                  <p className="text-xs mt-2" style={{ color: 'rgba(244,240,231,0.72)' }}>
+                  <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
                     Sumando los dos proyectos
                   </p>
                 </div>
@@ -484,15 +491,15 @@ export function VistaResumenContent() {
                     const pct = totalPolines > 0 ? (s.polines / totalPolines) * 100 : 0
                     return (
                       <div key={s.seg} className="min-w-[104px]">
-                        <p className="eyebrow" style={{ color: 'rgba(244,240,231,0.72)' }}>{s.sigla}</p>
+                        <p className="eyebrow" style={{ color: 'var(--text-muted)' }}>{s.sigla}</p>
                         <p className="titulo-md mt-1 tabular-nums">{s.polines || '—'}</p>
-                        <div className="h-[3px] w-full mt-3 rounded-full" style={{ background: 'rgba(244,240,231,0.18)' }}>
+                        <div className="h-[3px] w-full mt-3 rounded-full" style={{ background: 'var(--linea)' }}>
                           <div
                             className="h-full rounded-full motion-safe:transition-[width] motion-safe:duration-700 motion-safe:ease-out"
-                            style={{ width: `${pct}%`, background: colorEnOscuro(s.seg) }}
+                            style={{ width: `${pct}%`, background: colorDeSegmento(s.seg) }}
                           />
                         </div>
-                        <p className="text-xs mt-2 tabular-nums" style={{ color: 'rgba(244,240,231,0.72)' }}>
+                        <p className="text-xs mt-2 tabular-nums" style={{ color: 'var(--text-muted)' }}>
                           {Math.round(pct)}% del total
                         </p>
                       </div>
@@ -629,14 +636,13 @@ export function VistaResumenContent() {
   )
 }
 
-/** Color de proyecto sobre la superficie oscura del panel de polines. El
- *  verde bosque (#3f5c1c) y el terracota (#8b5a2b) del sistema están hechos
- *  para leerse sobre papel crema; sobre --tinta (#1f2419) quedan casi
- *  invisibles, así que ahí se usan aclarados con el mismo crema. */
-function colorEnOscuro(seg: Segmento) {
-  return seg === 'Invernadero'
-    ? 'color-mix(in oklab, var(--marca) 52%, var(--papel))'
-    : 'color-mix(in oklab, var(--marca-calida) 58%, var(--papel))'
+/** Color de proyecto en el panel de polines: los de marca, sin tocar. El
+ *  verde bosque (#3f5c1c) y el terracota (#8b5a2b) están hechos para leerse
+ *  sobre papel crema, que es justo el fondo que este panel volvió a tener.
+ *  Antes había acá un colorEnOscuro() que los aclaraba con crema porque el
+ *  panel iba sobre --tinta; con el fondo claro esa corrección sobra. */
+function colorDeSegmento(seg: Segmento) {
+  return seg === 'Invernadero' ? 'var(--marca)' : 'var(--marca-calida)'
 }
 
 /** "Polines" es el único insumo que comparten los dos proyectos y el que

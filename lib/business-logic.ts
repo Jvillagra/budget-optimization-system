@@ -193,7 +193,21 @@ export function calcularCostoCarrito(
   return { total, itemsConPrecio, itemsSinPrecio }
 }
 
-export interface MejorProveedor {
+/** Proveedor con el que se valoriza el programa cuando nadie eligió uno a
+ *  mano: Sodimac, por decisión del proyecto PAT (es quien cotiza los polines,
+ *  el insumo que define la simulación y que todos los socios llevan). Si no
+ *  existiera, el primero de la lista.
+ *
+ *  Vive acá, y no en lib/proveedor-context.tsx, porque lo necesitan tanto el
+ *  cliente (el selector "ver precios de" en /beneficiarios y /mi-dashboard)
+ *  como el servidor (la rendición). Con la definición duplicada, /rendición y
+ *  /beneficiarios podían mostrar proveedores distintos para el mismo socio --
+ *  que es exactamente lo que pasaba con Marcia Catrilef. */
+export function proveedorPorDefecto<T extends { id: string; nombre: string }>(proveedores: T[]): T | undefined {
+  return proveedores.find(p => p.nombre.trim().toLowerCase().includes('sodimac')) ?? proveedores[0]
+}
+
+export interface CotizacionCarrito {
   proveedor: Proveedor | null
   total: number
   itemsSinPrecio: number
@@ -204,40 +218,40 @@ export interface MejorProveedor {
 }
 
 /**
- * "Mejor proveedor calculado": el que cotiza el carrito completo al menor
- * total; si ninguno cotiza el 100%, el que cubre más ítems (y, en empate de
- * ambos, el de nombre alfabéticamente menor, para que sea determinista).
+ * Valoriza el carrito de un socio con UN proveedor dado.
  *
- * Vivía duplicado literal en /api/rendicion y en /api/admin/informe-consultora:
- * arreglar el criterio en uno dejaba el PDF que va a la consultora auditora
- * con el criterio viejo. Es una estimación de reporte, NUNCA la fuente de
- * verdad transaccional -- para eso está beneficiarios.proveedor_compra_id.
+ * Reemplaza a `elegirMejorProveedor()` (borrada el 2026-09-13), que elegía
+ * sola al proveedor más barato que cotizara el carrito completo. Ese criterio
+ * automático era el origen de la incongruencia entre pantallas: Agrícola
+ * Pucón tenía los polines en $0 (dato malo, corregido en la migración 011) y
+ * ganaba siempre, así que /rendición reportaba un proveedor distinto del que
+ * el staff estaba mirando en /beneficiarios, para el mismo socio y el mismo
+ * carrito. Quién es el proveedor ahora es una DECISIÓN (compra confirmada, o
+ * el de referencia), no un resultado de cálculo.
  */
-export function elegirMejorProveedor(
+export function cotizarCarrito(
   asignaciones: Asignacion[],
-  proveedores: Proveedor[],
+  proveedor: Proveedor | null,
   precioMap: Map<string, number | null>
-): MejorProveedor {
-  // Sin carrito no hay proveedor que elegir. Antes todos empataban en
-  // total 0 / 0 ítems sin precio y "ganaba" el primero: se reportaba
-  // "Proveedor X — $0" como si fuera un hecho, y el PDF sumaba ese cero al
-  // total general sin que nadie notara que faltaba el carrito.
-  if (asignaciones.length === 0 || proveedores.length === 0) {
-    return { proveedor: null, total: 0, itemsSinPrecio: asignaciones.length, totalEsCompleto: false }
+): CotizacionCarrito {
+  // Sin carrito no hay nada que cotizar: `total` 0 con `totalEsCompleto`
+  // false, para que nadie reporte "$0" como si fuera un hecho ni lo sume al
+  // total general del informe.
+  if (!proveedor || asignaciones.length === 0) {
+    return { proveedor, total: 0, itemsSinPrecio: asignaciones.length, totalEsCompleto: false }
   }
 
-  let mejor: MejorProveedor = { proveedor: null, total: 0, itemsSinPrecio: asignaciones.length, totalEsCompleto: false }
+  const { total, itemsSinPrecio } = calcularCostoCarrito(asignaciones, proveedor.id, precioMap)
+  return { proveedor, total, itemsSinPrecio, totalEsCompleto: itemsSinPrecio === 0 }
+}
 
-  for (const prov of proveedores) {
-    const { total, itemsSinPrecio } = calcularCostoCarrito(asignaciones, prov.id, precioMap)
-    const gana =
-      !mejor.proveedor ||
-      itemsSinPrecio < mejor.itemsSinPrecio ||
-      (itemsSinPrecio === mejor.itemsSinPrecio && total < mejor.total) ||
-      (itemsSinPrecio === mejor.itemsSinPrecio && total === mejor.total &&
-        prov.nombre.localeCompare(mejor.proveedor.nombre) < 0)
-    if (gana) mejor = { proveedor: prov, total, itemsSinPrecio, totalEsCompleto: itemsSinPrecio === 0 }
-  }
-
-  return mejor
+/** Lo que el socio tiene que poner de su bolsillo: todo lo que su compra pasa
+ *  del presupuesto del programa. Es la cifra que María Inés le cobra.
+ *
+ *  Devuelve null cuando el total es parcial (faltan precios o no hay carrito):
+ *  un aporte calculado sobre una suma incompleta es más bajo que el real, y
+ *  cobrarlo dejaría el déficit escondido. */
+export function aporteDeBolsillo(cot: { total: number; totalEsCompleto: boolean }, presupuestoBase: number): number | null {
+  if (!cot.totalEsCompleto) return null
+  return Math.max(0, cot.total - presupuestoBase)
 }

@@ -8,12 +8,10 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 // guardado una sola vez; una elección hecha a mano después se sigue respetando.
 export const STORAGE_KEY = 'pat_proveedor_id_v2'
 
-/** Proveedor con el que arranca el comparador cuando no hay uno guardado:
- *  Sodimac por decisión del programa (es el que tiene los polines, el insumo
- *  que define la simulación). Si no existiera, el primero de la lista. */
-export function proveedorPorDefecto<T extends { id: string; nombre: string }>(proveedores: T[]): T | undefined {
-  return proveedores.find(p => p.nombre.trim().toLowerCase().includes('sodimac')) ?? proveedores[0]
-}
+// El proveedor por defecto (Sodimac) se define en lib/business-logic.ts: lo
+// comparten este selector y la rendición server-side, y con dos definiciones
+// las dos pantallas podían mostrar proveedores distintos para el mismo socio.
+export { proveedorPorDefecto } from './business-logic'
 
 type ProveedorCtx = {
   proveedorId: string

@@ -2,11 +2,12 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { ScanLine, Pencil, EyeOff, RotateCcw, X } from 'lucide-react'
-import type { CatalogoInsumo, Proveedor, CompraSegmento } from '@/lib/types'
+import type { CatalogoInsumo, Proveedor, CompraSegmento, Asignacion } from '@/lib/types'
 import { formatCLP } from '@/lib/business-logic'
 import type { DatosStaff } from '@/lib/staff-data'
 import { Button, Alert, ConfirmDialog, IconButton } from '@/components/design-system'
 import { PageHeader } from '@/components/Editorial'
+import { GestionInsumos } from './GestionInsumos'
 
 type PrecioMap = Map<string, number | null>
 type VisionItem = { nombre_insumo: string; precio_extraido: number }
@@ -15,6 +16,9 @@ type VisionItem = { nombre_insumo: string; precio_extraido: number }
 // lib/staff-data.ts. null = falló server-side, se reintenta con /api/data.
 export default function PreciosClient({ initial }: { initial: DatosStaff | null }) {
   const [insumos, setInsumos] = useState<CatalogoInsumo[]>([])
+  // Cuántos socios tienen cada insumo en el carrito: lo consume el panel de
+  // productos para avisar antes de desactivar uno que está en uso.
+  const [usoPorInsumo, setUsoPorInsumo] = useState<Map<string, number>>(new Map())
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
   const [precios, setPrecios] = useState<PrecioMap>(new Map())
   const [saving, setSaving] = useState<Set<string>>(new Set())
@@ -56,8 +60,13 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
   useEffect(() => {
     async function load() {
       const datos: DatosStaff | null = initial ?? await fetch('/api/data').then(r => r.ok ? r.json() : null)
-      const { catalogoInsumos: ins, proveedores: provs, preciosProveedor: precs, compras: comps } = datos ?? {}
+      const { catalogoInsumos: ins, proveedores: provs, preciosProveedor: precs, compras: comps, asignaciones: asigs } = datos ?? {}
       if (comps) setCompras(comps)
+      if (asigs) {
+        const uso = new Map<string, number>()
+        for (const a of asigs as Asignacion[]) uso.set(a.insumo_id, (uso.get(a.insumo_id) ?? 0) + 1)
+        setUsoPorInsumo(uso)
+      }
       if (ins) setInsumos(ins as CatalogoInsumo[])
       if (provs) setProveedores(provs as Proveedor[])
       if (precs) {
@@ -251,6 +260,10 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
   }
 
   const segmentos = ['Invernadero', 'Ambos', 'Cierre Perimetral'] as const
+  // Un insumo desactivado sale de la matriz de precios, pero NO de la lista
+  // del panel de gestión: ahí tiene que seguir visible para poder
+  // reactivarlo.
+  const insumosActivos = insumos.filter(i => i.es_activo !== false)
 
   if (loading) return (
     <div className="space-y-3">
@@ -272,7 +285,7 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
               <ScanLine size={14} /> Escanear cotización
             </Button>
             <Button size="sm" onClick={() => setGestionAbierta(v => !v)}>
-              Proveedores ({activos.length})
+              Gestionar maestro
             </Button>
           </>
         }
@@ -382,6 +395,14 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
         </section>
       )}
 
+      {/* Los productos se gestionan junto a los proveedores: son las dos
+          columnas de la misma matriz de precios, y separarlas en dos
+          pantallas obligaría a ir y volver para cargar un insumo nuevo con
+          su precio. */}
+      {gestionAbierta && (
+        <GestionInsumos insumos={insumos} onChange={setInsumos} usoPorInsumo={usoPorInsumo} />
+      )}
+
       {/* Mobile: un proveedor a la vez, tarjetas grandes por insumo (ver
           comentario en mobileProvId más arriba). */}
       <div className="sm:hidden space-y-4">
@@ -410,7 +431,7 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
             </div>
 
             {segmentos.map(seg => {
-              const items = insumos.filter(i => i.segmento === seg)
+              const items = insumosActivos.filter(i => i.segmento === seg)
               if (!items.length) return null
               return (
                 <div key={seg} className="space-y-2">
@@ -509,7 +530,7 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
           </thead>
           <tbody>
             {segmentos.map(seg => {
-              const items = insumos.filter(i => i.segmento === seg)
+              const items = insumosActivos.filter(i => i.segmento === seg)
               if (!items.length) return null
               return [
                 <tr key={`seg_${seg}`}>
@@ -539,12 +560,12 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
       </div>
 
       <p className="text-xs" style={{ color: 'var(--tinta-45)' }}>
-        {insumos.length} insumos · {activos.length} proveedores activos · Los precios se guardan al salir de cada celda.
+        {insumosActivos.length} insumos · {activos.length} proveedores activos · Los precios se guardan al salir de cada celda.
       </p>
 
       {/* Modal IA Vision */}
       {showVision && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'var(--tinta-70)', backdropFilter: 'none' }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 material-scrim">
           <div className="rounded-[6px] p-6 w-full max-w-md space-y-4 glass-strong" style={{ background: 'var(--papel)' }}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">

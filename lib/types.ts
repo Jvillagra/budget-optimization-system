@@ -12,6 +12,10 @@ export interface CatalogoInsumo {
   segmento: SegmentoCatalogo
   nombre: string
   formato_venta: string
+  /** false = fuera de los selectores y de la matriz de precios. Es el
+   *  "eliminar" reversible (migración 013); no borra nada. Opcional en el
+   *  tipo porque las filas viejas en caché pueden no traerlo. */
+  es_activo?: boolean
 }
 
 export interface PrecioProveedor {
@@ -101,9 +105,9 @@ export type Database = {
         Relationships: []
       }
       catalogo_insumos: {
-        Row: { id: string; segmento: string; nombre: string; formato_venta: string }
-        Insert: { id?: string; segmento: string; nombre: string; formato_venta: string }
-        Update: { id?: string; segmento?: string; nombre?: string; formato_venta?: string }
+        Row: { id: string; segmento: string; nombre: string; formato_venta: string; es_activo: boolean }
+        Insert: { id?: string; segmento: string; nombre: string; formato_venta: string; es_activo?: boolean }
+        Update: { id?: string; segmento?: string; nombre?: string; formato_venta?: string; es_activo?: boolean }
         Relationships: []
       }
       precios_proveedor: {

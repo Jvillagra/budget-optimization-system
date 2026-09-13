@@ -3,7 +3,9 @@ import assert from 'node:assert/strict'
 import {
   simularBeneficiario,
   calcularCostoCarrito,
-  elegirMejorProveedor,
+  cotizarCarrito,
+  proveedorPorDefecto,
+  aporteDeBolsillo,
   buildPrecioMap,
   normalizar,
   METROS_POLY_MIN,
@@ -145,61 +147,81 @@ describe('calcularCostoCarrito', () => {
   })
 })
 
-describe('elegirMejorProveedor', () => {
+describe('cotizarCarrito', () => {
   const pA: Proveedor = { id: 'pa', nombre: 'Agrícola A', es_activo: true }
-  const pB: Proveedor = { id: 'pb', nombre: 'Beta', es_activo: true }
   const asigs: Asignacion[] = [{ id: 'a1', beneficiario_id: 'b1', insumo_id: 'i-polin', cantidad: 10 }]
 
-  test('sin carrito NO elige proveedor ni reporta un total', () => {
-    // Antes todos empataban en 0 y "ganaba" el primero: se reportaba
-    // "Proveedor X — $0" como un hecho y el PDF sumaba ese cero.
-    const r = elegirMejorProveedor([], [pA, pB], new Map())
-    assert.equal(r.proveedor, null)
+  test('sin carrito NO reporta un total', () => {
+    // Antes se reportaba "Proveedor X — $0" como un hecho y el PDF de la
+    // consultora sumaba ese cero al total general.
+    const r = cotizarCarrito([], pA, new Map())
+    assert.equal(r.total, 0)
     assert.equal(r.totalEsCompleto, false)
   })
 
-  test('elige el más barato entre los que cotizan todo', () => {
+  test('sin proveedor no hay cotización', () => {
+    const r = cotizarCarrito(asigs, null, new Map())
+    assert.equal(r.proveedor, null)
+    assert.equal(r.totalEsCompleto, false)
+    assert.equal(r.itemsSinPrecio, 1)
+  })
+
+  test('valoriza con el proveedor dado, sea o no el más barato', () => {
+    // El punto de la función: el proveedor es una decisión, no el resultado
+    // de buscar el más barato. pb cotiza más barato y da lo mismo.
     const mapa = buildPrecioMap([
       { id: '1', proveedor_id: 'pa', insumo_id: 'i-polin', precio_unitario: 3500 },
-      { id: '2', proveedor_id: 'pb', insumo_id: 'i-polin', precio_unitario: 3200 },
+      { id: '2', proveedor_id: 'pb', insumo_id: 'i-polin', precio_unitario: 1 },
     ])
-    const r = elegirMejorProveedor(asigs, [pA, pB], mapa)
-    assert.equal(r.proveedor?.id, 'pb')
-    assert.equal(r.total, 32000)
+    const r = cotizarCarrito(asigs, pA, mapa)
+    assert.equal(r.proveedor?.id, 'pa')
+    assert.equal(r.total, 35000)
     assert.equal(r.totalEsCompleto, true)
   })
 
-  test('prefiere cobertura sobre precio y marca el total como parcial', () => {
+  test('un ítem sin precio deja el total en parcial', () => {
     const asigs2: Asignacion[] = [
       ...asigs,
       { id: 'a2', beneficiario_id: 'b1', insumo_id: 'i-malla-a', cantidad: 1 },
     ]
     const mapa = buildPrecioMap([
       { id: '1', proveedor_id: 'pa', insumo_id: 'i-polin', precio_unitario: 3500 },
-      { id: '2', proveedor_id: 'pa', insumo_id: 'i-malla-a', precio_unitario: 45000 },
-      { id: '3', proveedor_id: 'pb', insumo_id: 'i-polin', precio_unitario: 1 },
     ])
-    const r = elegirMejorProveedor(asigs2, [pA, pB], mapa)
-    assert.equal(r.proveedor?.id, 'pa')
-    assert.equal(r.totalEsCompleto, true)
-
-    const soloParcial = elegirMejorProveedor(asigs2, [pB], mapa)
-    assert.equal(soloParcial.totalEsCompleto, false)
-    assert.equal(soloParcial.itemsSinPrecio, 1)
-  })
-
-  test('empate exacto: gana el alfabéticamente menor, siempre el mismo', () => {
-    const mapa = buildPrecioMap([
-      { id: '1', proveedor_id: 'pa', insumo_id: 'i-polin', precio_unitario: 3500 },
-      { id: '2', proveedor_id: 'pb', insumo_id: 'i-polin', precio_unitario: 3500 },
-    ])
-    assert.equal(elegirMejorProveedor(asigs, [pA, pB], mapa).proveedor?.id, 'pa')
-    assert.equal(elegirMejorProveedor(asigs, [pB, pA], mapa).proveedor?.id, 'pa')
+    const r = cotizarCarrito(asigs2, pA, mapa)
+    assert.equal(r.itemsSinPrecio, 1)
+    assert.equal(r.totalEsCompleto, false)
   })
 })
 
-describe('normalizar', () => {
-  test('quita tildes, colapsa espacios y baja a minúsculas', () => {
-    assert.equal(normalizar('  Polínes   (3 a 4 CM) '), 'polines (3 a 4 cm)')
+describe('proveedorPorDefecto', () => {
+  test('es Sodimac aunque no sea el primero ni el más barato', () => {
+    const provs = [
+      { id: 'pa', nombre: 'Agricola Pucon' },
+      { id: 'ps', nombre: ' Sodimac ' },
+    ]
+    assert.equal(proveedorPorDefecto(provs)?.id, 'ps')
+  })
+
+  test('sin Sodimac cae al primero, y sin proveedores devuelve undefined', () => {
+    assert.equal(proveedorPorDefecto([{ id: 'pa', nombre: 'Agricola Pucon' }])?.id, 'pa')
+    assert.equal(proveedorPorDefecto([]), undefined)
+  })
+})
+
+describe('aporteDeBolsillo', () => {
+  test('es lo que la compra pasa del presupuesto', () => {
+    // El caso real que destapó todo esto: Marcia Catrilef, carrito Sodimac
+    // de $190.450 contra un presupuesto de $189.000.
+    assert.equal(aporteDeBolsillo({ total: 190450, totalEsCompleto: true }, 189000), 1450)
+  })
+
+  test('una compra bajo presupuesto no genera deuda (nunca negativo)', () => {
+    assert.equal(aporteDeBolsillo({ total: 187234, totalEsCompleto: true }, 189000), 0)
+  })
+
+  test('con total parcial no se afirma un aporte', () => {
+    // Un aporte calculado sobre una suma incompleta sale más bajo que el
+    // real: cobrarlo dejaría el déficit escondido.
+    assert.equal(aporteDeBolsillo({ total: 86000, totalEsCompleto: false }, 189000), null)
   })
 })

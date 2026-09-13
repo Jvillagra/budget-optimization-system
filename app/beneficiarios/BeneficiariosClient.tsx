@@ -93,8 +93,12 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
   const benSeleccionado = beneficiarios.find(b => b.id === seleccionado)
   const asigsBen = seleccionado ? (asignaciones[seleccionado] ?? []) : []
   const ayudaBen = seleccionado ? (ayudaMemoria[seleccionado] ?? []) : []
+  // Un insumo desactivado (migración 013) no se puede agregar a un carrito
+  // nuevo, pero el que YA está en un carrito se sigue mostrando y sumando:
+  // desactivar saca el producto del maestro, no reescribe compras hechas.
   const insumosCompatibles = benSeleccionado
-    ? insumos.filter(i => i.segmento === benSeleccionado.segmento || i.segmento === 'Ambos')
+    ? insumos.filter(i =>
+        i.es_activo !== false && (i.segmento === benSeleccionado.segmento || i.segmento === 'Ambos'))
     : []
   const carritoCalc = proveedorId
     ? calcularCostoCarrito(asigsBen, proveedorId, precioMap)
@@ -119,10 +123,19 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
     })
     const { data } = await res.json()
     if (res.ok && data) {
-      setAsignaciones(prev => ({
-        ...prev,
-        [seleccionado]: [...(prev[seleccionado] ?? []), data as Asignacion],
-      }))
+      // El endpoint devuelve la fila creada O la existente con la cantidad
+      // sumada (un insumo tiene una sola fila por socio desde la migración
+      // 012). Agregar a ciegas dejaba la misma línea dos veces en pantalla,
+      // con la cantidad vieja en una de ellas.
+      const fila = data as Asignacion
+      setAsignaciones(prev => {
+        const actuales = prev[seleccionado] ?? []
+        const yaEstaba = actuales.some(a => a.id === fila.id)
+        return {
+          ...prev,
+          [seleccionado]: yaEstaba ? actuales.map(a => (a.id === fila.id ? fila : a)) : [...actuales, fila],
+        }
+      })
       setInsumoForm('')
       setCantidadForm(1)
     }
@@ -266,7 +279,7 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
         <>
           {/* Overlay */}
           <div
-            className="fixed inset-0 z-40 bg-black/40"
+            className="fixed inset-0 z-40 material-scrim"
             onClick={() => setSheetOpen(false)}
           />
           {/* Sheet */}

@@ -77,6 +77,7 @@ type FilaRendicion = {
   total: number
   itemsSinPrecio: number
   totalEsCompleto: boolean
+  aporteBolsillo: number | null
   items: ItemCotizacion[]
   fotos: Foto[]
   fotosCount: number
@@ -97,6 +98,50 @@ function TotalCotizado({ f, className }: { f: FilaRendicion; className?: string 
     <span className={className} style={{ color: 'var(--cafe-dark)' }} title={motivo}>
       {f.items.length === 0 ? '—' : `${formatCLP(f.total)}*`}
     </span>
+  )
+}
+
+/** Lo que el socio tiene que pagar de su bolsillo, y de dónde sale.
+ *
+ *  Se muestran las tres cifras y no solo el resultado: con "$1.450" pelado,
+ *  María Inés no puede defender el cobro frente al socio. Con
+ *  "$190.450 − $189.000" sí, y además se ve al tiro si el descuadre viene del
+ *  carrito o del presupuesto de esa persona (no todos tienen el mismo).
+ *
+ *  `aporteBolsillo` en null = el total es parcial: no se afirma un aporte
+ *  calculado sobre una suma incompleta, porque saldría más bajo que el real. */
+function AporteSocio({ f }: { f: FilaRendicion }) {
+  const aporte = f.aporteBolsillo
+
+  if (aporte === null) {
+    return (
+      <div className="flex items-baseline justify-between gap-3 text-sm">
+        <span style={{ color: 'var(--text-muted)' }}>Aporte del socio</span>
+        <span className="font-semibold text-right" style={{ color: 'var(--cafe-dark)' }}>
+          por confirmar
+        </span>
+      </div>
+    )
+  }
+
+  const debe = aporte > 0
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold" style={{ color: debe ? 'var(--cafe-dark)' : 'var(--text-muted)' }}>
+          {debe ? 'Debe pagar de su bolsillo' : 'Cubierto por el presupuesto'}
+        </p>
+        <p className="text-xs mt-0.5 tabular-nums" style={{ color: 'var(--text-muted)' }}>
+          {formatCLP(f.total)} de compra · {formatCLP(f.presupuestoBase)} de presupuesto
+        </p>
+      </div>
+      <span
+        className="font-bold tabular-nums shrink-0"
+        style={{ color: debe ? 'var(--cafe-dark)' : 'var(--tinta-45)', fontSize: debe ? '1.125rem' : '1rem' }}
+      >
+        {formatCLP(aporte)}
+      </span>
+    </div>
   )
 }
 
@@ -563,11 +608,11 @@ function DetalleCotizacionModal({ f, onClose }: { f: FilaRendicion; onClose: () 
   const proveedorReferencia = f.proveedorCompraNombre ?? f.proveedorNombre
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(23,24,21,0.55)] p-4 motion-safe:animate-[fadeIn_150ms_ease-out]"
+      className="fixed inset-0 z-50 flex items-center justify-center material-scrim p-4 motion-safe:animate-[fadeIn_150ms_ease-out]"
       onClick={onClose}
     >
       <div
-        className="relative max-w-lg w-full rounded-[6px] overflow-hidden motion-safe:animate-[scaleIn_180ms_ease-out]"
+        className="relative max-w-lg w-full rounded-[6px] overflow-hidden panel-modal motion-safe:animate-[scaleIn_180ms_ease-out]"
         style={{ background: 'var(--papel)', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
         onClick={e => e.stopPropagation()}
       >
@@ -626,6 +671,10 @@ function DetalleCotizacionModal({ f, onClose }: { f: FilaRendicion; onClose: () 
             </span>
             <TotalCotizado f={f} className="font-bold" />
           </div>
+
+          <div className="pt-3" style={{ borderTop: '1px solid var(--linea)' }}>
+            <AporteSocio f={f} />
+          </div>
         </div>
       </div>
     </div>
@@ -654,7 +703,7 @@ function Lightbox({ nombre, fotos, index, onClose, onNavigate, onEliminar }: {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 motion-safe:animate-[fadeIn_150ms_ease-out]"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 motion-safe:animate-[fadeIn_150ms_ease-out]"
       onClick={onClose}
     >
       <div
@@ -789,6 +838,11 @@ function FilaCard({
         </span>
         <TotalCotizado f={f} className="font-bold" />
       </button>
+
+      {/* Cuánto le toca poner al socio. Va pegado al total y antes de los
+          comprobantes: es lo que se le pide en la misma visita en que se le
+          piden las fotos. */}
+      <div className="-mt-2"><AporteSocio f={f} /></div>
 
       {/* Fotos -- siempre visibles: es la acción diaria más frecuente
           (incluye admin subiendo por socios sin celular). El conteo estaba
@@ -928,7 +982,7 @@ function FilaCard({
         </div>
       )}
 
-      {/* Detalle -- proveedor estimado/confirmado, configuración ocasional */}
+      {/* Detalle -- proveedor de referencia/confirmado, configuración ocasional */}
       <Button
         variant="ghost"
         size="sm"
@@ -943,7 +997,11 @@ function FilaCard({
       {expanded && (
         <div className="space-y-3 pt-1" style={{ borderTop: '1px solid var(--linea)' }}>
           <div>
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Proveedor estimado</p>
+            {/* Ya no es un "estimado": es el proveedor de referencia del
+                programa (Sodimac), el mismo con el que /beneficiarios muestra
+                los precios. Antes acá salía el más barato calculado, que para
+                el mismo socio podía ser otro. */}
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Proveedor de referencia</p>
             <p className="text-base font-medium" style={{ color: 'var(--tinta)' }}>
               {f.proveedorNombre ?? '—'}
             </p>

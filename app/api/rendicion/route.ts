@@ -13,8 +13,9 @@ import { FOTOS_REQUERIDAS } from '@/lib/constants'
 //
 // Nota de diseño: `proveedorCompraNombre` es el proveedor REAL con el que se
 // compró (lo setea staff en /rendicion tras validar el comprobante) y es el
-// dato de verdad. `proveedorNombre` es el "mejor proveedor calculado", una
-// aproximación de reporte -- ver elegirMejorProveedor en lib/business-logic.ts.
+// dato de verdad. `proveedorNombre` es el proveedor de REFERENCIA del programa
+// (Sodimac; ver proveedorPorDefecto en lib/business-logic.ts), con el que se
+// valoriza el carrito mientras no haya compra confirmada.
 export async function GET() {
   const ctx = await getViewerContext()
   if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 403 })

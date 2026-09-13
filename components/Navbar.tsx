@@ -118,10 +118,9 @@ export default function Navbar({ role, tieneBeneficiario }: { role: NavRole; tie
 
   return (
     <header
-      className="app-header sticky top-0 z-40"
+      className="app-header material-chrome sticky top-0 z-40"
       data-scrolled={scrolled}
       style={{
-        background: 'var(--papel)',
         borderBottom: '1px solid var(--linea)',
       }}
     >
@@ -227,9 +226,8 @@ export function MobileTabBar({ role, tieneBeneficiario }: { role: NavRole; tiene
 
   return (
     <nav
-      className="sm:hidden fixed inset-x-0 bottom-0 z-40 flex"
+      className="sm:hidden fixed inset-x-0 bottom-0 z-40 flex material-chrome"
       style={{
-        background: 'var(--papel)',
         borderTop: '1px solid var(--linea)',
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}

@@ -1,7 +1,7 @@
 import 'server-only'
 import { getSupabaseAdmin } from './supabase-admin'
 import { urlsFirmadasFoto } from './r2'
-import { elegirMejorProveedor } from './business-logic'
+import { cotizarCarrito, proveedorPorDefecto, aporteDeBolsillo } from './business-logic'
 import { EMAIL_QA_SOCIO } from './constants'
 import type { Asignacion, Proveedor, PrecioProveedor, FotoCompra, Beneficiario } from './types'
 
@@ -33,6 +33,10 @@ export interface FilaRendicion {
   /** false = `total` es una suma parcial (faltan precios o no hay carrito),
    *  no un total cotizado. Quien lo muestre tiene que decirlo. */
   totalEsCompleto: boolean
+  /** Lo que el socio tiene que poner de su bolsillo: `total` menos su
+   *  presupuesto, nunca negativo. null cuando el total es parcial y el
+   *  aporte no se puede afirmar. Es la cifra que se le cobra. */
+  aporteBolsillo: number | null
   items: ItemCotizado[]
   fotos: { id: string; r2_key: string; uploaded_at: string }[]
   fotosCount: number
@@ -96,13 +100,25 @@ export async function cargarRendicion(): Promise<
 
   const visibles = ((beneficiarios ?? []) as BeneficiarioRow[]).filter(ben => !esDePrueba(ben))
 
+  // Proveedor de referencia del programa: Sodimac (ver proveedorPorDefecto).
+  // Es el mismo que muestra el selector de /beneficiarios, para que las dos
+  // pantallas no puedan discrepar sobre el mismo socio. Solo se consideran
+  // los activos: un proveedor dado de baja no puede ser la referencia.
+  const referencia = proveedorPorDefecto(provs.filter(p => p.es_activo)) ?? null
+
   const filas: FilaRendicion[] = visibles.map(ben => {
     const asigs = asignacionesPorBen.get(ben.id) ?? []
-    const mejor = elegirMejorProveedor(asigs, provs, precioMap)
 
-    // Cotización línea a línea del carrito real, valorizada con el proveedor
-    // de compra confirmado si existe; si no, con el "mejor" calculado.
-    const proveedorParaItems = ben.proveedor_compra_id ?? mejor.proveedor?.id ?? null
+    // Quién valoriza el carrito: el proveedor de compra confirmado si ya se
+    // eligió, y si no el de referencia. Nunca un "más barato" calculado.
+    const proveedorCotizador = ben.proveedor_compra_id
+      ? (provPorId.get(ben.proveedor_compra_id) ?? null)
+      : referencia
+    const cot = cotizarCarrito(asigs, proveedorCotizador, precioMap)
+
+    // Cotización línea a línea del carrito real, con el mismo proveedor que
+    // da el total: si difirieran, la suma del detalle no cuadraría con él.
+    const proveedorParaItems = proveedorCotizador?.id ?? null
     const items: ItemCotizado[] = asigs.map(a => {
       const precioUnitario = proveedorParaItems
         ? (precioMap.get(`${proveedorParaItems}_${a.insumo_id}`) ?? null)
@@ -124,14 +140,15 @@ export async function cargarRendicion(): Promise<
       nombre: ben.nombre,
       segmento: ben.segmento,
       presupuestoBase: ben.presupuesto_base,
-      proveedorNombre: mejor.proveedor?.nombre ?? null,
+      proveedorNombre: referencia?.nombre ?? null,
       proveedorCompraId: ben.proveedor_compra_id,
       proveedorCompraNombre: ben.proveedor_compra_id
         ? (provPorId.get(ben.proveedor_compra_id)?.nombre ?? null)
         : null,
-      total: mejor.total,
-      itemsSinPrecio: mejor.itemsSinPrecio,
-      totalEsCompleto: mejor.totalEsCompleto,
+      total: cot.total,
+      itemsSinPrecio: cot.itemsSinPrecio,
+      totalEsCompleto: cot.totalEsCompleto,
+      aporteBolsillo: aporteDeBolsillo(cot, ben.presupuesto_base),
       items,
       fotos: fotosBen.map(f => ({ id: f.id, r2_key: f.r2_key, uploaded_at: f.uploaded_at })),
       fotosCount: fotosBen.length,

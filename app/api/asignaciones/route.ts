@@ -42,7 +42,44 @@ export async function POST(req: NextRequest) {
   const bloqueo = await bloqueadoPorCompra(beneficiario_id)
   if (bloqueo) return NextResponse.json({ error: bloqueo }, { status: 409 })
 
-  const { data, error } = await getSupabaseAdmin()
+  // Un insumo tiene UNA fila por socio (migración 012: unique
+  // beneficiario_id+insumo_id). Si ya está en el carrito, "Agregar" suma
+  // sobre la cantidad existente en vez de abrir una segunda línea -- que es
+  // lo que el staff espera al apretar el botón dos veces, y lo que evita que
+  // vuelvan a aparecer carritos como el de Ana Luz Huisca, con el mismo
+  // insumo repetido tres veces y un conteo de ítems que no significaba nada.
+  const admin = getSupabaseAdmin()
+  const { data: existente } = await admin
+    .from('asignaciones')
+    .select('id, cantidad')
+    .eq('beneficiario_id', beneficiario_id)
+    .eq('insumo_id', insumo_id)
+    .maybeSingle()
+
+  if (existente) {
+    const previa = (existente as { id: string; cantidad: number }).cantidad
+    const nuevaCantidad = previa + cantidad
+    const { data, error } = await admin
+      .from('asignaciones')
+      .update({ cantidad: nuevaCantidad })
+      .eq('id', (existente as { id: string }).id)
+      .select('*, catalogo_insumos(*)')
+      .single()
+
+    if (error || !data) {
+      console.error('asignaciones POST (suma)', error)
+      return NextResponse.json({ error: 'No se pudo actualizar la asignación' }, { status: 400 })
+    }
+
+    await logAudit('asignaciones', 'update', (existente as { id: string }).id, {
+      beneficiario_id, insumo_id, cantidad_anterior: previa, cantidad_agregada: cantidad,
+      cantidad: nuevaCantidad,
+      actor: { email: ctx.email, userId: ctx.userId, role: ctx.role },
+    })
+    return NextResponse.json({ data })
+  }
+
+  const { data, error } = await admin
     .from('asignaciones')
     .insert({ beneficiario_id, insumo_id, cantidad })
     .select('*, catalogo_insumos(*)')
