@@ -7,7 +7,7 @@ import type {
 } from '@/lib/types'
 import { buildPrecioMap, formatCLP } from '@/lib/business-logic'
 import { useProveedor, proveedorPorDefecto } from '@/lib/proveedor-context'
-import { Button, ConfirmDialog, Alert } from '@/components/design-system'
+import { Button, ConfirmDialog, Alert, InfoTip } from '@/components/design-system'
 import { Reveal } from '@/components/Editorial'
 
 const SEGMENTOS: { seg: Segmento; sigla: 'CP' | 'INV'; nombre: string }[] = [
@@ -348,7 +348,15 @@ export function VistaResumenContent() {
             className="rounded-[6px] p-4 sm:p-5"
             style={{ background: 'var(--papel-hueco)', border: '1px solid var(--linea)' }}
           >
-            <p className="eyebrow mb-3">Estado de la compra</p>
+            <p className="eyebrow mb-3">
+              Estado de la compra
+              <InfoTip etiqueta="el estado de la compra">
+                Cada proyecto se compra una sola vez, para todos sus socios juntos.
+                Marcarlo como comprado <strong>congela los precios y las cantidades</strong>:
+                desde ahí, aunque cambie un precio en el maestro, este proyecto
+                mantiene lo que costó el día de la compra.
+              </InfoTip>
+            </p>
             <div className="grid gap-3 sm:grid-cols-2">
               {porSegmento.map(({ seg, sigla, nombre, compra }) => (
                 <div key={seg} className="flex items-center justify-between gap-3">
@@ -370,7 +378,7 @@ export function VistaResumenContent() {
                   ) : (
                     <a
                       href={`#panel-${sigla}`}
-                      className="text-xs font-semibold underline underline-offset-2 shrink-0"
+                      className="text-xs font-semibold underline underline-offset-2 shrink-0 inline-flex items-center min-h-[44px]"
                       style={{ color: 'var(--marca-dark)' }}
                     >
                       Pendiente — marcar como comprado
@@ -388,13 +396,21 @@ export function VistaResumenContent() {
           <Reveal>
             <section>
               <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
-                <p className="eyebrow">Total general de la compra</p>
+                <p className="eyebrow">
+                  Total general de la compra
+                  <InfoTip etiqueta="el total general de la compra">
+                    Lo que cuesta comprar todo lo de los dos proyectos juntos,
+                    con los precios del proveedor que elijas al lado. Cambiar el
+                    proveedor solo cambia este cálculo: <strong>no toca el carrito
+                    de nadie</strong>.
+                  </InfoTip>
+                </p>
                 <label className="text-xs flex items-center gap-2" style={{ color: 'var(--tinta-45)' }}>
                   Cotizado con
                   <select
                     value={proveedorId}
                     onChange={e => setProveedorId(e.target.value)}
-                    className="rounded-[4px] px-2 py-1.5 min-h-[38px] text-sm font-semibold"
+                    className="rounded-[4px] px-2 py-1.5 min-h-[44px] text-sm font-semibold"
                     style={{ border: '1px solid var(--linea-fuerte)', background: 'var(--papel)', color: 'var(--tinta)' }}
                   >
                     {(baseData?.proveedores ?? []).filter(p => p.es_activo).map(p => (
@@ -480,7 +496,15 @@ export function VistaResumenContent() {
               </div>
               <div className="p-6 sm:p-8 flex flex-wrap items-end justify-between gap-x-10 gap-y-8">
                 <div>
-                  <p className="eyebrow" style={{ color: 'var(--text-muted)' }}>Total de polines</p>
+                  <p className="eyebrow" style={{ color: 'var(--text-muted)' }}>
+                    Total de polines
+                    <InfoTip etiqueta="el total de polines">
+                      Los polines son <strong>el saldo</strong>: la simulación gasta
+                      primero en la malla y compra polines con lo que sobra. Por eso
+                      dos socios del mismo proyecto pueden llevar cantidades muy
+                      distintas sin que haya ningún error.
+                    </InfoTip>
+                  </p>
                   <p className="titulo-lg mt-2 tabular-nums">{totalPolines || '—'}</p>
                   <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
                     Sumando los dos proyectos

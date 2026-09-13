@@ -25,9 +25,15 @@
 :root {
   --papel: #f4f0e7;
   --papel-hueco: #ece7db;   /* superficie hundida: filas alternas, inputs */
+  /* El fondo de la pagina NO es el papel: si lo fuera, tarjeta y lienzo
+     serian el mismo color y la pantalla se leeria como un unico bloque
+     plano -- que es exactamente como se leia. La tarjeta queda mas CLARA
+     que el lienzo, nunca mas oscura. */
+  --lienzo: #ebe6da;
+  --papel-claro: #fcfaf5;   /* cara de la tarjeta, por encima del lienzo */
   --tinta: #1f2419;         /* verde-tinta, no negro puro */
-  --tinta-70: rgba(31, 36, 25, 0.75);   /* 6.49:1 */
-  --tinta-45: rgba(31, 36, 25, 0.66);   /* 4.91:1 -- alias historico */
+  --tinta-70: rgba(31, 36, 25, 0.85);   /* 8.96:1 -- AAA */
+  --tinta-45: rgba(31, 36, 25, 0.78);   /* 7.14:1 -- AAA; alias historico */
   --linea: rgba(31, 36, 25, 0.16);
   --linea-fuerte: rgba(31, 36, 25, 0.32);
 
@@ -51,7 +57,7 @@
      pie): sigue siendo tinta traslucida, no terracota -- pintar de marca cada
      etiqueta secundaria ensucia la pantalla. Lo que si es identidad de
      segmento es --cafe-dark / --cafe-muted, que llevan el terracota de CP. */
-  --cafe: rgba(31, 36, 25, 0.75);
+  --cafe: rgba(31, 36, 25, 0.85);
   --cafe-dark: #6d4520;
   --cafe-light: rgba(31, 36, 25, 0.32);
   --cafe-muted: #f0e4d7;
@@ -63,7 +69,7 @@
   --glass-bg: #f4f0e7;
   --glass-border: rgba(31, 36, 25, 0.16);
   --glass-shadow: none;
-  --text-muted: rgba(31, 36, 25, 0.75);
+  --text-muted: rgba(31, 36, 25, 0.85);
 }
 
 @theme inline {
@@ -76,7 +82,7 @@
 }
 
 body {
-  background: var(--papel);
+  background: var(--lienzo);
   color: var(--tinta);
   min-height: 100vh;
   font-family: var(--font-instrument), ui-sans-serif, system-ui, sans-serif;
@@ -134,16 +140,26 @@ body {
 /* Antes .glass/.glass-strong eran vidrio esmerilado con blur y sombra de
    color. Ahora son papel plano separado por una línea; se conservan los
    nombres para no tocar las ~34 llamadas repartidas por las pantallas. */
+/* La tarjeta es la capa de LECTURA, y aun asi lleva material: aca el
+   material no va debajo del texto contra un fondo cualquiera, va contra el
+   lienzo crema, que es lo unico que pasa por detras. Medido sobre pixeles
+   reales del screenshot, no con getComputedStyle: el texto apagado sobre la
+   tarjeta compuesta se mantiene sobre AAA. La tarjeta es mas CLARA que el
+   lienzo -- nada de tarjetas oscuras. */
 .glass {
-  background: var(--papel);
+  background: rgba(252, 250, 245, 0.72);
+  -webkit-backdrop-filter: saturate(160%) blur(12px);
+  backdrop-filter: saturate(160%) blur(12px);
   border: 1px solid var(--linea);
-  box-shadow: none;
+  box-shadow: 0 1px 2px rgba(31, 36, 25, 0.06), 0 4px 14px rgba(31, 36, 25, 0.05);
 }
 
 .glass-strong {
-  background: var(--papel);
+  background: rgba(252, 250, 245, 0.86);
+  -webkit-backdrop-filter: saturate(160%) blur(12px);
+  backdrop-filter: saturate(160%) blur(12px);
   border: 1px solid var(--linea-fuerte);
-  box-shadow: none;
+  box-shadow: 0 1px 2px rgba(31, 36, 25, 0.06), 0 4px 14px rgba(31, 36, 25, 0.05);
 }
 
 /* ---- Impresión -------------------------------------------------------
@@ -170,6 +186,16 @@ body {
 
   body { background: #fff; }
   .app-shell { padding-bottom: 0 !important; }
+
+  /* En papel el material no existe: la sombra sale como mancha gris y el
+     blur no se imprime. Tarjeta blanca separada por linea, como antes. */
+  .glass,
+  .glass-strong {
+    background: #fff !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    box-shadow: none !important;
+  }
 
   /* Un caso no se parte entre dos hojas: la pregunta que hay que hacerle al
      socio tiene que quedar junto a su nombre. */
@@ -219,18 +245,26 @@ body {
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .material-chrome { background: var(--papel); }
   .material-scrim { background: rgba(244, 240, 231, 0.94); }
+  .glass,
+  .glass-strong { background: var(--papel-claro); }
 }
 
 /* Quien pidió menos transparencia en su sistema operativo la recibe: misma
    jerarquía, sin material. */
 @media (prefers-reduced-transparency: reduce) {
   .material-chrome,
-  .material-scrim {
+  .material-scrim,
+  .glass,
+  .glass-strong {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
   .material-chrome { background: var(--papel); }
   .material-scrim { background: rgba(244, 240, 231, 0.94); }
+  /* La jerarquia se conserva sin transparencia: la tarjeta sigue siendo
+     mas clara que el lienzo, que es lo que la despega. */
+  .glass,
+  .glass-strong { background: var(--papel-claro); }
 }
 
 /* Lightbox de /rendicion -- entrada rápida, solo transform/opacity, dentro
@@ -386,6 +420,9 @@ button,
 .nav-item {
   -webkit-user-select: none;
   user-select: none;
+  /* Volver al inicio desde el logo media 32px de alto. Mismo minimo de dedo
+     que el resto de los controles. */
+  min-height: 44px;
 }
 
 button:focus:not(:focus-visible),
@@ -411,6 +448,10 @@ a:focus:not(:focus-visible),
 .nav-pill {
   display: inline-flex;
   align-items: center;
+  /* El dedo necesita 44px. Las sub-tabs de /rendicion median 36 y se tocaban
+     al lado. Va aca y no en cada call site porque .nav-pill es el unico
+     indicador de "activo" del sistema: menu, barra inferior y sub-tabs. */
+  min-height: 44px;
   gap: 0.5rem;
   border-radius: 999px;
   color: var(--tinta-70);

@@ -3,7 +3,7 @@
 import { useMemo } from 'react'
 import { formatCLP } from '@/lib/business-logic'
 import { FOTOS_REQUERIDAS } from '@/lib/constants'
-import { Button } from '@/components/design-system'
+import { Button, InfoTip } from '@/components/design-system'
 
 // Panel de control de /rendicion. Todo es SVG/CSS puro a propósito: esta es
 // la ruta que el staff abre en celulares de terreno y recharts costaba
@@ -211,6 +211,17 @@ export function PanelControl({ filas, filtro, onFiltro }: {
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
               Avance de rendición
+              {/* Los cuatro cuadros de abajo YA son botones de filtro: la
+                  ayuda va aca y los explica juntos, sin anidar un control
+                  dentro de otro. */}
+              <InfoTip etiqueta="el avance de rendición">
+                Cada socio pasa por cuatro momentos:{' '}
+                <strong>Sin fotos</strong> (todavía no trajo ningún comprobante),{' '}
+                <strong>Faltan fotos</strong> (trajo algunas, pero no las {FOTOS_REQUERIDAS}),{' '}
+                <strong>Listos para marcar</strong> (ya tiene las {FOTOS_REQUERIDAS} y solo falta que tú
+                confirmes la compra) y <strong>Completos</strong> (ya confirmada).
+                Toca cualquiera de los cuatro para ver solo esos socios.
+              </InfoTip>
             </p>
             <p className="text-2xl font-bold leading-tight tabular-nums" style={{ color: 'var(--tinta)' }}>
               {d.completos} <span className="text-base font-semibold" style={{ color: 'var(--text-muted)' }}>de {d.total} socios</span>
@@ -270,7 +281,14 @@ export function PanelControl({ filas, filtro, onFiltro }: {
       <div className="rounded-[6px] overflow-hidden" style={{ background: 'var(--linea)' }}>
         <div className="p-3.5 pb-3 space-y-1.5" style={{ background: 'var(--papel)' }}>
           <div className="flex items-baseline justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Plata rendida</p>
+            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+            Plata rendida
+            <InfoTip etiqueta="la plata rendida">
+              Cuánta de la plata cotizada ya quedó respaldada con comprobantes.
+              Solo suma la de los socios con la compra <strong>confirmada</strong>:
+              mientras no marques la compra, su plata sigue contando como por rendir.
+            </InfoTip>
+          </p>
             <p className="text-sm font-bold tabular-nums" style={{ color: 'var(--verde-dark)' }}>{pctRendido.toFixed(0)}%</p>
           </div>
           <BarraApilada
@@ -301,6 +319,11 @@ export function PanelControl({ filas, filtro, onFiltro }: {
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
             Aporte de bolsillo por cobrar
+            <InfoTip etiqueta="el aporte de bolsillo">
+              Plata que ponen los socios, no el programa. Cuando lo que el socio
+              eligió cuesta más que su presupuesto, la diferencia la paga él.
+              Esta es la suma de todas esas diferencias: lo que hay que cobrar.
+            </InfoTip>
           </p>
           <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
             {d.sociosConAporte === 0

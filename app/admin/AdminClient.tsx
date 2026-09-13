@@ -203,9 +203,12 @@ export default function AdminClient({ initial }: { initial: RoleRow[] | null }) 
             (proveedor de compra, total cotizado y fotos de comprobante) para
             enviar a la empresa consultora que audita el proyecto.
           </p>
-          <a href="/api/admin/informe-consultora">
-            <Button>Descargar informe PDF</Button>
-          </a>
+          {/* Un <Button> dentro de un <a> es HTML invalido -- contenido
+              interactivo anidado: el teclado paraba dos veces y el area
+              tactil medida caia a 20px. Un solo control que navega. */}
+          <Button onClick={() => { window.location.href = '/api/admin/informe-consultora' }}>
+            Descargar informe PDF
+          </Button>
         </Card>
       </section>
 

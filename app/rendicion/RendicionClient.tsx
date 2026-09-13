@@ -830,7 +830,12 @@ function FilaCard({
             solo -- que fue exactamente la confusion que hubo con una socia
             marcada en agosto y revisada en septiembre. */}
         <div className="shrink-0 text-right">
-          <Badge tone={f.compraCompleta ? 'solido' : 'neutral'} className="!text-sm !px-3 !py-1.5">
+          {/* `hueco` y no `neutral`: el tono neutral es una caja CON BORDE,
+              visualmente identica al boton fantasma "Marcar completo" que vive
+              mas abajo en esta misma tarjeta, y se tocaba esperando que hiciera
+              algo. Una etiqueta de estado no se toca, asi que no debe parecer
+              un boton: fondo plano, sin borde. */}
+          <Badge tone={f.compraCompleta ? 'solido' : 'hueco'} className="!text-sm !px-2.5 !py-1">
             {f.compraCompleta && <CheckCircle2 size={14} />}
             {f.compraCompleta ? 'Completo' : 'Pendiente'}
           </Badge>
@@ -845,7 +850,7 @@ function FilaCard({
       {/* Total cotizado */}
       <button
         onClick={onVerCotizacion}
-        className="btn-base w-full flex items-center justify-between text-base"
+        className="btn-base w-full flex items-center justify-between text-base min-h-[44px]"
         style={{ borderTop: '1px solid var(--linea)', paddingTop: '0.75rem' }}
       >
         <span className="underline underline-offset-2" style={{ color: 'var(--text-muted)' }}>
@@ -1000,7 +1005,7 @@ function FilaCard({
       {/* Detalle -- proveedor de referencia/confirmado, configuración ocasional */}
       <Button
         variant="ghost"
-        size="sm"
+        size="md"
         onClick={onToggleExpanded}
         className="w-full"
         aria-expanded={expanded}

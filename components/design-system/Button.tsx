@@ -26,7 +26,10 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
 }
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {
-  sm: 'text-xs px-3.5 py-1.5 gap-1.5 min-h-[38px]',
+  // 44px tambien en sm: el tamano del texto baja, el area que tiene que
+  // acertar un dedo no. Antes eran 38 y caian bajo el minimo las acciones de
+  // /precios, /admin y las barras de "Por revisar" y Resumen.
+  sm: 'text-xs px-3.5 py-2 gap-1.5 min-h-[44px]',
   md: 'text-sm px-5 py-2.5 gap-2 min-h-[44px]',
   // lg es el paso decisivo en el celular en terreno: dedo con guante y vista
   // cansada. En escritorio no hace falta -- ahi se usa md.
