@@ -11,6 +11,9 @@ function socio(over: Partial<CarritoRevisable> & { id: string; nombre: string })
     total: 187234,
     totalEsCompleto: true,
     itemsSinPrecio: 0,
+    // Precio real del polín en Sodimac. Es la unidad con la que se mide si
+    // el saldo todavía compra algo.
+    precioPolin: 3950,
     items: [
       { insumoNombre: 'Malla Inchalam 120 cm', cantidad: 2 },
       { insumoNombre: 'Polines (3 a 4 cm)', cantidad: 15 },
@@ -40,14 +43,39 @@ describe('revisarCarritos', () => {
     assert.equal(caso.severidad, 'alta')
     const uso = caso.hallazgos.find(h => h.motivo === 'presupuesto_sin_usar')
     assert.ok(uso, 'debía marcar el presupuesto sin usar')
-    assert.match(uso.titulo, /36%/)
-    assert.match(uso.detalle, /121\.425/)
+    // La plata que sobra, y cuántos polines más compra: 121.425 / 3.950 = 30.
+    assert.match(uso.titulo, /121\.425/)
+    assert.match(uso.detalle, /30 polines más/)
   })
 
-  test('un resto pequeño de presupuesto NO es un caso', () => {
-    // 187.234 de 189.000 es 99%: es lo que sobra porque no alcanzaba para
-    // un polín más. Marcarlo sería ruido en cada carga.
+  test('el vuelto que deja el ajuste automático NO es un caso', () => {
+    // 187.234 de 189.000: sobran 1.766, menos que el polín de 3.950. No se
+    // puede comprar nada con eso, así que marcarlo sería ruido en cada carga.
     assert.equal(revisarCarritos(normales).length, 0)
+  })
+
+  test('el umbral es el precio del polín, no un porcentaje', () => {
+    // 184.000 de 189.000 es el 97,4%: el umbral viejo de 80% no lo veía. Le
+    // sobran 5.000, que compran un polín más, así que ahora sí se marca.
+    const casi = socio({ id: 'x', nombre: 'Casi', total: 184000 })
+    const uso = revisarCarritos([...normales, casi])
+      .find(c => c.id === 'x')?.hallazgos.find(h => h.motivo === 'presupuesto_sin_usar')
+    assert.ok(uso, 'debía marcarlo: le alcanza para otro polín')
+    assert.match(uso.detalle, /1 polín más/)
+
+    // Un peso menos que un polín y ya no hay nada que comprar.
+    const justo = socio({ id: 'y', nombre: 'Justo', total: 189000 - 3949 })
+    assert.equal(revisarCarritos([...normales, justo]).find(c => c.id === 'y'), undefined)
+  })
+
+  test('sin precio de polín no se afirma que sobre plata gastable', () => {
+    // Proveedor sin el polín cotizado: no hay vara. Callarse es lo correcto;
+    // el umbral viejo habría marcado igual, con una cifra que nadie podía
+    // verificar contra una compra real.
+    const sinVara = socio({ id: 'x', nombre: 'Sin vara', total: 67575, precioPolin: null,
+      items: [{ insumoNombre: 'Malla Ursus 80 cm', cantidad: 1 }] })
+    const caso = revisarCarritos([...normales, sinVara]).find(c => c.id === 'x')
+    assert.ok(!caso?.hallazgos.some(h => h.motivo === 'presupuesto_sin_usar'))
   })
 
   test('marca los rollos de malla fuera de la mediana, en los dos sentidos', () => {

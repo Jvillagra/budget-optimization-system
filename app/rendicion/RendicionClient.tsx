@@ -80,6 +80,7 @@ type FilaRendicion = {
   itemsSinPrecio: number
   totalEsCompleto: boolean
   aporteBolsillo: number | null
+  precioPolin: number | null
   items: ItemCotizacion[]
   fotos: Foto[]
   fotosCount: number

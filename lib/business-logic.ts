@@ -458,10 +458,39 @@ export function cambioDePrecioEsGrande(antes: number | null, despues: number | n
 // Ninguna regla corrige nada. Marcan y explican: la respuesta la tiene el
 // socio, no el sistema.
 
-/** Debajo de este uso del presupuesto, el carrito se ve a medio cargar.
- *  80% y no 90% para no marcar a quien simplemente no llegó a gastar el
- *  saldo: la app deja restos de hasta ~$1.800 por el precio de un polín. */
-export const UMBRAL_USO_PRESUPUESTO = 0.8
+/**
+ * Precio del polín con el que se mide si a un socio le sobra presupuesto
+ * GASTABLE. El polín es la vara correcta porque es donde va el saldo por
+ * diseño del programa: la simulación compra primero la malla (o el
+ * polietileno) y mete en polines todo lo que sobra -- ver polinesQueCaben.
+ *
+ * Reemplaza al umbral fijo de "menos del 80% del presupuesto" (borrado el
+ * 2026-09-14). Ese porcentaje dejó de medir lo que decía cuando el ajuste
+ * automático (migración 014) llevó a los 29 socios a usar entre el 98% y el
+ * 99,7%: lo que les sobra son $571 a $3.350, menos que un polín, así que no
+ * es descuido sino vuelto. Un umbral en pesos derivado del catálogo no hay
+ * que volver a moverlo cuando cambien los precios o el presupuesto.
+ *
+ * Solo insumos activos: un polín dado de baja (migración 013) no se puede
+ * comprar, y el del catálogo que quedó inactivo no tiene precio, con lo que
+ * la regla no se dispararía nunca.
+ *
+ * Devuelve null si no hay con qué medir -- sin proveedor, sin polín activo o
+ * sin precio cotizado -- y entonces no se afirma nada. Un polín en 0 (donado)
+ * también da null: con precio 0 siempre "alcanza para otro más" y la regla
+ * marcaría a los 29 socios en cada carga.
+ */
+export function precioPolinDeReferencia(
+  proveedorId: string | null,
+  insumos: CatalogoInsumo[],
+  precioMap: Map<string, number | null>
+): number | null {
+  if (!proveedorId) return null
+  const polin = primeroEstable(insumos.filter(i => i.es_activo !== false && esPolines(i)))
+  if (!polin) return null
+  const precio = getPrecio(precioMap, proveedorId, polin.id)
+  return precio !== null && precio > 0 ? precio : null
+}
 
 /** Desvío contra la mediana de su segmento a partir del cual los rollos de
  *  malla se consideran fuera de lo normal. */
@@ -479,6 +508,10 @@ export interface CarritoRevisable {
   total: number
   totalEsCompleto: boolean
   itemsSinPrecio: number
+  /** Precio de un polín con el proveedor que cotiza ESTE carrito, que es la
+   *  unidad mínima con la que se puede seguir gastando el saldo. null cuando
+   *  no se puede saber: ver precioPolinDeReferencia. */
+  precioPolin: number | null
   items: { insumoNombre: string; cantidad: number }[]
 }
 
@@ -564,13 +597,18 @@ export function revisarCarritos(carritos: CarritoRevisable[]): CasoRevision[] {
         detalle: `El total de ${formatCLP(c.total)} es parcial: no incluye lo que falta cotizar`,
         pregunta: 'Falta cargar ese precio en la pestaña Precios. Hasta entonces no se sabe si el presupuesto alcanza.',
       })
-    } else if (c.total < c.presupuestoBase * UMBRAL_USO_PRESUPUESTO) {
-      const usado = Math.round((c.total / c.presupuestoBase) * 100)
+    } else if (c.precioPolin !== null && c.presupuestoBase - c.total >= c.precioPolin) {
+      // El saldo solo es un problema si todavía COMPRA algo. Con el ajuste
+      // automático todos los carritos terminan con un resto de menos de un
+      // polín, que es el vuelto y no un descuido: marcarlo sería ruido en
+      // cada carga y taparía a los dos carritos que sí están a medio cargar.
+      const sobra = c.presupuestoBase - c.total
+      const polines = Math.floor(sobra / c.precioPolin)
       hallazgos.push({
         motivo: 'presupuesto_sin_usar',
         severidad: 'alta',
-        titulo: `Usa solo el ${usado}% de su presupuesto`,
-        detalle: `${formatCLP(c.total)} de ${formatCLP(c.presupuestoBase)} · le sobran ${formatCLP(c.presupuestoBase - c.total)}`,
+        titulo: `Le sobran ${formatCLP(sobra)} sin usar`,
+        detalle: `${formatCLP(c.total)} de compra sobre ${formatCLP(c.presupuestoBase)} de presupuesto · alcanza para ${polines} ${polines === 1 ? 'polín' : 'polines'} más`,
         pregunta: '¿El carrito quedó a medio cargar, o pidió solo eso? Es plata del programa que se pierde si no se usa.',
       })
     }

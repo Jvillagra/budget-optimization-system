@@ -1,8 +1,8 @@
 import 'server-only'
 import { getSupabaseAdmin } from './supabase-admin'
 import { urlsFirmadasFoto } from './r2'
-import { cotizarCarrito, proveedorPorDefecto, aporteDeBolsillo, esDePrueba } from './business-logic'
-import type { Asignacion, Proveedor, PrecioProveedor, FotoCompra, Beneficiario } from './types'
+import { cotizarCarrito, proveedorPorDefecto, aporteDeBolsillo, esDePrueba, precioPolinDeReferencia } from './business-logic'
+import type { Asignacion, Proveedor, PrecioProveedor, FotoCompra, Beneficiario, CatalogoInsumo } from './types'
 
 // Agregación por beneficiario para la rendición. La consumen /api/rendicion
 // (JSON para la UI de staff) y /api/admin/informe-consultora (PDF para la
@@ -44,6 +44,11 @@ export interface FilaRendicion {
    *  presupuesto, nunca negativo. null cuando el total es parcial y el
    *  aporte no se puede afirmar. Es la cifra que se le cobra. */
   aporteBolsillo: number | null
+  /** Precio de un polín con el proveedor que cotiza este carrito: la unidad
+   *  más chica con la que el socio puede seguir gastando su saldo. Lo usa la
+   *  revisión de carritos para distinguir un carrito a medio cargar del
+   *  vuelto que deja el ajuste automático. null = no hay con qué medir. */
+  precioPolin: number | null
   items: ItemCotizado[]
   fotos: { id: string; r2_key: string; uploaded_at: string }[]
   fotosCount: number
@@ -65,15 +70,20 @@ export async function cargarRendicion(): Promise<
     { data: proveedores, error: e3 },
     { data: preciosProveedor, error: e4 },
     { data: fotos, error: e5 },
+    { data: catalogo, error: e6 },
   ] = await Promise.all([
     admin.from('beneficiarios').select('*').order('segmento').order('nombre'),
     admin.from('asignaciones').select('*, catalogo_insumos(*)'),
     admin.from('proveedores').select('*').order('nombre'),
     admin.from('precios_proveedor').select('*'),
     admin.from('fotos_compra').select('*').order('uploaded_at', { ascending: true }),
+    // El catálogo completo, no solo los insumos que están en algún carrito:
+    // la vara del saldo gastable es el polín, y un socio a medio cargar
+    // puede no tener ninguno.
+    admin.from('catalogo_insumos').select('*'),
   ])
 
-  const error = e1 || e2 || e3 || e4 || e5
+  const error = e1 || e2 || e3 || e4 || e5 || e6
   if (error) return { ok: false, error }
 
   const precioMap = new Map<string, number | null>()
@@ -97,6 +107,8 @@ export async function cargarRendicion(): Promise<
 
   const provs = (proveedores ?? []) as Proveedor[]
   const provPorId = new Map(provs.map(p => [p.id, p]))
+
+  const insumosCatalogo = (catalogo ?? []) as CatalogoInsumo[]
 
   const visibles = ((beneficiarios ?? []) as BeneficiarioRow[]).filter(ben => !esDePrueba(ben))
 
@@ -161,6 +173,10 @@ export async function cargarRendicion(): Promise<
       itemsSinPrecio: cot.itemsSinPrecio,
       totalEsCompleto: cot.totalEsCompleto,
       aporteBolsillo: aporteDeBolsillo(cot, ben.presupuesto_base),
+      // Con el MISMO proveedor que dio el total: medir el saldo con el precio
+      // de otro diría "le alcanza para 2 polines más" sobre una compra que
+      // nadie va a hacer a ese precio.
+      precioPolin: precioPolinDeReferencia(proveedorCotizador?.id ?? null, insumosCatalogo, precioMap),
       items,
       fotos: fotosBen.map(f => ({ id: f.id, r2_key: f.r2_key, uploaded_at: f.uploaded_at })),
       fotosCount: fotosBen.length,
