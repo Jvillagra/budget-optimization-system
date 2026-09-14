@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getViewerContext, isStaff } from '@/lib/roles'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { logAudit } from '@/lib/audit'
+import { familiaDeNombre } from '@/lib/business-logic'
 
 // Gestión del catálogo de productos (polines, mallas, polietileno). Calcado
 // de /api/proveedores a propósito: mismo guard, misma forma de PATCH parcial
@@ -101,6 +102,31 @@ export async function PATCH(req: NextRequest) {
     if (count && count > 0) {
       return NextResponse.json(
         { error: `No se puede desactivar: está en el carrito de ${count} socio${count === 1 ? '' : 's'}. Sácalo de esos carritos primero.` },
+        { status: 409 }
+      )
+    }
+  }
+
+  // Renombrar puede romper el programa entero, y en silencio. El sistema
+  // todavía reconoce las familias por cómo empieza el nombre (ver
+  // familiaDeNombre): si "Polines (4 a 5 cm)" pasa a llamarse "Postes", la
+  // simulación deja a los 29 socios en "Catálogo incompleto", el ajuste al
+  // presupuesto se queda sin el insumo que absorbe el saldo y la revisión de
+  // carritos pierde su vara. Nada de eso da error en pantalla: simplemente
+  // deja de funcionar. Hasta que exista una columna `categoria` de verdad, el
+  // nombre es también el dato, y por eso se puede editar todo MENOS la
+  // palabra con que empieza.
+  if (cambios.nombre) {
+    const familiaAntes = familiaDeNombre(previo.nombre)
+    const familiaAhora = familiaDeNombre(cambios.nombre)
+    if (familiaAntes !== familiaAhora) {
+      const comoEmpezaba = previo.nombre.trim().split(/\s+/)[0]
+      return NextResponse.json(
+        {
+          error: familiaAntes === 'otro'
+            ? `El nombre no puede empezar con "${cambios.nombre.trim().split(/\s+/)[0]}": esa palabra le diría al sistema que es ${familiaAhora}, y se usaría para calcular los carritos. Elige otro comienzo.`
+            : `El nombre tiene que seguir empezando con "${comoEmpezaba}": así reconoce el sistema que es ${familiaAntes}, y de eso dependen el simulador y el ajuste al presupuesto. Puedes cambiar el resto del nombre.`,
+        },
         { status: 409 }
       )
     }

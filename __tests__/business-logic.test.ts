@@ -7,6 +7,7 @@ import {
   proveedorPorDefecto,
   aporteDeBolsillo,
   esDePrueba,
+  familiaDeNombre,
   buildPrecioMap,
   normalizar,
   METROS_POLY_MIN,
@@ -244,5 +245,31 @@ describe('esDePrueba', () => {
     assert.equal(esDePrueba({ es_prueba: false, email: 'mane.burgosc@gmail.com' }), false)
     assert.equal(esDePrueba({ email: null }), false)
     assert.equal(esDePrueba({}), false)
+  })
+})
+
+describe('familiaDeNombre', () => {
+  // De esto depende TODO el cálculo: el polín absorbe el saldo, la malla es
+  // el material base y el polietileno el del invernadero. Mientras el
+  // catálogo no tenga una columna `categoria`, la familia se deduce del
+  // nombre, y por eso /api/catalogo-insumos no deja que un renombre la
+  // cambie sin darse cuenta.
+  test('reconoce las tres familias por como empieza el nombre', () => {
+    assert.equal(familiaDeNombre('Polines (4 a 5 cm)'), 'polines')
+    assert.equal(familiaDeNombre('Malla Ursus 80 cm'), 'malla')
+    assert.equal(familiaDeNombre('Polietileno (Largo 4m, Ancho 8m)'), 'polietileno')
+  })
+
+  test('tolera tildes, mayusculas y espacios de mas', () => {
+    assert.equal(familiaDeNombre('  PÓLINES  (3 a 4 cm)'), 'polines')
+    assert.equal(familiaDeNombre('MALLA inchalam'), 'malla')
+  })
+
+  test('un nombre que no empieza con la familia queda fuera', () => {
+    // El caso que rompe el programa: renombrar el polín a "Postes" lo saca
+    // de la familia y la simulación se queda sin el insumo del saldo.
+    assert.equal(familiaDeNombre('Postes 4 a 5 cm'), 'otro')
+    assert.equal(familiaDeNombre('Rollo de malla'), 'otro')
+    assert.equal(familiaDeNombre(''), 'otro')
   })
 })

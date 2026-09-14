@@ -56,7 +56,7 @@ export function GestionInsumos({ insumos, onChange, usoPorInsumo }: {
     }).catch(() => null)
     const body = await res?.json().catch(() => null)
     if (!res?.ok || !body?.data) {
-      setError(body?.error ?? 'No se pudo crear el insumo.')
+      setError(body?.error ?? 'No se pudo crear el material.')
     } else {
       onChange(ordenar([...insumos, body.data as CatalogoInsumo]))
       setNuevo(BORRADOR_VACIO)
@@ -85,7 +85,7 @@ export function GestionInsumos({ insumos, onChange, usoPorInsumo }: {
     }).catch(() => null)
     if (!res?.ok) {
       const body = await res?.json().catch(() => null)
-      setError(body?.error ?? 'No se pudo guardar el insumo.')
+      setError(body?.error ?? 'No se pudo guardar el material.')
     } else {
       onChange(ordenar(insumos.map(i =>
         i.id === insumo.id ? { ...i, nombre, formato_venta, segmento: edicion.segmento } : i
@@ -104,7 +104,7 @@ export function GestionInsumos({ insumos, onChange, usoPorInsumo }: {
     }).catch(() => null)
     if (!res?.ok) {
       const body = await res?.json().catch(() => null)
-      setError(body?.error ?? 'No se pudo actualizar el insumo.')
+      setError(body?.error ?? 'No se pudo actualizar el material.')
       setADesactivar(null)
       return
     }
@@ -122,7 +122,7 @@ export function GestionInsumos({ insumos, onChange, usoPorInsumo }: {
   return (
     <section className="mb-8 rounded-[6px] glass-strong">
       <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid var(--linea)' }}>
-        <p className="eyebrow">Productos ({activos.length})</p>
+        <p className="eyebrow">Materiales ({activos.length})</p>
         <Button size="sm" variant="ghost" onClick={() => { setAgregando(v => !v); setError(null) }}>
           {agregando ? 'Cancelar' : '+ Agregar'}
         </Button>
@@ -152,7 +152,7 @@ export function GestionInsumos({ insumos, onChange, usoPorInsumo }: {
           <select
             value={nuevo.segmento}
             onChange={e => setNuevo(n => ({ ...n, segmento: e.target.value as SegmentoCatalogo }))}
-            aria-label="Segmento del insumo nuevo"
+            aria-label="Segmento del material nuevo"
             className="rounded-[4px] px-3 py-2 text-sm min-h-[44px]"
             style={inputStyle}
           >

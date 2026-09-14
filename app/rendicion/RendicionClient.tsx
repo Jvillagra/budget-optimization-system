@@ -96,7 +96,7 @@ function TotalCotizado({ f, className }: { f: FilaRendicion; className?: string 
   }
   const motivo = f.items.length === 0
     ? 'Sin carrito registrado'
-    : `Parcial: ${f.itemsSinPrecio} ítem(s) sin precio, no incluidos`
+    : `Parcial: ${f.itemsSinPrecio} material(es) sin precio, no incluidos`
   return (
     <span className={className} style={{ color: 'var(--cafe-dark)' }} title={motivo}>
       {f.items.length === 0 ? '—' : `${formatCLP(f.total)}*`}
@@ -127,23 +127,40 @@ function AporteSocio({ f }: { f: FilaRendicion }) {
     )
   }
 
+  // Tres situaciones distintas, y la linea dice CUAL es. Antes mostraba
+  // siempre "Cubierto por el presupuesto $0": un cero que no significa nada
+  // -- ni que le sobra plata ni que la gasto justa -- en la unica linea que
+  // Maria Ines mira para saber si tiene que cobrarle a alguien.
   const debe = aporte > 0
+  const sobra = f.presupuestoBase - f.total
+
+  const { etiqueta, monto, color, destacado } = debe
+    ? { etiqueta: 'Debe pagar de su bolsillo', monto: aporte, color: 'var(--alerta)', destacado: true }
+    : sobra > 0
+      ? { etiqueta: 'Le sobra de su presupuesto', monto: sobra, color: 'var(--tinta-45)', destacado: false }
+      : { etiqueta: 'Usó todo su presupuesto', monto: 0, color: 'var(--tinta-45)', destacado: false }
+
   return (
     <div className="flex items-baseline justify-between gap-3">
       <div className="min-w-0">
-        <p className="text-sm font-semibold" style={{ color: debe ? 'var(--cafe-dark)' : 'var(--text-muted)' }}>
-          {debe ? 'Debe pagar de su bolsillo' : 'Cubierto por el presupuesto'}
+        <p className="text-sm font-semibold" style={{ color: debe ? 'var(--alerta)' : 'var(--text-muted)' }}>
+          {etiqueta}
         </p>
         <p className="text-xs mt-0.5 tabular-nums" style={{ color: 'var(--text-muted)' }}>
           {formatCLP(f.total)} de compra · {formatCLP(f.presupuestoBase)} de presupuesto
         </p>
       </div>
-      <span
-        className="font-bold tabular-nums shrink-0"
-        style={{ color: debe ? 'var(--cafe-dark)' : 'var(--tinta-45)', fontSize: debe ? '1.125rem' : '1rem' }}
-      >
-        {formatCLP(aporte)}
-      </span>
+      {/* Cuando gastó el presupuesto justo no hay cifra que mostrar: un "$0"
+          al lado de "Usó todo su presupuesto" solo invita a preguntarse qué
+          es ese cero. */}
+      {monto > 0 && (
+        <span
+          className="font-bold tabular-nums shrink-0"
+          style={{ color, fontSize: destacado ? '1.125rem' : '1rem' }}
+        >
+          {formatCLP(monto)}
+        </span>
+      )}
     </div>
   )
 }
@@ -699,7 +716,7 @@ function DetalleCotizacionModal({ f, onClose }: { f: FilaRendicion; onClose: () 
 
           {f.itemsSinPrecio > 0 && (
             <p className="text-xs" style={{ color: 'var(--cafe)' }}>
-              {f.itemsSinPrecio} ítem{f.itemsSinPrecio > 1 ? 's' : ''} sin precio cotizado en este proveedor.
+              {f.itemsSinPrecio} material{f.itemsSinPrecio > 1 ? 'es' : ''} sin precio cotizado en este proveedor.
             </p>
           )}
 

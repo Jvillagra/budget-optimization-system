@@ -33,20 +33,36 @@ export function normalizar(s: string): string {
 // UN lugar, es tolerante a tildes/espacios y falla de forma explícita.
 const PREFIJO_POLINES = 'polines'
 const PREFIJO_POLIETILENO = 'polietileno'
+const PREFIJO_MALLA = 'malla'
+
+export type FamiliaInsumo = 'polines' | 'polietileno' | 'malla' | 'otro'
+
+/** A qué familia pertenece un insumo, deducido de cómo empieza su nombre.
+ *  ES LA ÚNICA definición: las tres funciones de abajo la consultan, y
+ *  /api/catalogo-insumos la usa para no dejar que un renombre cambie la
+ *  familia sin querer -- de eso dependen la simulación entera, el ajuste al
+ *  presupuesto y la revisión de carritos. */
+export function familiaDeNombre(nombre: string): FamiliaInsumo {
+  const n = normalizar(nombre)
+  if (n.startsWith(PREFIJO_POLINES)) return 'polines'
+  if (n.startsWith(PREFIJO_POLIETILENO)) return 'polietileno'
+  if (n.startsWith(PREFIJO_MALLA)) return 'malla'
+  return 'otro'
+}
 
 export function esPolines(insumo: CatalogoInsumo): boolean {
-  return normalizar(insumo.nombre).startsWith(PREFIJO_POLINES)
+  return familiaDeNombre(insumo.nombre) === 'polines'
 }
 export function esPolietileno(insumo: CatalogoInsumo): boolean {
-  return normalizar(insumo.nombre).startsWith(PREFIJO_POLIETILENO)
+  return familiaDeNombre(insumo.nombre) === 'polietileno'
 }
 
-/** Familia "malla" por nombre, igual que las otras dos. Se usa en la
- *  revisión de carritos (lib/revision-carritos.ts), que compara rollos de
- *  malla entre socios. Acepta el nombre suelto y no un CatalogoInsumo porque
- *  ahí lo único que llega es el nombre del ítem cotizado. */
+/** Familia "malla" por nombre, igual que las otras dos. La usa la revisión
+ *  de carritos, que compara rollos de malla entre socios. Acepta el nombre
+ *  suelto y no un CatalogoInsumo porque ahí lo único que llega es el nombre
+ *  del ítem cotizado. */
 export function esNombreDeMalla(nombre: string): boolean {
-  return normalizar(nombre).startsWith('malla')
+  return familiaDeNombre(nombre) === 'malla'
 }
 
 /** Elige de forma determinista entre varios candidatos (orden estable por

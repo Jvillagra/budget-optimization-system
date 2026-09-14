@@ -175,6 +175,22 @@ export function VistaResumenContent() {
     return m
   }, [baseData])
 
+  /** Precio de un material para un segmento: si ese proyecto ya cerró su
+   *  compra manda el precio congelado, aunque después alguien haya editado la
+   *  lista de precios del proveedor.
+   *
+   *  Vive acá y no dentro del consolidado porque lo necesitan los dos cálculos
+   *  de esta pantalla -- el total general y cuánto de él pone el socio. Con
+   *  una copia en cada uno, la resta entre ambos podría no cuadrar. */
+  const precioDe = useMemo(() => {
+    const precioMap = buildPrecioMap(baseData?.precios ?? [])
+    const congelado = new Map((baseData?.preciosCongelados ?? []).map(p => [`${p.segmento}_${p.insumo_id}`, p.precio_unitario]))
+    return (insumoId: string, seg: Segmento): number | null => {
+      if (compraDe.get(seg)) return congelado.get(`${seg}_${insumoId}`) ?? null
+      return proveedorId ? (precioMap.get(`${proveedorId}_${insumoId}`) ?? null) : null
+    }
+  }, [baseData, compraDe, proveedorId])
+
   /** Filas del consolidado, con el segmento siempre resuelto desde el socio
    *  (antes se deducía del nombre del insumo, que solo funcionaba para
    *  "Polines"). Un insumo que aparece en los dos proyectos se parte en dos
@@ -182,18 +198,7 @@ export function VistaResumenContent() {
   const filas = useMemo<FilaConsolidado[]>(() => {
     if (!baseData || !isLoaded) return []
 
-    const { beneficiarios, asignaciones, precios, preciosCongelados } = baseData
-    const precioMap = buildPrecioMap(precios)
-    const congelado = new Map(preciosCongelados.map(p => [`${p.segmento}_${p.insumo_id}`, p.precio_unitario]))
-
-    // Precio de un insumo para un segmento: si ese proyecto ya cerró su
-    // compra manda el precio congelado, aunque después alguien haya editado
-    // la lista de precios del proveedor.
-    const precioDe = (insumoId: string, seg: Segmento): number | null => {
-      const compra = compraDe.get(seg)
-      if (compra) return congelado.get(`${seg}_${insumoId}`) ?? null
-      return proveedorId ? (precioMap.get(`${proveedorId}_${insumoId}`) ?? null) : null
-    }
+    const { beneficiarios, asignaciones } = baseData
 
     const segPorBen = new Map(beneficiarios.map(b => [b.id, b.segmento]))
     const acumulado = new Map<string, { insumo_id: string; nombre: string; formato_venta: string; seg: Segmento; cantidad: number }>()
@@ -243,11 +248,32 @@ export function VistaResumenContent() {
         if (a.tag && b.tag && a.tag !== b.tag) return a.tag === 'CP' ? -1 : 1
         return a.nombre.localeCompare(b.nombre)
       })
-  }, [baseData, proveedorId, isLoaded, compraDe])
+  }, [baseData, isLoaded, precioDe])
 
   const subtotal = (f: FilaConsolidado) => (f.precioUnitario ? f.cantidad * f.precioUnitario : 0)
 
   const totalGasto = filas.reduce((s, f) => s + subtotal(f), 0)
+
+  // Cuánto de ese total NO lo paga el programa. Las líneas `es_extra` son las
+  // que el socio pidió aparte y paga de su bolsillo (migración 014): hay que
+  // comprarlas igual, así que siguen en la lista de materiales, pero el total
+  // general las sumaba junto con la plata del programa sin decirlo. Por eso
+  // esta pantalla marcaba $5.188.724 mientras la Lista de /rendición sumaba
+  // $5.003.074 para los mismos 29 socios -- la misma compra con dos cifras
+  // distintas y nada que explicara la diferencia, que es justo el bug que
+  // este proyecto existe para no repetir.
+  const gastoDelSocio = useMemo(() => {
+    if (!baseData || !isLoaded) return 0
+    const segPorBen = new Map(baseData.beneficiarios.map(b => [b.id, b.segmento]))
+    return baseData.asignaciones.reduce((acc, a) => {
+      if (a.es_extra !== true) return acc
+      const seg = segPorBen.get(a.beneficiario_id)
+      if (!seg) return acc
+      const precio = precioDe(a.insumo_id, seg)
+      return precio === null ? acc : acc + precio * a.cantidad
+    }, 0)
+  }, [baseData, isLoaded, precioDe])
+
   const hayPrecios = filas.some(f => f.precioUnitario !== null)
   const totalPolines = filas.filter(f => esPolin(f.nombre)).reduce((s, f) => s + f.cantidad, 0)
 
@@ -417,7 +443,9 @@ export function VistaResumenContent() {
                     Lo que cuesta comprar todo lo de los dos proyectos juntos,
                     con los precios del proveedor que elijas al lado. Cambiar el
                     proveedor solo cambia este cálculo: <strong>no toca el carrito
-                    de nadie</strong>.
+                    de nadie</strong>. Incluye lo que algún socio pidió aparte y
+                    paga de su bolsillo, porque igual hay que comprarlo; si eso
+                    existe, aparece separado justo abajo.
                   </InfoTip>
                 </p>
                 <label className="text-xs flex items-center gap-2" style={{ color: 'var(--tinta-45)' }}>
@@ -437,6 +465,18 @@ export function VistaResumenContent() {
               <p className="titulo-xl mt-3 tabular-nums">
                 {hayPrecios ? formatCLP(totalGasto) : '—'}
               </p>
+
+              {/* Sin esta línea, el total de acá y el de la Lista de
+                  /rendición son dos cifras distintas para la misma compra y
+                  nada dice por qué. Solo aparece cuando hay algo que separar:
+                  si ningún socio pidió nada aparte, una línea que dice
+                  "$0 lo pone el socio" es ruido. */}
+              {hayPrecios && gastoDelSocio > 0 && (
+                <p className="text-sm mt-1.5 tabular-nums" style={{ color: 'var(--text-muted)' }}>
+                  El programa paga {formatCLP(totalGasto - gastoDelSocio)} · {formatCLP(gastoDelSocio)} lo pone
+                  el socio que lo pidió aparte
+                </p>
+              )}
 
               {/* Reparto CP / INV. Antes era una barra apilada de 56px de alto
                   con el porcentaje escrito adentro en blanco: leía como una
@@ -554,7 +594,7 @@ export function VistaResumenContent() {
             <Reveal delay={160}>
               <section>
                 <div className="flex items-center justify-between pb-3 mb-1" style={{ borderBottom: '1px solid var(--tinta)' }}>
-                  <p className="eyebrow">Detalle de insumos</p>
+                  <p className="eyebrow">Detalle de materiales</p>
                   <Button size="sm" variant={copiado ? 'accent' : 'secondary'} onClick={copiar}>
                     {copiado ? '✓ Copiado' : 'Copiar cotización'}
                   </Button>

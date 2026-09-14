@@ -316,16 +316,16 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
   return (
     <div className="space-y-4">
       <PageHeader
-        eyebrow="03 / Maestro de precios"
+        eyebrow="03 / Precios"
         titulo={<>Lo que cuesta<br /><em>cada material.</em></>}
-        bajada="Un precio por proveedor y por insumo. La celda vacía significa que ese proveedor todavía no lo cotizó."
+        bajada="Un precio por proveedor y por material. La celda vacía significa que ese proveedor todavía no lo cotizó."
         acciones={
           <>
             <Button size="sm" variant="secondary" onClick={() => setShowVision(true)}>
               <ScanLine size={14} /> Escanear cotización
             </Button>
             <Button size="sm" onClick={() => setGestionAbierta(v => !v)}>
-              Gestionar maestro
+              Editar materiales
             </Button>
           </>
         }

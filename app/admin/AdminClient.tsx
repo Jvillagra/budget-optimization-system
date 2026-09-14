@@ -173,7 +173,7 @@ export default function AdminClient({ initial }: { initial: RoleRow[] | null }) 
 
       {confirmarEnvio && (
         <ConfirmDialog
-          title="Enviar Magic Links a todos los socios"
+          title="Enviar el acceso a todos los socios"
           description="Se enviará un correo con link de acceso a cada socio que tenga email cargado. Los links anteriores dejarán de servir. ¿Confirmas el envío masivo?"
           confirmLabel="Enviar a todos"
           onConfirm={enviarMagicLinks}
@@ -214,15 +214,15 @@ export default function AdminClient({ initial }: { initial: RoleRow[] | null }) 
 
       <section className="space-y-3">
         <h2 className="eyebrow">
-          Magic Links masivos
+          Acceso de los socios
         </h2>
         <Card className="p-4 space-y-3">
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-            Envía un link de acceso a todos los socios que tengan email cargado.
+            Le manda a cada socio un correo con un enlace para entrar a ver su propia ficha. No necesitan contraseña: el enlace del correo los deja adentro. Solo les llega a los que tienen correo cargado.
           </p>
           {/* Un click mandaba 29 correos sin ninguna confirmación. */}
           <Button onClick={() => setConfirmarEnvio(true)} disabled={enviando}>
-            {enviando ? 'Enviando…' : 'Enviar Magic Links a todos los socios'}
+            {enviando ? 'Enviando…' : 'Enviar el acceso a todos los socios'}
           </Button>
           {reporte && (
             <Alert tone={reporte.pendientes ? 'warning' : 'info'}>

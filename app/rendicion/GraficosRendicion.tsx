@@ -344,7 +344,7 @@ export function PanelControl({ filas, filtro, onFiltro }: {
       {d.parciales > 0 && (
         <p className="text-xs px-1" style={{ color: 'var(--cafe-dark)' }}>
           * {d.parciales} socio{d.parciales === 1 ? '' : 's'} con total parcial
-          (ítems sin precio o sin carrito): no están sumados completos acá.
+          (materiales sin precio o sin carrito): no están sumados completos acá.
         </p>
       )}
 

@@ -6,7 +6,7 @@ import type { Beneficiario, CatalogoInsumo, Asignacion, AyudaMemoria, Proveedor 
 import { buildPrecioMap, calcularCostoCarrito, formatCLP, PRESUPUESTO_BASE } from '@/lib/business-logic'
 import { useProveedor, proveedorPorDefecto, STORAGE_KEY } from '@/lib/proveedor-context'
 import type { DatosStaff } from '@/lib/staff-data'
-import { Button, IconButton, Chip } from '@/components/design-system'
+import { Button, IconButton, Chip, InfoTip } from '@/components/design-system'
 
 type Filtro = 'todos' | 'Invernadero' | 'Cierre Perimetral'
 
@@ -279,7 +279,7 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
                   </span>
 
                   <p className="text-xs mt-2 tabular-nums" style={{ color: 'var(--tinta-70)' }}>
-                    {itemsCarrito} ítem{itemsCarrito !== 1 ? 's' : ''}
+                    {itemsCarrito} material{itemsCarrito !== 1 ? 'es' : ''}
                     {proveedorId && itemsCarrito > 0 && <> · {formatCLP(costoTotal)} de {formatCLP(presupuestoBen)}</>}
                   </p>
 
@@ -451,9 +451,18 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
                 <span style={{ color: 'var(--tinta-45)' }}>{formatCLP(total)}</span>
                 <span style={{ color: 'var(--tinta-45)' }}>{formatCLP(ben.presupuesto_base ?? PRESUPUESTO_BASE)}</span>
               </div>
+              {/* Lo que le queda por gastar, en plata y no en porcentaje: el
+                  98,6% de la barra no le dice a nadie si alcanza para otro
+                  polín. Solo cuando sobra -- si se pasó, manda el bloque rojo
+                  de abajo, y las dos cifras juntas se contradirían. */}
+              {aporteBolsillo === 0 && (ben.presupuesto_base ?? PRESUPUESTO_BASE) - total > 0 && (
+                <p className="text-xs mt-1 font-semibold" style={{ color: 'var(--verde-dark)' }}>
+                  Le sobran {formatCLP((ben.presupuesto_base ?? PRESUPUESTO_BASE) - total)} por usar
+                </p>
+              )}
               {itemsSinPrecio > 0 && (
                 <p className="text-xs mt-1" style={{ color: 'var(--cafe)' }}>
-                  {itemsSinPrecio} ítem{itemsSinPrecio > 1 ? 's' : ''} sin precio cotizado
+                  {itemsSinPrecio} material{itemsSinPrecio > 1 ? 'es' : ''} sin precio cotizado
                 </p>
               )}
               {aporteBolsillo > 0 && (
@@ -481,12 +490,25 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
           )}
 
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--tinta-45)' }}>
-              carrito real
-            </p>
+            {/* La ayuda explica los DOS botones de una vez y vive en el
+                encabezado, no dentro de cada linea: el boton "Del programa"
+                ya es un control, y meterle un "?" adentro seria un control
+                anidado dentro de otro (mismo criterio que los cuadros de
+                estado del panel de avance). */}
+            <div className="flex items-center gap-1.5 mb-2">
+              <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--tinta-45)' }}>
+                lo que va a comprar
+              </p>
+              <InfoTip etiqueta="quién paga cada línea">
+                Cada línea dice quién la paga. <strong>Del programa</strong>: sale del presupuesto
+                de {formatCLP(ben.presupuesto_base ?? PRESUPUESTO_BASE)} que le corresponde al socio.
+                <strong> Del socio</strong>: la pidió aparte y la paga él de su bolsillo, así que no
+                gasta presupuesto ni se le descuenta. Toca el botón para cambiarlo.
+              </InfoTip>
+            </div>
             {asigsBen.length === 0 ? (
               <p className="text-xs" style={{ color: 'var(--tinta-45)' }}>
-                Carrito vacío. Agrega insumos una vez definido el proveedor.
+                Todavía no tiene materiales. Elige el proveedor y agrégalos aquí abajo.
               </p>
             ) : (
               <ul className="space-y-1.5">
@@ -543,7 +565,7 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
 
           <div className="space-y-2 pt-2" style={{ borderTop: '1px solid var(--linea)' }}>
             <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--tinta-45)' }}>
-              agregar insumo
+              agregar material
             </p>
             <select
               value={insumoForm}
