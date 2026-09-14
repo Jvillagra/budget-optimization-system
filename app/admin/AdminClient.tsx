@@ -193,25 +193,8 @@ export default function AdminClient({ initial }: { initial: RoleRow[] | null }) 
         />
       )}
 
-      <section className="space-y-3">
-        <h2 className="eyebrow">
-          Informe para consultora
-        </h2>
-        <Card className="p-4 space-y-3">
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-            Descarga un PDF con el total general y el detalle por beneficiario
-            (proveedor de compra, total cotizado y fotos de comprobante) para
-            enviar a la empresa consultora que audita el proyecto.
-          </p>
-          {/* Un <Button> dentro de un <a> es HTML invalido -- contenido
-              interactivo anidado: el teclado paraba dos veces y el area
-              tactil medida caia a 20px. Un solo control que navega. */}
-          <Button onClick={() => { window.location.href = '/api/admin/informe-consultora' }}>
-            Descargar informe PDF
-          </Button>
-        </Card>
-      </section>
-
+      {/* El informe PDF para la consultora se descarga desde la pestaña
+          Reporte de /rendicion (2026-09-14): es el mismo documento. */}
       <section className="space-y-3">
         <h2 className="eyebrow">
           Acceso de los socios

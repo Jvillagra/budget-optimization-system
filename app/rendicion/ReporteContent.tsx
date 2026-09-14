@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Printer, Download } from 'lucide-react'
+import { Printer, Download, FileDown } from 'lucide-react'
 import { formatCLP } from '@/lib/business-logic'
 import { Button, Badge } from '@/components/design-system'
 import { resumenCarrito } from './RevisionContent'
@@ -87,6 +87,13 @@ export function ReporteContent({ filas }: { filas: FilaReporte[] }) {
           </Button>
           <Button size="sm" variant="secondary" onClick={() => descargarCSV(filas)}>
             <Download size={14} /> Descargar CSV
+          </Button>
+          {/* El informe PDF para la consultora (proveedor de compra, total y
+              fotos por socio) se genera en el servidor con la MISMA
+              agregación que esta tabla. Antes vivía en /admin, lejos de la
+              pestaña que es el mismo documento. */}
+          <Button size="sm" variant="secondary" onClick={() => { window.location.href = '/api/admin/informe-consultora' }}>
+            <FileDown size={14} /> PDF para la consultora
           </Button>
         </div>
       </div>

@@ -161,39 +161,37 @@ function BarraFila({ nombre, valor, max, color, detalle }: { nombre: string; val
 /** Panel de control completo. `filtro` / `onFiltro` conectan el gráfico de
  *  estados con la lista: tocar un segmento o un chip filtra los socios de
  *  abajo, que es la forma de pasar de "ver" a "actuar" sin scrollear. */
+/** Las cifras del panel. Exportada para que la línea de resumen que se ve
+ *  con el panel plegado salga del MISMO cálculo y no pueda discrepar. */
+export function resumirFilas(filas: FilaGrafico[]) {
+  const porEstado: Record<EstadoSocio, number> = { completo: 0, listo: 0, faltan: 0, sin_fotos: 0 }
+  const porSegmento: Record<string, { total: number; completos: number; monto: number; montoRendido: number }> = {}
+  let cotizado = 0, rendido = 0, parciales = 0
+
+  for (const f of filas) {
+    porEstado[estadoDe(f)]++
+    cotizado += f.total
+    if (!f.totalEsCompleto) parciales++
+    if (f.compraCompleta) rendido += f.total
+    const seg = porSegmento[f.segmento] ?? (porSegmento[f.segmento] = { total: 0, completos: 0, monto: 0, montoRendido: 0 })
+    seg.total++
+    seg.monto += f.total
+    if (f.compraCompleta) { seg.completos++; seg.montoRendido += f.total }
+  }
+
+  return {
+    porEstado, porSegmento, parciales,
+    cotizado, rendido, porRendir: cotizado - rendido,
+    total: filas.length, completos: porEstado.completo,
+  }
+}
+
 export function PanelControl({ filas, filtro, onFiltro }: {
   filas: FilaGrafico[]
   filtro: EstadoSocio | null
   onFiltro: (e: EstadoSocio | null) => void
 }) {
-  const d = useMemo(() => {
-    const porEstado: Record<EstadoSocio, number> = { completo: 0, listo: 0, faltan: 0, sin_fotos: 0 }
-    const porSegmento: Record<string, { total: number; completos: number; monto: number; montoRendido: number }> = {}
-    let cotizado = 0, rendido = 0, parciales = 0
-    // Aporte de bolsillo: lo que los socios tienen que poner de su plata
-    // porque su compra pasó del presupuesto. No es plata del programa, por
-    // eso se cuenta aparte de `cotizado`/`rendido`.
-    let aporteTotal = 0, sociosConAporte = 0
-
-    for (const f of filas) {
-      porEstado[estadoDe(f)]++
-      cotizado += f.total
-      if (f.aporteBolsillo !== null && f.aporteBolsillo > 0) { aporteTotal += f.aporteBolsillo; sociosConAporte++ }
-      if (!f.totalEsCompleto) parciales++
-      if (f.compraCompleta) rendido += f.total
-      const seg = porSegmento[f.segmento] ?? (porSegmento[f.segmento] = { total: 0, completos: 0, monto: 0, montoRendido: 0 })
-      seg.total++
-      seg.monto += f.total
-      if (f.compraCompleta) { seg.completos++; seg.montoRendido += f.total }
-    }
-
-    return {
-      porEstado, porSegmento, parciales,
-      cotizado, rendido, porRendir: cotizado - rendido,
-      aporteTotal, sociosConAporte,
-      total: filas.length, completos: porEstado.completo,
-    }
-  }, [filas])
+  const d = useMemo(() => resumirFilas(filas), [filas])
 
   const pct = d.total > 0 ? (d.completos / d.total) * 100 : 0
   const pctRendido = d.cotizado > 0 ? (d.rendido / d.cotizado) * 100 : 0
@@ -307,40 +305,8 @@ export function PanelControl({ filas, filtro, onFiltro }: {
         </div>
       </div>
 
-      {/* Aporte de bolsillo. Va en su propio bloque y no como cuarta celda
-          del grid de arriba a propósito: esa fila es plata del programa
-          (cotizado / rendido / por rendir) y esta es plata que los socios
-          tienen que poner de su bolsillo. Mezclarlas hace que se sumen sin
-          querer. Es la cifra que María Inés usa para cobrar. */}
-      <div
-        className="rounded-[6px] p-3.5 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2"
-        style={{ background: 'var(--papel)', border: '1px solid var(--linea)' }}
-      >
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
-            Aporte de bolsillo por cobrar
-            <InfoTip etiqueta="el aporte de bolsillo">
-              Plata que ponen los socios, no el programa. Cuando lo que el socio
-              eligió cuesta más que su presupuesto, la diferencia la paga él.
-              Esta es la suma de todas esas diferencias: lo que hay que cobrar.
-            </InfoTip>
-          </p>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-            {d.sociosConAporte === 0
-              ? 'Ningún socio pasó su presupuesto'
-              : d.sociosConAporte === 1
-                ? `1 de ${d.total} socios tiene que poner plata`
-                : `${d.sociosConAporte} de ${d.total} socios tienen que poner plata`}
-          </p>
-        </div>
-        <p
-          className="text-2xl font-bold tabular-nums leading-none"
-          style={{ color: d.aporteTotal > 0 ? 'var(--cafe-dark)' : 'var(--text-muted)' }}
-        >
-          {formatCLP(d.aporteTotal)}
-        </p>
-      </div>
-
+      {/* El aporte de bolsillo NO va acá (2026-09-14): salía en tres pantallas
+          con la misma cifra. Vive donde se cobra, en "Por revisar" y "Reporte". */}
       {d.parciales > 0 && (
         <p className="text-xs px-1" style={{ color: 'var(--cafe-dark)' }}>
           * {d.parciales} socio{d.parciales === 1 ? '' : 's'} con total parcial

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { X, ImageOff, CheckCircle2, RotateCcw, ImageUp, ChevronDown, ClipboardList, BarChart3, AlertTriangle, Trash2, Lock, FileText } from 'lucide-react'
 import { formatCLP } from '@/lib/business-logic'
@@ -10,7 +10,7 @@ import { PageHeader } from '@/components/Editorial'
 import { RevisionContent } from './RevisionContent'
 import { ReporteContent } from './ReporteContent'
 import { VistaResumenContent, precargarDatosResumen } from '@/components/VistaResumenContent'
-import { PanelControl, ESTADOS, estadoDe, type EstadoSocio } from './GraficosRendicion'
+import { PanelControl, resumirFilas, ESTADOS, estadoDe, type EstadoSocio } from './GraficosRendicion'
 
 /** Lista de nombres para el diálogo de confirmación. Con 20 socios listos,
  *  volcarlos todos convertía la descripción en un párrafo que nadie lee y que
@@ -211,6 +211,8 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [busqueda, setBusqueda] = useState('')
   const [filtroEstado, setFiltroEstado] = useState<EstadoSocio | null>(null)
+  // Antes de cualquier return temprano: es un hook.
+  const resumen = useMemo(() => resumirFilas(filas), [filas])
   // Borrar una foto ya subida: el endpoint (DELETE /api/fotos) siempre lo
   // permitio al staff, pero la unica pantalla que lo ofrecia era la del
   // socio (/mi-dashboard). Sin esto, una foto movida o repetida cargada por
@@ -460,7 +462,7 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
         bajada={
           tab === 'lista' ? <>Cada socio necesita {FOTOS_REQUERIDAS} fotos de sus comprobantes para quedar completo.</>
           : tab === 'revisar' ? 'Los carritos que no cuadran y el aporte que hay que pedirle a cada socio. Se recalcula solo.'
-          : tab === 'reporte' ? 'La rendición socio por socio, para imprimir o bajar en planilla. Se arma con los datos de hoy.'
+          : tab === 'reporte' ? 'La rendición socio por socio, para imprimir, bajar en planilla o mandar en PDF a la consultora. Se arma con los datos de hoy.'
           : 'Consolidado de la compra de los dos proyectos, con el total de cada uno.'
         }
       />
@@ -468,11 +470,11 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
       {/* Sub-tabs Lista/Resumen -- ver comentario en RendicionPageInner. Misma
           pastilla que el menu principal: antes eran un borde inferior, o sea
           un tercer indicador de "elegido" distinto conviviendo en la pantalla. */}
-      {/* Con la cuarta pestaña dejan de caber a 390px. Se deslizan en vez de
-          acortar las etiquetas: "Por revisar" recortado a "Revisar" pierde el
-          sentido justo en la pantalla donde hay menos espacio para adivinar.
-          `shrink-0` en cada pastilla, o flex las aprieta en vez de desbordar. */}
-      <div className="flex gap-1 no-print overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+      {/* Con la cuarta pestaña dejan de caber a 390px. Antes se deslizaban y
+          "Reporte" quedaba cortada en el borde: una pestaña que no se ve no
+          existe para quien usa el celular. En móvil van en dos filas de dos,
+          todas a la vista; en escritorio siguen en una línea. */}
+      <div className="grid grid-cols-2 sm:flex gap-1 no-print">
         {([
           { id: 'lista' as const, label: 'Lista', icon: ClipboardList },
           { id: 'revisar' as const, label: 'Por revisar', icon: AlertTriangle },
@@ -486,7 +488,7 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
               key={t.id}
               type="button"
               onClick={e => { setTab(t.id); soltarFocoDePuntero(e) }}
-              className="nav-item nav-pill px-3 sm:px-4 h-9 text-[13px] sm:text-sm shrink-0"
+              className="nav-item nav-pill justify-center sm:justify-start px-3 sm:px-4 h-9 text-[13px] sm:text-sm shrink-0"
               data-activo={active}
               aria-pressed={active}
             >
@@ -504,10 +506,42 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
 
       {tab === 'lista' && <>
 
+      {/* Búsqueda — con 30+ beneficiarios el único mecanismo de navegación
+          antes de esto era scroll; filtra ambas vistas (mobile y desktop).
+          Va ARRIBA del panel: en el celular estaba a 1,5 pantallas de scroll. */}
+      {filas.length > 8 && (
+        <Input
+          type="search"
+          value={busqueda}
+          onChange={e => setBusqueda(e.target.value)}
+          placeholder="Buscar beneficiario por nombre…"
+          aria-label="Buscar beneficiario"
+        />
+      )}
+
       {/* Panel de control: avance, etapa de cada socio (con filtro), plata,
-          presupuesto y proveedor. Ver app/rendicion/GraficosRendicion.tsx. */}
+          presupuesto y proveedor. Ver app/rendicion/GraficosRendicion.tsx.
+          Plegado por defecto: en el celular medía 1,5 pantallas y tapaba la
+          lista. La línea del resumen sale de resumirFilas, el mismo cálculo
+          del panel, para que plegado y abierto no puedan decir cosas
+          distintas. */}
       <Card className="p-3 sm:p-4">
-        <PanelControl filas={filas} filtro={filtroEstado} onFiltro={setFiltroEstado} />
+        <details className="group">
+          <summary className="btn-base list-none cursor-pointer flex items-center justify-between gap-3 min-h-[44px] -m-1 p-1 rounded-[6px]">
+            <span className="min-w-0">
+              <span className="block text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+                Avance de rendición
+              </span>
+              <span className="block text-sm tabular-nums" style={{ color: 'var(--tinta)' }}>
+                <strong>{resumen.completos} de {resumen.total}</strong> completos · {formatCLP(resumen.cotizado)} cotizado
+              </span>
+            </span>
+            <ChevronDown size={18} aria-hidden className="shrink-0 transition-transform group-open:rotate-180" style={{ color: 'var(--tinta-70)' }} />
+          </summary>
+          <div className="mt-3">
+            <PanelControl filas={filas} filtro={filtroEstado} onFiltro={setFiltroEstado} />
+          </div>
+        </details>
       </Card>
 
       {/* Acción por lote. Aparece solo cuando hay algo que hacer con ella, y
@@ -561,22 +595,10 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
         </Card>
       )}
 
-      {/* Búsqueda — con 30+ beneficiarios el único mecanismo de navegación
-          antes de esto era scroll; filtra ambas vistas (mobile y desktop). */}
       {etiquetaFiltro && (
         <p className="text-sm font-semibold" style={{ color: 'var(--verde-dark)' }}>
           Mostrando {filasFiltradas.length} de {filas.length} · {etiquetaFiltro}
         </p>
-      )}
-
-      {filas.length > 8 && (
-        <Input
-          type="search"
-          value={busqueda}
-          onChange={e => setBusqueda(e.target.value)}
-          placeholder="Buscar beneficiario por nombre…"
-          aria-label="Buscar beneficiario"
-        />
       )}
 
       {filasFiltradas.length === 0 && (
