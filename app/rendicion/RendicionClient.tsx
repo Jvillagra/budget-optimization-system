@@ -8,7 +8,7 @@ import { FOTOS_REQUERIDAS } from '@/lib/constants'
 import { Card, Button, Badge, Input, Alert, Skeleton, ConfirmDialog, IconButton, soltarFocoDePuntero } from '@/components/design-system'
 import { PageHeader } from '@/components/Editorial'
 import { RevisionContent } from './RevisionContent'
-import { VistaResumenContent } from '@/components/VistaResumenContent'
+import { VistaResumenContent, precargarDatosResumen } from '@/components/VistaResumenContent'
 import { PanelControl, ESTADOS, estadoDe, type EstadoSocio } from './GraficosRendicion'
 
 /** Lista de nombres para el diálogo de confirmación. Con 20 socios listos,
@@ -163,6 +163,18 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
   // Datos ya resueltos en el servidor (app/rendicion/page.tsx): la pantalla
   // pinta con contenido en el primer frame, sin skeleton ni fetch al montar.
   const [filas, setFilas] = useState<FilaRendicion[]>(initialFilas)
+
+  // "Resumen" es la unica sub-tab que pide sus datos aparte, y por eso la
+  // unica lenta al abrirla. Se precargan en reposo, una vez, mientras la
+  // persona mira la Lista: cuando toque la pestana el cache ya esta listo.
+  useEffect(() => {
+    if (tab === 'resumen') return
+    const t = setTimeout(() => {
+      if ('requestIdleCallback' in window) window.requestIdleCallback(() => precargarDatosResumen(), { timeout: 3000 })
+      else precargarDatosResumen()
+    }, 1200)
+    return () => clearTimeout(t)
+  }, [tab])
   const [proveedores, setProveedores] = useState<ProveedorOpcion[]>(initialProveedores)
   const [loading, setLoading] = useState(false)
   // El error de carga distingue causa: sin conexion, sesion vencida y fallo

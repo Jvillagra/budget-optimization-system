@@ -4,6 +4,7 @@ import './globals.css'
 import Navbar, { MobileTabBar } from '@/components/Navbar'
 import { ProveedorProvider } from '@/lib/proveedor-context'
 import { getViewerContext } from '@/lib/roles'
+import { InvalidarDatosAlEscribir } from '@/lib/invalidar-datos'
 
 // Instrument Sans es variable (400..700): la escala editorial usa peso 520,
 // que solo existe con la fuente variable cargada. Newsreader entra solo en
@@ -58,6 +59,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           incluyendo el safe area de iOS, y lo saca en desktop. */}
       <body className="min-h-full flex flex-col app-shell">
         <ProveedorProvider>
+        {/* Las pantallas del menú se precargan enteras, datos incluidos, y
+            eso se reutiliza 5 minutos: esto lo tira abajo en cuanto la app
+            escribe algo, para que nadie vea una cifra de hace dos minutos.
+            Ver lib/invalidar-datos.tsx. */}
+        <InvalidarDatosAlEscribir />
         <Navbar role={ctx.role} tieneBeneficiario={ctx.beneficiarioId !== null} />
         <main className="flex-1 mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
           {children}

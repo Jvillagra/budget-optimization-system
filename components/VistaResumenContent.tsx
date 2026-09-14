@@ -93,6 +93,21 @@ async function pedirDatos(): Promise<BaseData> {
   }
 }
 
+/** Pide los datos ANTES de que alguien abra la sub-tab, para que el cache ya
+ *  este caliente cuando la toque. La sub-tab "Resumen" era la unica lenta de
+ *  /rendicion -- 538 ms medidos la primera vez contra 8-20 ms las otras dos,
+ *  porque las otras ya traen sus datos dentro del HTML del Server Component y
+ *  esta los pide al montarse.
+ *
+ *  No fuerza nada si el cache ya esta fresco, y se apoya en `datosEnVuelo`
+ *  para que precarga y montaje no disparen dos peticiones. Un fallo se ignora
+ *  a proposito: es una precarga, y el montaje real lo reintenta y ahi si
+ *  muestra el error. */
+export function precargarDatosResumen() {
+  if (cacheFresco()) return
+  pedirDatos().catch(() => {})
+}
+
 /** true cuando el cache es lo bastante reciente como para no revalidar. */
 function cacheFresco() {
   return datosCache !== null && Date.now() - datosCacheAt < FRESCO_MS

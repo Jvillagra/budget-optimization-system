@@ -3,7 +3,8 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useAlMutarDatos } from '@/lib/invalidar-datos'
 import {
   Download, LogOut, ClipboardList, Users, Tag, Calculator, ShieldCheck, ShoppingBag,
 } from 'lucide-react'
@@ -34,7 +35,13 @@ const SOCIO_LINKS = [{ href: '/mi-dashboard', label: 'Mi compra', corto: 'Mi com
 
 /** Devuelve el handler de precarga para un link. Una sola vez por destino:
  *  el segundo hover ya no dispara nada. Un fallo (offline, chunk viejo tras
- *  un deploy) se ignora a propósito -- la navegación normal lo reintenta. */
+ *  un deploy) se ignora a propósito -- la navegación normal lo reintenta.
+ *
+ *  Precarga solo el JS de la pantalla destino, que es una espera distinta de
+ *  la de los datos: el prefetch del <Link> en estas rutas (`force-dynamic`
+ *  con `loading.tsx`) llega solo hasta ese esqueleto, así que el bundle del
+ *  componente de página se bajaba recién al navegar. Los DATOS los precarga
+ *  `usePrefetchEscalonado`, y en otro momento: acá es demasiado tarde. */
 function usePrecargaEnIntencion() {
   const yaPedidos = useRef<Set<string>>(new Set())
   return (href: string, chunk: () => Promise<unknown>) => {
@@ -42,6 +49,74 @@ function usePrecargaEnIntencion() {
     yaPedidos.current.add(href)
     chunk().catch(() => {})
   }
+}
+
+/** Habilita el prefetch COMPLETO de los links del menú de a uno, en reposo.
+ *  Devuelve cuántos links (en orden) ya pueden precargar sus datos.
+ *
+ *  Esta es la espera grande: la función de Vercel corre en iad1 y quien usa
+ *  la app está en Chile, así que CADA navegación paga un viaje de ida y
+ *  vuelta a Washington -- medido en 425-525 ms, idéntico la segunda vez
+ *  porque hoy no se cachea nada. Las consultas a Supabase NO son el cuello
+ *  (la base está en us-east-1, al lado de la función): es el viaje, y un
+ *  viaje solo se arregla haciéndolo antes de que haga falta.
+ *
+ *  Por qué en reposo y no en el hover/touch del link, que sería lo obvio:
+ *  medido, ahí es CONTRAPRODUCENTE. El touchstart llega ~100 ms antes del
+ *  click y el viaje tarda 400+, así que el prefetch no alcanza a servir esa
+ *  navegación y encima el servidor recibe dos peticiones idénticas (la del
+ *  prefetch y la de la navegación). La segunda vuelta de la medición pasó de
+ *  ~425 ms a 1.300-3.100 ms.
+ *
+ *  Tiene que ser `prefetch={true}` en el `<Link>` y no `router.prefetch()`:
+ *  medido con el tráfico real del navegador, `router.prefetch()` manda
+ *  `next-router-prefetch: 1`, o sea el prefetch PARCIAL -- trae el esqueleto
+ *  de `loading.tsx` y ningún dato, así que la navegación seguía costando los
+ *  mismos 425-525 ms. `prefetch={true}` es la única forma pública de pedir
+ *  la ruta entera en una ruta dinámica.
+ *
+ *  Escalonado, y no los cinco de golpe: cada uno renderiza una página
+ *  completa en el servidor, y en un celular en terreno cinco a la vez le
+ *  quitan ancho de banda a la pantalla que la persona está mirando. El
+ *  retardo inicial existe por lo mismo -- primero que termine de aparecer lo
+ *  que se pidió, después precargamos lo que quizás se pida.
+ *
+ *  Lo que trae `prefetch={true}` se reutiliza 5 minutos -- cuenta como
+ *  `static` en el client cache, no como `dynamic` (que es 0). Eso es lo que
+ *  lo hace valer la pena y, a la vez, lo que obliga a invalidarlo cuando se
+ *  escribe: ver `lib/invalidar-datos.ts`. */
+function usePrefetchEscalonado(total: number) {
+  const [habilitados, setHabilitados] = useState(0)
+  // Cambia en cada escritura y entra en la `key` de los <Link>: eso los
+  // vuelve a montar, y un Link recién montado con prefetch={true} pide la
+  // ruta de nuevo y sobrescribe lo que había en caché. Es la única forma
+  // pública de refrescar lo precargado de OTRA ruta -- router.refresh() solo
+  // alcanza a la pantalla actual (ver lib/invalidar-datos.tsx).
+  const [generacion, setGeneracion] = useState(0)
+
+  const alEscribir = useCallback(() => {
+    setGeneracion(g => g + 1)
+    // Vuelve a cero para que el re-prefetch también salga escalonado y no
+    // dispare cinco renders de página juntos justo después de guardar.
+    setHabilitados(0)
+  }, [])
+  useAlMutarDatos(alEscribir)
+
+  useEffect(() => {
+    if (total === 0) return
+    const timers: ReturnType<typeof setTimeout>[] = []
+    const enReposo = (fn: () => void) =>
+      'requestIdleCallback' in window
+        ? window.requestIdleCallback(fn, { timeout: 3000 })
+        : setTimeout(fn, 0)
+
+    for (let i = 1; i <= total; i++) {
+      timers.push(setTimeout(() => enReposo(() => setHabilitados(n => Math.max(n, i))), 800 + (i - 1) * 400))
+    }
+    return () => timers.forEach(clearTimeout)
+  }, [total, generacion])
+
+  return { hasta: habilitados, generacion }
 }
 
 interface BeforeInstallPromptEvent extends Event {
@@ -74,6 +149,11 @@ export default function Navbar({ role, tieneBeneficiario }: { role: NavRole; tie
   const [scrolled, setScrolled] = useState(false)
   const links = linksParaViewer(role, tieneBeneficiario)
   const precargar = usePrecargaEnIntencion()
+  // El menú de escritorio está en display:none en móvil, así que ahí no
+  // prefetchea nada (Next usa IntersectionObserver): el del celular lo hace
+  // MobileTabBar por su cuenta. Un mismo destino pedido por los dos es un
+  // acierto de caché en el segundo, no una petición más.
+  const { hasta: prefetchHasta, generacion } = usePrefetchEscalonado(links.length)
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' })
@@ -147,10 +227,11 @@ export default function Navbar({ role, tieneBeneficiario }: { role: NavRole; tie
 
           {/* Menú de escritorio */}
           <nav className="hidden sm:flex items-center gap-1">
-            {links.map(link => (
+            {links.map((link, i) => (
               <Link
-                key={link.href}
+                key={`${link.href}:${generacion}`}
                 href={link.href}
+                prefetch={i < prefetchHasta ? true : undefined}
                 onPointerEnter={() => precargar(link.href, link.chunk)}
                 onFocus={() => precargar(link.href, link.chunk)}
                 onClick={soltarFocoDePuntero}
@@ -221,6 +302,7 @@ export function MobileTabBar({ role, tieneBeneficiario }: { role: NavRole; tiene
   const pathname = usePathname()
   const links = linksParaViewer(role, tieneBeneficiario)
   const precargar = usePrecargaEnIntencion()
+  const { hasta: prefetchHasta, generacion } = usePrefetchEscalonado(links.length)
 
   if (links.length === 0) return null
 
@@ -232,13 +314,14 @@ export function MobileTabBar({ role, tieneBeneficiario }: { role: NavRole; tiene
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
-      {links.map(link => {
+      {links.map((link, i) => {
         const Icon = link.icon
         const active = pathname === link.href
         return (
           <Link
-            key={link.href}
+            key={`${link.href}:${generacion}`}
             href={link.href}
+            prefetch={i < prefetchHasta ? true : undefined}
             // En mobile no hay hover: el touchstart llega ~100ms antes que el
             // click, y esos 100ms son justo el pedido del chunk.
             onTouchStart={() => precargar(link.href, link.chunk)}
