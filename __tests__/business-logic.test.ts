@@ -4,6 +4,7 @@ import {
   simularBeneficiario,
   calcularCostoCarrito,
   cotizarCarrito,
+  cotizarProgramaYSocio,
   proveedorPorDefecto,
   aporteDeBolsillo,
   esDePrueba,
@@ -192,6 +193,40 @@ describe('cotizarCarrito', () => {
     const r = cotizarCarrito(asigs2, pA, mapa)
     assert.equal(r.itemsSinPrecio, 1)
     assert.equal(r.totalEsCompleto, false)
+  })
+})
+
+describe('cotizarProgramaYSocio', () => {
+  const pA: Proveedor = { id: 'pa', nombre: 'Sodimac', es_activo: true }
+  const mapa = buildPrecioMap([
+    { id: '1', proveedor_id: 'pa', insumo_id: 'i-polin', precio_unitario: 3950 },
+  ])
+
+  test('separa lo del programa de lo que el socio paga aparte', () => {
+    const r = cotizarProgramaYSocio([
+      { id: 'a1', beneficiario_id: 'b1', insumo_id: 'i-polin', cantidad: 10 },
+      { id: 'a2', beneficiario_id: 'b1', insumo_id: 'i-polin', cantidad: 5, es_extra: true },
+    ], pA, mapa)
+    assert.equal(r.programa.total, 39500)
+    assert.equal(r.socio.total, 19750)
+    assert.equal(r.programa.totalEsCompleto, true)
+  })
+
+  test('todo pedido aparte = el programa gastó $0, y eso es un hecho completo', () => {
+    // El caso real de María Inés Burgos: 47 polines de su bolsillo y nada
+    // del programa. Salía como "0 productos sin precio cotizado".
+    const r = cotizarProgramaYSocio([
+      { id: 'a1', beneficiario_id: 'b1', insumo_id: 'i-polin', cantidad: 47, es_extra: true },
+    ], pA, mapa)
+    assert.equal(r.programa.total, 0)
+    assert.equal(r.programa.totalEsCompleto, true)
+    assert.equal(r.programa.itemsSinPrecio, 0)
+    assert.equal(r.socio.total, 185650)
+  })
+
+  test('sin ninguna línea sigue sin afirmar un total', () => {
+    const r = cotizarProgramaYSocio([], pA, mapa)
+    assert.equal(r.programa.totalEsCompleto, false)
   })
 })
 

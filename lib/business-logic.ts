@@ -269,6 +269,31 @@ export function cotizarCarrito(
   return { proveedor, total, itemsSinPrecio, totalEsCompleto: itemsSinPrecio === 0 }
 }
 
+/** El carrito en sus dos partes: lo que paga el programa y lo que el socio
+ *  pidió aparte y paga él (`es_extra`, migración 014). Es LA definición que
+ *  usan /rendicion y el informe; /beneficiarios separa las líneas igual.
+ *
+ *  Un carrito del programa VACÍO porque todo se pidió aparte no es "sin
+ *  cotizar": el socio no usó nada del presupuesto, y eso es un hecho completo
+ *  ($0). Sin esta distinción, María Inés Burgos (47 polines de su bolsillo,
+ *  nada del programa) salía como "0 productos sin precio cotizado" y fuera
+ *  del total general, cuando lo cierto es que le sobra el presupuesto entero.
+ *  Sin ninguna línea de ningún tipo sigue siendo incompleto: ahí no hay nada
+ *  que afirmar (ver cotizarCarrito). */
+export function cotizarProgramaYSocio(
+  asignaciones: Asignacion[],
+  proveedor: Proveedor | null,
+  precioMap: Map<string, number | null>
+): { programa: CotizacionCarrito; socio: CotizacionCarrito } {
+  const delPrograma = asignaciones.filter(a => a.es_extra !== true)
+  const delSocio = asignaciones.filter(a => a.es_extra === true)
+  const socio = cotizarCarrito(delSocio, proveedor, precioMap)
+  const programa = proveedor && delPrograma.length === 0 && delSocio.length > 0
+    ? { proveedor, total: 0, itemsSinPrecio: 0, totalEsCompleto: true }
+    : cotizarCarrito(delPrograma, proveedor, precioMap)
+  return { programa, socio }
+}
+
 /** Lo que el socio tiene que poner de su bolsillo: todo lo que su compra pasa
  *  del presupuesto del programa. Es la cifra que María Inés le cobra.
  *

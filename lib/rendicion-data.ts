@@ -1,7 +1,7 @@
 import 'server-only'
 import { getSupabaseAdmin } from './supabase-admin'
 import { urlsFirmadasFoto } from './r2'
-import { cotizarCarrito, proveedorPorDefecto, aporteDeBolsillo, esDePrueba, precioPolinDeReferencia } from './business-logic'
+import { cotizarProgramaYSocio, proveedorPorDefecto, aporteDeBolsillo, esDePrueba, precioPolinDeReferencia } from './business-logic'
 import type { Asignacion, Proveedor, PrecioProveedor, FotoCompra, Beneficiario, CatalogoInsumo } from './types'
 
 // Agregación por beneficiario para la rendición. La consumen /api/rendicion
@@ -133,10 +133,7 @@ export async function cargarRendicion(): Promise<
     // "eligió sumar". /beneficiarios ya los separa; si acá no, las dos
     // pantallas volverían a discrepar sobre el mismo socio -- que es el bug
     // que definió este proyecto.
-    const asigsPrograma = asigs.filter(a => a.es_extra !== true)
-    const asigsDelSocio = asigs.filter(a => a.es_extra === true)
-    const cot = cotizarCarrito(asigsPrograma, proveedorCotizador, precioMap)
-    const cotSocio = cotizarCarrito(asigsDelSocio, proveedorCotizador, precioMap)
+    const { programa: cot, socio: cotSocio } = cotizarProgramaYSocio(asigs, proveedorCotizador, precioMap)
 
     // Cotización línea a línea del carrito real, con el mismo proveedor que
     // da el total: si difirieran, la suma del detalle no cuadraría con él.
