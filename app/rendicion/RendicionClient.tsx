@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { X, ImageOff, CheckCircle2, RotateCcw, ImageUp, ChevronDown, ClipboardList, BarChart3, AlertTriangle, Trash2, Lock } from 'lucide-react'
+import { X, ImageOff, CheckCircle2, RotateCcw, ImageUp, ChevronDown, ClipboardList, BarChart3, AlertTriangle, Trash2, Lock, FileText } from 'lucide-react'
 import { formatCLP } from '@/lib/business-logic'
 import { FOTOS_REQUERIDAS } from '@/lib/constants'
 import { Card, Button, Badge, Input, Alert, Skeleton, ConfirmDialog, IconButton, soltarFocoDePuntero } from '@/components/design-system'
 import { PageHeader } from '@/components/Editorial'
 import { RevisionContent } from './RevisionContent'
+import { ReporteContent } from './ReporteContent'
 import { VistaResumenContent, precargarDatosResumen } from '@/components/VistaResumenContent'
 import { PanelControl, ESTADOS, estadoDe, type EstadoSocio } from './GraficosRendicion'
 
@@ -156,9 +157,9 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
   initialError: boolean
 }) {
   const searchParams = useSearchParams()
-  const [tab, setTab] = useState<'lista' | 'revisar' | 'resumen'>(() => {
+  const [tab, setTab] = useState<'lista' | 'revisar' | 'resumen' | 'reporte'>(() => {
     const t = searchParams.get('tab')
-    return t === 'resumen' || t === 'revisar' ? t : 'lista'
+    return t === 'resumen' || t === 'revisar' || t === 'reporte' ? t : 'lista'
   })
   // Datos ya resueltos en el servidor (app/rendicion/page.tsx): la pantalla
   // pinta con contenido en el primer frame, sin skeleton ni fetch al montar.
@@ -435,11 +436,13 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
         titulo={
           tab === 'lista' ? <>Quién ya<br /><em>rindió.</em></>
           : tab === 'revisar' ? <>Qué preguntar y<br /><em>qué cobrar.</em></>
+          : tab === 'reporte' ? <>Qué compró<br /><em>cada socio.</em></>
           : <>Todo lo que<br /><em>hay que comprar.</em></>
         }
         bajada={
           tab === 'lista' ? <>Cada socio necesita {FOTOS_REQUERIDAS} fotos de sus comprobantes para quedar completo.</>
           : tab === 'revisar' ? 'Los carritos que no cuadran y el aporte que hay que pedirle a cada socio. Se recalcula solo.'
+          : tab === 'reporte' ? 'La rendición socio por socio, para imprimir o bajar en planilla. Se arma con los datos de hoy.'
           : 'Consolidado de la compra de los dos proyectos, con el total de cada uno.'
         }
       />
@@ -447,11 +450,16 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
       {/* Sub-tabs Lista/Resumen -- ver comentario en RendicionPageInner. Misma
           pastilla que el menu principal: antes eran un borde inferior, o sea
           un tercer indicador de "elegido" distinto conviviendo en la pantalla. */}
-      <div className="flex gap-1 no-print">
+      {/* Con la cuarta pestaña dejan de caber a 390px. Se deslizan en vez de
+          acortar las etiquetas: "Por revisar" recortado a "Revisar" pierde el
+          sentido justo en la pantalla donde hay menos espacio para adivinar.
+          `shrink-0` en cada pastilla, o flex las aprieta en vez de desbordar. */}
+      <div className="flex gap-1 no-print overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
         {([
           { id: 'lista' as const, label: 'Lista', icon: ClipboardList },
           { id: 'revisar' as const, label: 'Por revisar', icon: AlertTriangle },
           { id: 'resumen' as const, label: 'Resumen', icon: BarChart3 },
+          { id: 'reporte' as const, label: 'Reporte', icon: FileText },
         ]).map(t => {
           const Icon = t.icon
           const active = tab === t.id
@@ -460,11 +468,11 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
               key={t.id}
               type="button"
               onClick={e => { setTab(t.id); soltarFocoDePuntero(e) }}
-              className="nav-item nav-pill px-4 h-9 text-sm"
+              className="nav-item nav-pill px-3 sm:px-4 h-9 text-[13px] sm:text-sm shrink-0"
               data-activo={active}
               aria-pressed={active}
             >
-              <Icon size={15} /> {t.label}
+              <Icon size={14} className="sm:size-[15px]" /> {t.label}
             </button>
           )
         })}
@@ -473,6 +481,8 @@ export default function RendicionClient({ initialFilas, initialProveedores, init
       {tab === 'revisar' && <RevisionContent filas={filas} />}
 
       {tab === 'resumen' && <VistaResumenContent />}
+
+      {tab === 'reporte' && <ReporteContent filas={filas} />}
 
       {tab === 'lista' && <>
 

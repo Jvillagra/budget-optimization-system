@@ -1,6 +1,6 @@
 import 'server-only'
 import { getSupabaseAdmin } from './supabase-admin'
-import { EMAIL_QA_SOCIO } from './constants'
+import { esDePrueba } from './business-logic'
 import type { Beneficiario, CatalogoInsumo, Asignacion, AyudaMemoria, Proveedor, PrecioProveedor, CompraSegmento, PrecioCongelado } from './types'
 import { cargarComprasSegmento } from './compras-segmento'
 
@@ -60,11 +60,11 @@ export async function cargarDatosStaff(): Promise<DatosStaff | null> {
     return null
   }
 
-  // Oculto de las vistas staff: desde la migración 009 la marca es la
-  // columna `es_prueba`, no un email hardcodeado. El filtro por email queda
-  // de respaldo por si la migración no se aplicó todavía en algún entorno.
+  // Oculto de las vistas staff con la MISMA regla que usa la rendición
+  // (lib/business-logic.ts): si cada pantalla la escribe por su cuenta,
+  // tarde o temprano una cuenta 29 socios y la otra 30.
   const beneficiariosVisibles = ((beneficiarios ?? []) as (Beneficiario & { es_prueba?: boolean })[])
-    .filter(ben => ben.es_prueba !== true && (ben.email?.toLowerCase() ?? null) !== EMAIL_QA_SOCIO)
+    .filter(ben => !esDePrueba(ben))
 
   return {
     proveedores: (proveedores ?? []) as Proveedor[],

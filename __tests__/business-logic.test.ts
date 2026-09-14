@@ -6,6 +6,7 @@ import {
   cotizarCarrito,
   proveedorPorDefecto,
   aporteDeBolsillo,
+  esDePrueba,
   buildPrecioMap,
   normalizar,
   METROS_POLY_MIN,
@@ -223,5 +224,25 @@ describe('aporteDeBolsillo', () => {
     // Un aporte calculado sobre una suma incompleta sale más bajo que el
     // real: cobrarlo dejaría el déficit escondido.
     assert.equal(aporteDeBolsillo({ total: 86000, totalEsCompleto: false }, 189000), null)
+  })
+})
+
+describe('esDePrueba', () => {
+  // La regla estaba escrita tres veces (rendicion-data, staff-data,
+  // ajuste-carritos) sin compartir código. Estos tests fijan la única.
+
+  test('la columna es_prueba manda', () => {
+    assert.equal(esDePrueba({ es_prueba: true, email: 'alguien@real.cl' }), true)
+  })
+
+  test('el email de QA sigue sirviendo de respaldo si 009 no está aplicada', () => {
+    assert.equal(esDePrueba({ email: 'neurobotinnovations@gmail.com' }), true)
+    assert.equal(esDePrueba({ email: 'NeurobotInnovations@Gmail.com' }), true)
+  })
+
+  test('un socio real no es de prueba', () => {
+    assert.equal(esDePrueba({ es_prueba: false, email: 'mane.burgosc@gmail.com' }), false)
+    assert.equal(esDePrueba({ email: null }), false)
+    assert.equal(esDePrueba({}), false)
   })
 })

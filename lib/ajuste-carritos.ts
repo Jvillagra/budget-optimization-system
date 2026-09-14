@@ -1,11 +1,11 @@
 import 'server-only'
 import { getSupabaseAdmin } from './supabase-admin'
 import { logAudit } from './audit'
-import { EMAIL_QA_SOCIO } from './constants'
 import {
   ajustarCarritoAPresupuesto,
   buildPrecioMap,
   proveedorPorDefecto,
+  esDePrueba,
   type LineaAjustable,
 } from './business-logic'
 import type { Beneficiario, CatalogoInsumo, Asignacion, Proveedor, PrecioProveedor } from './types'
@@ -93,7 +93,7 @@ export async function ajustarCarritosDelProveedor(
   }
 
   for (const ben of beneficiarios) {
-    if (ben.es_prueba === true || (ben.email?.toLowerCase() ?? null) === EMAIL_QA_SOCIO) continue
+    if (esDePrueba(ben)) continue
 
     const proveedorDelSocio = ben.proveedor_compra_id ?? referencia?.id ?? null
     if (proveedorDelSocio !== proveedorId) continue

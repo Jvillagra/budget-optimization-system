@@ -264,6 +264,27 @@ export function aporteDeBolsillo(cot: { total: number; totalEsCompleto: boolean 
   return Math.max(0, cot.total - presupuestoBase)
 }
 
+/** Correo del socio de QA. OBSOLETO como fuente de verdad: desde la
+ *  migración 009 la marca es la columna `beneficiarios.es_prueba`, para que
+ *  una query directa a la tabla vea lo mismo que la app y los conteos
+ *  cuadren. Queda solo como respaldo del filtro de abajo; una vez aplicada
+ *  009 en todos los entornos se puede borrar junto con su `||`. */
+export const EMAIL_QA_SOCIO = 'neurobotinnovations@gmail.com'
+
+/** Fila de QA que vive a propósito en la tabla real de beneficiarios
+ *  (`__TEST_QA_SOCIO__`), para poder probar login y subida de fotos sin
+ *  inventar un socio falso. Desde la migración 009 la marca es la columna
+ *  `es_prueba`; el filtro por email queda de respaldo por si 009 no se
+ *  aplicó todavía en algún entorno.
+ *
+ *  Vive acá, y no en cada consulta, porque la condición estaba escrita tres
+ *  veces sin compartir código (rendicion-data, staff-data, ajuste-carritos).
+ *  Mientras coincidan no se nota; en cuanto una cambie, una pantalla dice 29
+ *  socios y otra 30 -- el mismo bug que originó este proyecto. */
+export function esDePrueba(ben: { es_prueba?: boolean; email?: string | null }): boolean {
+  return ben.es_prueba === true || (ben.email?.toLowerCase() ?? null) === EMAIL_QA_SOCIO
+}
+
 // ---------------------------------------------------------------------------
 // Ajuste del carrito al presupuesto.
 //

@@ -1,8 +1,7 @@
 import 'server-only'
 import { getSupabaseAdmin } from './supabase-admin'
 import { urlsFirmadasFoto } from './r2'
-import { cotizarCarrito, proveedorPorDefecto, aporteDeBolsillo } from './business-logic'
-import { EMAIL_QA_SOCIO } from './constants'
+import { cotizarCarrito, proveedorPorDefecto, aporteDeBolsillo, esDePrueba } from './business-logic'
 import type { Asignacion, Proveedor, PrecioProveedor, FotoCompra, Beneficiario } from './types'
 
 // Agregación por beneficiario para la rendición. La consumen /api/rendicion
@@ -53,13 +52,6 @@ export interface FilaRendicion {
 }
 
 type BeneficiarioRow = Beneficiario & { es_prueba?: boolean }
-
-/** Fila de QA que vive en la tabla real. Desde 009 se marca con la columna
- *  `es_prueba`; el filtro por email queda como respaldo por si la migración
- *  todavía no se aplicó en algún entorno. */
-function esDePrueba(ben: BeneficiarioRow): boolean {
-  return ben.es_prueba === true || (ben.email?.toLowerCase() ?? null) === EMAIL_QA_SOCIO
-}
 
 export async function cargarRendicion(): Promise<
   | { ok: true; filas: FilaRendicion[]; proveedores: Proveedor[] }

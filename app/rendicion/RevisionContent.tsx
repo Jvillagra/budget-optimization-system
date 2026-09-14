@@ -18,9 +18,10 @@ export type FilaRevision = CarritoRevisable & {
   items: { insumoNombre: string; cantidad: number }[]
 }
 
-/** Resumen del carrito en una línea, para la lista de cobro: es lo que
- *  permite reconocer en terreno de qué compra se está hablando. */
-function resumenCarrito(items: { insumoNombre: string; cantidad: number }[]): string {
+/** Resumen del carrito en una línea: es lo que permite reconocer en terreno
+ *  de qué compra se está hablando. Lo usan la lista de cobro de acá y la
+ *  pestaña Reporte -- misma compra, misma frase en las dos. */
+export function resumenCarrito(items: { insumoNombre: string; cantidad: number }[]): string {
   return items.map(i => `${i.cantidad} ${i.insumoNombre}`).join(' + ')
 }
 
