@@ -71,6 +71,11 @@ export interface Asignacion {
   beneficiario_id: string
   insumo_id: string
   cantidad: number
+  /** true = esta línea la paga el socio de su bolsillo (migración 014). El
+   *  ajuste automático al presupuesto la ignora y nunca le baja la cantidad.
+   *  Opcional en el tipo porque las filas en caché pueden no traerlo; quien
+   *  lo lea debe tratar `undefined` como `false`. */
+  es_extra?: boolean
   catalogo_insumos?: CatalogoInsumo | null
 }
 
@@ -153,9 +158,9 @@ export type Database = {
         Relationships: []
       }
       asignaciones: {
-        Row: { id: string; beneficiario_id: string; insumo_id: string; cantidad: number }
-        Insert: { id?: string; beneficiario_id: string; insumo_id: string; cantidad: number }
-        Update: { id?: string; beneficiario_id?: string; insumo_id?: string; cantidad?: number }
+        Row: { id: string; beneficiario_id: string; insumo_id: string; cantidad: number; es_extra: boolean }
+        Insert: { id?: string; beneficiario_id: string; insumo_id: string; cantidad: number; es_extra?: boolean }
+        Update: { id?: string; beneficiario_id?: string; insumo_id?: string; cantidad?: number; es_extra?: boolean }
         Relationships: []
       }
       audit_log: {

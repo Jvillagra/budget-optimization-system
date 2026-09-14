@@ -130,3 +130,54 @@ export async function DELETE(req: NextRequest) {
   })
   return NextResponse.json({ ok: true })
 }
+
+/** Marca o desmarca una línea como "la paga el socio de su bolsillo"
+ *  (migración 014). Es lo único que se puede cambiar de una línea existente:
+ *  la cantidad se toca agregando (POST, que suma) o eliminando, y desde el
+ *  2026-09-14 también la mueve el ajuste automático al presupuesto.
+ *
+ *  Por qué es un atributo de la línea y no una línea aparte: `asignaciones`
+ *  tiene unique(beneficiario_id, insumo_id) desde la migración 012, así que
+ *  un mismo insumo no puede estar dos veces en el carrito de un socio. Marcar
+ *  la línea mueve TODA su cantidad al bolsillo del socio. */
+export async function PATCH(req: NextRequest) {
+  const ctx = await getViewerContext(); if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
+
+  const body = await req.json().catch(() => null)
+  const id = body?.id
+  const es_extra = body?.es_extra
+  if (typeof id !== 'string') return NextResponse.json({ error: 'id es requerido' }, { status: 400 })
+  if (typeof es_extra !== 'boolean') return NextResponse.json({ error: 'es_extra debe ser true o false' }, { status: 400 })
+
+  const admin = getSupabaseAdmin()
+  const { data: previa } = await admin
+    .from('asignaciones')
+    .select('*, catalogo_insumos(*)')
+    .eq('id', id)
+    .maybeSingle()
+  if (!previa) return NextResponse.json({ error: 'No encontrada' }, { status: 404 })
+
+  const fila = previa as { beneficiario_id: string; es_extra?: boolean }
+  const bloqueo = await bloqueadoPorCompra(fila.beneficiario_id)
+  if (bloqueo) return NextResponse.json({ error: bloqueo }, { status: 409 })
+
+  const { data, error } = await admin
+    .from('asignaciones')
+    .update({ es_extra })
+    .eq('id', id)
+    .select('*, catalogo_insumos(*)')
+    .single()
+
+  if (error || !data) {
+    console.error('asignaciones PATCH', error)
+    return NextResponse.json({ error: 'No se pudo actualizar la línea' }, { status: 400 })
+  }
+
+  await logAudit('asignaciones', 'update', id, {
+    cambios: { es_extra },
+    anterior: { es_extra: fila.es_extra === true },
+    beneficiario_id: fila.beneficiario_id,
+    actor: { email: ctx.email, userId: ctx.userId, role: ctx.role },
+  })
+  return NextResponse.json({ data })
+}

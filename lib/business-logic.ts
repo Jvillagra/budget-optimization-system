@@ -265,6 +265,167 @@ export function aporteDeBolsillo(cot: { total: number; totalEsCompleto: boolean 
 }
 
 // ---------------------------------------------------------------------------
+// Ajuste del carrito al presupuesto.
+//
+// El presupuesto de cada socio es FIJO ($189.000). Lo que varía son las
+// cantidades: si sube el precio de un material, el socio compra menos. Hasta
+// la migración 014 esto era cierto solo en /simulador, sobre datos
+// hipotéticos; los carritos reales se editaban a mano y quedaban sobre
+// presupuesto en silencio cuando cambiaba un precio (13 de 29 socios el
+// 2026-09-14, el mayor en $190.450).
+//
+// El orden en que ceden las cosas NO es arbitrario, y es el único punto de
+// este archivo donde conviene detenerse:
+//
+//   1. Las líneas `es_extra` no se tocan NUNCA. Son lo que el socio decidió
+//      pagar de su bolsillo; bajárselas automáticamente sería decidir por él.
+//   2. Los materiales base (malla, polietileno) bajan proporcionalmente, y
+//      truncados a unidades enteras: media malla no se puede comprar.
+//   3. Los polines absorben el resto. Son el saldo del programa -- la regla
+//      de siempre (ver polinesQueCaben y la nota de revisarCarritos): lo que
+//      queda después del material base se gasta en polines.
+//
+// Es simétrico a propósito: si un precio BAJA, los polines SUBEN hasta gastar
+// el presupuesto. El presupuesto es lo que hay para gastar, no un techo que
+// convenga dejar sin usar.
+
+/** Una línea de carrito lista para ajustar. Se separa de `Asignacion` porque
+ *  el ajuste necesita saber si la línea es polín, y eso vive en el catálogo. */
+export interface LineaAjustable {
+  insumo_id: string
+  cantidad: number
+  es_extra: boolean
+  insumo: CatalogoInsumo
+}
+
+export interface CambioDeLinea {
+  insumo_id: string
+  nombre: string
+  cantidad_antes: number
+  cantidad_despues: number
+}
+
+export interface AjusteCarrito {
+  /** Solo las líneas cuya cantidad cambia. Vacío = no hay nada que hacer. */
+  cambios: CambioDeLinea[]
+  /** Costo de las líneas financiadas por el programa, antes y después. */
+  totalAntes: number
+  totalDespues: number
+  /** Saldo del presupuesto que queda sin gastar (no hay polines donde
+   *  ponerlo, o lo que queda no alcanza para uno). */
+  saldoSinUsar: number
+  /** Por qué no se pudo ajustar. Si viene, `cambios` está vacío y NADIE debe
+   *  escribir nada: ajustar sobre un carrito que no se puede cotizar entero
+   *  daría cantidades calculadas sobre un total falso. */
+  error: string | null
+}
+
+/** Cuántas unidades de un material caben en un saldo. Con precio 0 devuelve 0:
+ *  un insumo donado es gratis de verdad, pero el saldo no se agota nunca y
+ *  "caben infinitas" no es una respuesta que se pueda comprar. */
+function unidadesQueCaben(saldo: number, precioUnitario: number): number {
+  if (saldo <= 0 || precioUnitario <= 0) return 0
+  return Math.floor(saldo / precioUnitario)
+}
+
+/**
+ * Calcula las cantidades que dejan el carrito dentro del presupuesto.
+ *
+ * NO escribe nada: devuelve lo que habría que cambiar. Quien llame decide si
+ * lo aplica, lo propone o solo lo informa.
+ */
+export function ajustarCarritoAPresupuesto(
+  lineas: LineaAjustable[],
+  proveedorId: string,
+  precioMap: Map<string, number | null>,
+  presupuesto: number
+): AjusteCarrito {
+  const vacio = (error: string | null, totalAntes = 0): AjusteCarrito =>
+    ({ cambios: [], totalAntes, totalDespues: totalAntes, saldoSinUsar: 0, error })
+
+  const financiadas = lineas.filter(l => !l.es_extra)
+  if (financiadas.length === 0) return vacio(null)
+
+  // Un solo precio faltante invalida el ajuste entero: el total sería parcial
+  // y las cantidades saldrían calculadas contra un presupuesto que en realidad
+  // ya está comprometido. Mismo criterio que aporteDeBolsillo.
+  const sinPrecio = financiadas.filter(l => getPrecio(precioMap, proveedorId, l.insumo_id) === null)
+  if (sinPrecio.length > 0) {
+    return vacio(`Sin precio: ${sinPrecio.map(l => l.insumo.nombre).join(', ')}`)
+  }
+
+  const precioDe = (l: LineaAjustable) => getPrecio(precioMap, proveedorId, l.insumo_id) as number
+  const costoDe = (ls: LineaAjustable[]) => ls.reduce((t, l) => t + l.cantidad * precioDe(l), 0)
+
+  const polines = financiadas.filter(l => esPolines(l.insumo))
+  const base = financiadas.filter(l => !esPolines(l.insumo))
+  const totalAntes = costoDe(financiadas)
+
+  // 2. El material base cede solo si por sí solo ya no cabe.
+  const nuevaCantidadBase = new Map<string, number>()
+  let costoBase = costoDe(base)
+  if (costoBase > presupuesto) {
+    const factor = presupuesto / costoBase
+    for (const l of base) nuevaCantidadBase.set(l.insumo_id, Math.floor(l.cantidad * factor))
+    costoBase = base.reduce((t, l) => t + (nuevaCantidadBase.get(l.insumo_id) as number) * precioDe(l), 0)
+  } else {
+    for (const l of base) nuevaCantidadBase.set(l.insumo_id, l.cantidad)
+  }
+
+  // 3. Los polines se llevan el saldo. Si hay más de una línea de polines
+  // (catálogo con duplicados), la primera estable se lleva el saldo y las
+  // demás quedan en cero: repartir entre líneas indistinguibles sería
+  // inventar un criterio que el programa no tiene.
+  const saldo = presupuesto - costoBase
+  const nuevaCantidadPolin = new Map<string, number>()
+  const polinPrincipal = primeroEstable(polines.map(l => l.insumo))
+  for (const l of polines) nuevaCantidadPolin.set(l.insumo_id, 0)
+  let saldoSinUsar = saldo
+  if (polinPrincipal) {
+    const linea = polines.find(l => l.insumo_id === polinPrincipal.id) as LineaAjustable
+    const cabe = unidadesQueCaben(saldo, precioDe(linea))
+    nuevaCantidadPolin.set(linea.insumo_id, cabe)
+    saldoSinUsar = saldo - cabe * precioDe(linea)
+  }
+
+  const cambios: CambioDeLinea[] = []
+  for (const l of financiadas) {
+    const despues = (esPolines(l.insumo) ? nuevaCantidadPolin : nuevaCantidadBase).get(l.insumo_id) ?? l.cantidad
+    if (despues !== l.cantidad) {
+      cambios.push({ insumo_id: l.insumo_id, nombre: l.insumo.nombre, cantidad_antes: l.cantidad, cantidad_despues: despues })
+    }
+  }
+
+  const totalDespues = financiadas.reduce((t, l) => {
+    const c = (esPolines(l.insumo) ? nuevaCantidadPolin : nuevaCantidadBase).get(l.insumo_id) ?? l.cantidad
+    return t + c * precioDe(l)
+  }, 0)
+
+  return { cambios, totalAntes, totalDespues, saldoSinUsar: Math.max(0, saldoSinUsar), error: null }
+}
+
+/** Un cambio de precio de esta magnitud no se aplica solo. Un cero de más al
+ *  teclear reescribiría los 29 carritos de una vez, y en este proyecto ya
+ *  pasó que un dato malo (el 0 de Agrícola Pucón) rompiera el cálculo sin que
+ *  nadie lo notara por días.
+ *
+ *  50% y no 25%: el 2026-09-14 subieron de verdad la Malla Ursus 80 de 67.475
+ *  a 85.419 (+26%) y la Ursus 100 un 27%. Con un umbral de 25% esas subidas
+ *  reales habrían pedido confirmación, que es justo la fricción que hace que
+ *  la gente apruebe sin mirar. Lo que hay que frenar es el error de tipeo, y
+ *  ese no se equivoca por un cuarto: se equivoca por un cero. */
+export const UMBRAL_CAMBIO_PRECIO = 0.5
+
+/** true si pasar de `antes` a `despues` es demasiado grande como para
+ *  reajustar carritos sin que una persona lo confirme. Estrenar un precio
+ *  (null -> algo) o borrarlo nunca es "sospechoso": no hay con qué comparar. */
+export function cambioDePrecioEsGrande(antes: number | null, despues: number | null): boolean {
+  if (antes === null || despues === null) return false
+  if (antes === 0) return despues !== 0
+  return Math.abs(despues - antes) / antes > UMBRAL_CAMBIO_PRECIO
+}
+
+// ---------------------------------------------------------------------------
 // Revisión automática de carritos: las reglas que marcan un carrito como
 // "raro" para que alguien lo confirme con el socio ANTES de comprar.
 //

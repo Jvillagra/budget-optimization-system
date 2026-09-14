@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getViewerContext, isStaff } from '@/lib/roles'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { logAudit } from '@/lib/audit'
+import { cambioDePrecioEsGrande } from '@/lib/business-logic'
+import { ajustarCarritosDelProveedor } from '@/lib/ajuste-carritos'
 
 export async function POST(req: NextRequest) {
   const ctx = await getViewerContext(); if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
@@ -37,10 +39,34 @@ export async function POST(req: NextRequest) {
 
   // El precio anterior es el dato que importa en una auditoría de compras:
   // sin él, el log solo dice que alguien tocó una celda.
+  const precio_anterior = previo?.precio_unitario ?? null
   await logAudit('precios_proveedor', 'update', `${proveedor_id}_${insumo_id}`, {
-    precio_anterior: previo?.precio_unitario ?? null,
+    precio_anterior,
     precio_unitario,
     actor: { email: ctx.email, userId: ctx.userId, role: ctx.role },
   })
-  return NextResponse.json({ ok: true })
+
+  // El presupuesto de cada socio es fijo: si cambia un precio, cambian las
+  // cantidades (ver lib/business-logic.ts::ajustarCarritoAPresupuesto). Un
+  // precio guardado y unos carritos sin reajustar son dos versiones del mismo
+  // número, que es el bug que definió este proyecto.
+  //
+  // La excepción es el cambio desmedido: ahí el precio se guarda igual (es un
+  // dato que alguien escribió) pero NO se reescriben 29 carritos sin que una
+  // persona lo mire. Se devuelve lo que habría pasado para poder confirmarlo
+  // desde /precios, sin volver a teclear nada.
+  const actor = { email: ctx.email, userId: ctx.userId, role: ctx.role }
+  const esGrande = cambioDePrecioEsGrande(precio_anterior, precio_unitario)
+  const ajuste = await ajustarCarritosDelProveedor(proveedor_id, { aplicar: !esGrande, actor })
+
+  return NextResponse.json({
+    ok: true,
+    ajuste: {
+      aplicado: !esGrande,
+      requiereConfirmacion: esGrande,
+      precio_anterior,
+      precio_unitario,
+      ...ajuste,
+    },
+  })
 }

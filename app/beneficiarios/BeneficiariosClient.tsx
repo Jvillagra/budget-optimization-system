@@ -100,16 +100,30 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
     ? insumos.filter(i =>
         i.es_activo !== false && (i.segmento === benSeleccionado.segmento || i.segmento === 'Ambos'))
     : []
+  // Dos totales, no uno: desde la migración 014 una línea puede estar marcada
+  // como "la paga el socio". Lo que el programa financia tiene que caber en el
+  // presupuesto -- y el ajuste automático lo mantiene ahí; lo que el socio
+  // suma por su cuenta no compite por esa plata y nadie se lo baja.
+  const lineasDelPrograma = asigsBen.filter(a => a.es_extra !== true)
+  const lineasDelSocio = asigsBen.filter(a => a.es_extra === true)
   const carritoCalc = proveedorId
-    ? calcularCostoCarrito(asigsBen, proveedorId, precioMap)
+    ? calcularCostoCarrito(lineasDelPrograma, proveedorId, precioMap)
+    : { total: 0, itemsConPrecio: 0, itemsSinPrecio: 0 }
+  const calcSocio = proveedorId
+    ? calcularCostoCarrito(lineasDelSocio, proveedorId, precioMap)
     : { total: 0, itemsConPrecio: 0, itemsSinPrecio: 0 }
   const { total, itemsSinPrecio } = carritoCalc
+  const totalDelSocio = calcSocio.total
   // El presupuesto es una columna por beneficiario (beneficiarios.presupuesto_base),
   // que es la que usa la simulación. Usar la constante global acá hacía que
   // la ficha mostrara un aporte de bolsillo equivocado para cualquier socio
   // con presupuesto distinto del default.
   const presupuestoSel = benSeleccionado?.presupuesto_base ?? PRESUPUESTO_BASE
-  const aporteBolsillo = Math.max(0, total - presupuestoSel)
+  // Lo que el socio pone: lo que eligió pagar, más cualquier exceso del
+  // programa que todavía no se haya reajustado (un precio que subió y aún no
+  // se guardó, por ejemplo).
+  const excesoDelPrograma = Math.max(0, total - presupuestoSel)
+  const aporteBolsillo = excesoDelPrograma + totalDelSocio
   const porcentaje = presupuestoSel > 0 ? Math.min(100, (total / presupuestoSel) * 100) : 0
   const bensFiltrados = filtro === 'todos' ? beneficiarios : beneficiarios.filter(b => b.segmento === filtro)
 
@@ -151,6 +165,24 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
     }))
   }
 
+  /** Mueve una línea entre "la paga el programa" y "la paga el socio". Es lo
+   *  que separa los dos totales, y lo que protege esa línea del ajuste
+   *  automático al presupuesto (ver lib/business-logic.ts). */
+  async function marcarComoExtra(asignacionId: string, es_extra: boolean) {
+    const res = await fetch('/api/asignaciones', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: asignacionId, es_extra }),
+    })
+    if (!res.ok) return
+    const { data } = await res.json()
+    const fila = data as Asignacion
+    setAsignaciones(prev => ({
+      ...prev,
+      [seleccionado!]: (prev[seleccionado!] ?? []).map(a => (a.id === fila.id ? fila : a)),
+    }))
+  }
+
   function seleccionarBen(id: string) {
     const mismo = seleccionado === id
     setSeleccionado(mismo ? null : id)
@@ -183,7 +215,7 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
     insumoForm, cantidadForm, agregando,
     setProveedorId, setInsumoForm,
     setCantidadForm: (v: number) => setCantidadForm(v),
-    agregar, eliminar,
+    agregar, eliminar, marcarComoExtra, totalDelSocio,
   }
 
   return (
@@ -333,9 +365,11 @@ type PanelProps = {
   setCantidadForm: (v: number) => void
   agregar: () => void
   eliminar: (id: string) => void
+  marcarComoExtra: (id: string, es_extra: boolean) => void
+  totalDelSocio: number
 }
 
-function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId, proveedores, precioMap, total, itemsSinPrecio, aporteBolsillo, porcentaje, insumoForm, cantidadForm, agregando, setProveedorId, setInsumoForm, setCantidadForm, agregar, eliminar }: PanelProps) {
+function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId, proveedores, precioMap, total, itemsSinPrecio, aporteBolsillo, porcentaje, insumoForm, cantidadForm, agregando, setProveedorId, setInsumoForm, setCantidadForm, agregar, eliminar, marcarComoExtra, totalDelSocio }: PanelProps) {
   return (
     <>
       {/* Selector de proveedor */}
@@ -425,9 +459,22 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
               {aporteBolsillo > 0 && (
                 <div className="rounded-[6px] p-3 mt-2" style={{ background: 'color-mix(in srgb, var(--alerta) 10%, transparent)', border: '1px solid rgba(220,38,38,0.2)' }}>
                   <p className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--alerta)' }}>
-                    Aporte de Bolsillo Requerido
+                    Paga de su bolsillo
                   </p>
                   <p className="text-xl font-bold" style={{ color: 'var(--alerta)' }}>{formatCLP(aporteBolsillo)}</p>
+                  {/* De dónde sale la cifra. Son dos cosas distintas: lo que
+                      el socio eligió sumar, y un exceso del programa que el
+                      ajuste al presupuesto todavía no corrigió. */}
+                  {totalDelSocio > 0 && aporteBolsillo !== totalDelSocio && (
+                    <p className="text-xs mt-1" style={{ color: 'var(--alerta)' }}>
+                      {formatCLP(totalDelSocio)} que agregó + {formatCLP(aporteBolsillo - totalDelSocio)} sobre el presupuesto
+                    </p>
+                  )}
+                  {totalDelSocio > 0 && aporteBolsillo === totalDelSocio && (
+                    <p className="text-xs mt-1" style={{ color: 'var(--alerta)' }}>
+                      Todo esto lo agregó él; el programa le cubre {formatCLP(total)}
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -446,21 +493,44 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
                 {asigsBen.map(a => {
                   const precio = proveedorId ? (precioMap.get(`${proveedorId}_${a.insumo_id}`) ?? null) : null
                   const costo = precio !== null ? a.cantidad * precio : null
+                  // Un insumo tiene UNA sola fila por socio (migración 012),
+                  // así que el nombre alcanza para identificar qué se borra.
+                  const nombreInsumo = a.catalogo_insumos?.nombre ?? 'Insumo'
+                  const esExtra = a.es_extra === true
                   return (
                     <li key={a.id} className="flex items-center gap-2 text-xs group">
                       <div className="flex-1 min-w-0">
                         <span className="font-medium truncate block" style={{ color: 'var(--tinta)' }}>
-                          {a.catalogo_insumos?.nombre ?? 'Insumo'} × {a.cantidad}
+                          {nombreInsumo} × {a.cantidad}
                         </span>
-                        {costo !== null && (
-                          <span style={{ color: 'var(--verde-dark)' }}>{formatCLP(costo)}</span>
-                        )}
+                        <span className="flex items-center gap-1.5 flex-wrap">
+                          {costo !== null && (
+                            <span style={{ color: esExtra ? 'var(--alerta)' : 'var(--verde-dark)' }}>{formatCLP(costo)}</span>
+                          )}
+                          {esExtra && (
+                            <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--alerta)' }}>
+                              la paga el socio
+                            </span>
+                          )}
+                        </span>
                       </div>
+                      {/* Mueve la línea entre los dos totales. Marcarla la saca
+                          del presupuesto del programa y la protege del ajuste
+                          automático: nadie le baja al socio lo que él decidió
+                          pagar. */}
+                      <Chip
+                        activo={esExtra}
+                        onClick={() => marcarComoExtra(a.id, !esExtra)}
+                        aria-pressed={esExtra}
+                        title={esExtra ? 'Volver a cargarla al presupuesto del programa' : 'Marcar: esta línea la paga el socio'}
+                      >
+                        {esExtra ? 'Del socio' : 'Del programa'}
+                      </Chip>
                       <IconButton
                         onClick={() => eliminar(a.id)}
                         tone="peligro"
                         className="h-9 w-9"
-                        aria-label={`Quitar ${a.insumo_id}`}
+                        aria-label={`Quitar ${nombreInsumo} del carrito`}
                       >
                         <TrashIcon />
                       </IconButton>

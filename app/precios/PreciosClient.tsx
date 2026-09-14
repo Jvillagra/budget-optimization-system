@@ -14,6 +14,22 @@ type VisionItem = { nombre_insumo: string; precio_extraido: number }
 
 // `initial` viene del Server Component (app/precios/page.tsx), ver
 // lib/staff-data.ts. null = falló server-side, se reintenta con /api/data.
+/** Lo que devuelve /api/precios-proveedor sobre el reajuste de carritos.
+ *  Se declara acá y no en lib/ porque es la forma de la respuesta HTTP, no
+ *  una regla de negocio: la regla vive en lib/business-logic.ts. */
+interface ResumenAjusteUI {
+  proveedor_id: string
+  aplicado: boolean
+  requiereConfirmacion: boolean
+  precio_anterior: number | null
+  precio_unitario: number | null
+  sociosRevisados: number
+  sociosAjustados: number
+  lineasCambiadas: number
+  omitidos: { nombre: string; motivo: string }[]
+  detalle: { nombre: string; cambios: { nombre: string; cantidad_antes: number; cantidad_despues: number }[] }[]
+}
+
 export default function PreciosClient({ initial }: { initial: DatosStaff | null }) {
   const [insumos, setInsumos] = useState<CatalogoInsumo[]>([])
   // Cuántos socios tienen cada insumo en el carrito: lo consume el panel de
@@ -22,6 +38,9 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
   const [precios, setPrecios] = useState<PrecioMap>(new Map())
   const [saving, setSaving] = useState<Set<string>>(new Set())
+  // Resultado del reajuste de carritos que dispara guardar un precio.
+  const [ajuste, setAjuste] = useState<ResumenAjusteUI | null>(null)
+  const [confirmandoAjuste, setConfirmandoAjuste] = useState(false)
   // Celdas cuyo último intento de guardado no llegó a la base. Antes un
   // valor inválido o un POST fallido no producían NINGÚN aviso: el número
   // quedaba en pantalla y el usuario creía que estaba guardado.
@@ -120,11 +139,32 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
 
     if (res?.ok) {
       setPrecios(prev => new Map(prev).set(key, precio))
+      // El presupuesto de cada socio es fijo, así que guardar un precio
+      // reajusta las cantidades de quienes compran con este proveedor. Hay
+      // que DECIRLO: si no, la pantalla miente por omisión sobre lo que el
+      // guardado acaba de hacerle a 29 carritos.
+      const data = await res.json().catch(() => null)
+      if (data?.ajuste) setAjuste({ ...data.ajuste, proveedor_id: provId })
     } else {
       const data = await res?.json().catch(() => null)
       marcarError(key, data?.error ?? 'No se pudo guardar. Revisa tu conexión e intenta de nuevo.')
     }
     setSaving(s => { const n = new Set(s); n.delete(key); return n })
+  }
+
+  /** Aplica un reajuste que se frenó por ser un cambio de precio desmedido.
+   *  El precio ya está guardado; lo que faltaba era la decisión. */
+  async function confirmarAjuste() {
+    if (!ajuste?.proveedor_id || confirmandoAjuste) return
+    setConfirmandoAjuste(true)
+    const res = await fetch('/api/ajustar-carritos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ proveedor_id: ajuste.proveedor_id }),
+    }).catch(() => null)
+    const data = await res?.json().catch(() => null)
+    if (res?.ok && data) setAjuste({ ...data, proveedor_id: ajuste.proveedor_id, aplicado: true, requiereConfirmacion: false })
+    setConfirmandoAjuste(false)
   }
 
   async function agregarProveedor() {
@@ -292,6 +332,62 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
       />
 
       {provError && <Alert tone="error" className="mb-4">{provError}</Alert>}
+
+      {/* Qué le hizo este precio a los carritos. Sin esto, guardar una celda
+          cambia en silencio las cantidades de hasta 29 socios: el presupuesto
+          es fijo y las cantidades son la variable. */}
+      {ajuste && (
+        <Alert tone={ajuste.requiereConfirmacion ? 'warning' : 'info'} className="mb-4">
+          <div className="flex flex-col gap-2">
+            {ajuste.requiereConfirmacion ? (
+              <>
+                <p>
+                  <strong>El precio quedó guardado, pero no se tocó ningún carrito.</strong>{' '}
+                  Pasó de {ajuste.precio_anterior === null ? 'sin precio' : formatCLP(ajuste.precio_anterior)} a{' '}
+                  {ajuste.precio_unitario === null ? 'sin precio' : formatCLP(ajuste.precio_unitario)}, que es un salto
+                  grande. Si es correcto, confirma y se reajustan las cantidades de{' '}
+                  {ajuste.sociosAjustados} socio{ajuste.sociosAjustados === 1 ? '' : 's'}.
+                </p>
+                <div className="flex gap-2 flex-wrap">
+                  <Button size="sm" onClick={confirmarAjuste} cargando={confirmandoAjuste}>
+                    Reajustar {ajuste.sociosAjustados} carrito{ajuste.sociosAjustados === 1 ? '' : 's'}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setAjuste(null)}>
+                    Dejar como está
+                  </Button>
+                </div>
+              </>
+            ) : ajuste.sociosAjustados === 0 ? (
+              <p>Precio guardado. Ningún carrito necesitaba reajuste.</p>
+            ) : (
+              <p>
+                Precio guardado. Se reajustaron <strong>{ajuste.sociosAjustados} carrito
+                {ajuste.sociosAjustados === 1 ? '' : 's'}</strong> ({ajuste.lineasCambiadas} línea
+                {ajuste.lineasCambiadas === 1 ? '' : 's'}) para que sigan cabiendo en el presupuesto.
+              </p>
+            )}
+
+            {ajuste.detalle.length > 0 && (
+              <ul className="text-xs space-y-0.5">
+                {ajuste.detalle.slice(0, 6).map(d => (
+                  <li key={d.nombre}>
+                    <strong>{d.nombre}</strong>:{' '}
+                    {d.cambios.map(c => `${c.nombre} ${c.cantidad_antes} → ${c.cantidad_despues}`).join(', ')}
+                  </li>
+                ))}
+                {ajuste.detalle.length > 6 && <li>y {ajuste.detalle.length - 6} más.</li>}
+              </ul>
+            )}
+
+            {ajuste.omitidos.length > 0 && (
+              <p className="text-xs">
+                Sin tocar: {ajuste.omitidos.slice(0, 4).map(o => `${o.nombre} (${o.motivo})`).join('; ')}
+                {ajuste.omitidos.length > 4 ? `; y ${ajuste.omitidos.length - 4} más` : ''}.
+              </p>
+            )}
+          </div>
+        </Alert>
+      )}
 
       {compras.length > 0 && (
         <Alert tone="warning" className="mb-4">
