@@ -103,11 +103,24 @@ describe('ajustarCarritoAPresupuesto', () => {
     assert.match(r.error ?? '', /Sin precio/)
   })
 
-  test('sin línea de polines el saldo queda sin usar, no se inventa una', () => {
-    const mapa = precios({ 'i-poly': 3832 })
+  test('sin polines y con un solo material base, ese material absorbe el saldo', () => {
+    // Juan, 2026-09-15: los 8 socios de Invernadero llevan SOLO polietileno y
+    // todo el presupuesto va al folio. 189.000 / 6.489 = 29,12 -> 29 m.
+    const mapa = precios({ 'i-poly': 6489 })
     const r = ajustarCarritoAPresupuesto([linea(POLY, 20)], PROV, mapa, PRESUPUESTO)
+    assert.equal(cambioDe(r, 'i-poly'), 29)
+    assert.equal(r.totalDespues, 29 * 6489)
+    assert.equal(r.saldoSinUsar, PRESUPUESTO - 29 * 6489)
+    // Y es simétrico como los polines: si el precio sube, los metros bajan.
+    const caro = ajustarCarritoAPresupuesto([linea(POLY, 29)], PROV, precios({ 'i-poly': 8000 }), PRESUPUESTO)
+    assert.equal(cambioDe(caro, 'i-poly'), 23)
+  })
+
+  test('sin polines y con dos materiales base el saldo queda sin usar, no se inventa un reparto', () => {
+    const mapa = precios({ 'i-poly': 3832, 'i-malla': 67575 })
+    const r = ajustarCarritoAPresupuesto([linea(POLY, 20), linea(MALLA, 1)], PROV, mapa, PRESUPUESTO)
     assert.equal(r.cambios.length, 0)
-    assert.equal(r.saldoSinUsar, PRESUPUESTO - 20 * 3832)
+    assert.equal(r.saldoSinUsar, PRESUPUESTO - 20 * 3832 - 67575)
   })
 
   test('un precio 0 es válido y no consume saldo, pero no da infinitos polines', () => {

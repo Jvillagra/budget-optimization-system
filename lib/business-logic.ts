@@ -334,6 +334,12 @@ export function esDePrueba(ben: { es_prueba?: boolean; email?: string | null }):
 // el presupuesto. El presupuesto es lo que hay para gastar, no un techo que
 // convenga dejar sin usar. Consecuencia honesta: una cantidad de polines
 // escrita a mano dura hasta el siguiente cambio de precio.
+//
+//   4. (Juan, 2026-09-15) Si el carrito NO tiene polines y tiene UN solo
+//      material base, ese material es el saldo: los 8 socios de Invernadero
+//      llevan solo polietileno y todo el presupuesto va al folio. Con dos o
+//      más materiales base y sin polines no se reparte nada: el saldo queda
+//      sin usar, porque elegir cuál crece sería inventar un criterio.
 
 /** Una línea de carrito lista para ajustar. Se separa de `Asignacion` porque
  *  el ajuste necesita saber si la línea es polín, y eso vive en el catálogo. */
@@ -429,6 +435,12 @@ export function ajustarCarritoAPresupuesto(
     const cabe = unidadesQueCaben(saldo, precioDe(linea))
     nuevaCantidadPolin.set(linea.insumo_id, cabe)
     saldoSinUsar = saldo - cabe * precioDe(linea)
+  } else if (base.length === 1) {
+    // 4. Sin polines y con un único material, ese material es el saldo.
+    const unica = base[0]
+    const cabe = unidadesQueCaben(presupuesto, precioDe(unica))
+    nuevaCantidadBase.set(unica.insumo_id, cabe)
+    saldoSinUsar = presupuesto - cabe * precioDe(unica)
   }
 
   const cambios: CambioDeLinea[] = []
