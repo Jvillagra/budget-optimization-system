@@ -71,6 +71,10 @@ export interface Asignacion {
   beneficiario_id: string
   insumo_id: string
   cantidad: number
+  /** Proveedor con el que se cotiza ESTA línea (migración 017). null o
+   *  ausente = el proveedor del socio. Resolver siempre con
+   *  proveedorDeLinea(), nunca a mano. */
+  proveedor_id?: string | null
   catalogo_insumos?: CatalogoInsumo | null
 }
 
@@ -153,9 +157,9 @@ export type Database = {
         Relationships: []
       }
       asignaciones: {
-        Row: { id: string; beneficiario_id: string; insumo_id: string; cantidad: number }
-        Insert: { id?: string; beneficiario_id: string; insumo_id: string; cantidad: number }
-        Update: { id?: string; beneficiario_id?: string; insumo_id?: string; cantidad?: number }
+        Row: { id: string; beneficiario_id: string; insumo_id: string; cantidad: number; proveedor_id: string | null }
+        Insert: { id?: string; beneficiario_id: string; insumo_id: string; cantidad: number; proveedor_id?: string | null }
+        Update: { id?: string; beneficiario_id?: string; insumo_id?: string; cantidad?: number; proveedor_id?: string | null }
         Relationships: []
       }
       audit_log: {

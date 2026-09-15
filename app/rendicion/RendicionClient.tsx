@@ -67,6 +67,7 @@ type ItemCotizacion = {
   cantidad: number
   precioUnitario: number | null
   subtotal: number | null
+  proveedorLineaNombre: string | null
 }
 type FilaRendicion = {
   id: string
@@ -726,6 +727,7 @@ function DetalleCotizacionModal({ f, onClose }: { f: FilaRendicion; onClose: () 
                     <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                       {item.formatoVenta ?? '—'}
                       {item.precioUnitario !== null && <> · {formatCLP(item.precioUnitario)} c/u</>}
+                      {item.proveedorLineaNombre && <> · en {item.proveedorLineaNombre}</>}
                     </p>
                   </div>
                   <span className="font-semibold shrink-0" style={{ color: item.subtotal !== null ? 'var(--verde-dark)' : 'var(--cafe)' }}>

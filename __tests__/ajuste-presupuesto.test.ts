@@ -72,6 +72,30 @@ describe('ajustarCarritoAPresupuesto', () => {
     assert.equal(cambioDe(r, 'i-polin'), 0)
   })
 
+  test('una línea con proveedor propio se cotiza ahí, y el saldo de polines sale con el del socio', () => {
+    // Migración 017: el polietileno va a MCT (6.539) y los polines siguen en
+    // el proveedor del socio (3.950). 20 m a 6.539 = 130.780; saldo 58.220
+    // -> 14 polines a 3.950. Con el polietileno al precio del socio (3.832)
+    // el saldo daría 28: si el test viera 28, la línea ignoró su proveedor.
+    const mapa = new Map<string, number | null>([
+      [`${PROV}_i-poly`, 3832], [`${PROV}_i-polin`, 3950],
+      ['mct_i-poly', 6539], ['mct_i-polin', 5831],
+    ])
+    const r = ajustarCarritoAPresupuesto(
+      [{ ...linea(POLY, 20), proveedor_id: 'mct' }, linea(POLIN, 28)],
+      PROV, mapa, PRESUPUESTO
+    )
+    assert.equal(cambioDe(r, 'i-polin'), 14)
+    assert.equal(r.totalDespues, 20 * 6539 + 14 * 3950)
+  })
+
+  test('una línea con proveedor propio que no cotiza ese material bloquea el ajuste', () => {
+    const mapa = new Map<string, number | null>([[`${PROV}_i-poly`, 3832], [`${PROV}_i-polin`, 3950]])
+    const r = ajustarCarritoAPresupuesto([{ ...linea(POLY, 20), proveedor_id: 'mct' }, linea(POLIN, 28)], PROV, mapa, PRESUPUESTO)
+    assert.equal(r.cambios.length, 0)
+    assert.match(r.error ?? '', /Sin precio/)
+  })
+
   test('un solo precio faltante bloquea el ajuste entero', () => {
     const mapa = precios({ 'i-malla': 67575, 'i-polin': null })
     const r = ajustarCarritoAPresupuesto([linea(MALLA, 1), linea(POLIN, 30)], PROV, mapa, PRESUPUESTO)

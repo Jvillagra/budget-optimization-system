@@ -1,7 +1,7 @@
 import 'server-only'
 import { getSupabaseAdmin } from './supabase-admin'
 import { urlsFirmadasFoto } from './r2'
-import { cotizarCarrito, proveedorPorDefecto, aporteDeBolsillo, esDePrueba, precioPolinDeReferencia } from './business-logic'
+import { cotizarCarrito, proveedorDeLinea, proveedorPorDefecto, aporteDeBolsillo, esDePrueba, precioPolinDeReferencia } from './business-logic'
 import type { Asignacion, Proveedor, PrecioProveedor, FotoCompra, Beneficiario, CatalogoInsumo } from './types'
 
 // Agregación por beneficiario para la rendición. La consumen /api/rendicion
@@ -17,6 +17,9 @@ export interface ItemCotizado {
   cantidad: number
   precioUnitario: number | null
   subtotal: number | null
+  /** Nombre del proveedor propio de la línea (migración 017), solo cuando
+   *  difiere del que cotiza el carrito; null si es el del socio. */
+  proveedorLineaNombre: string | null
 }
 
 export interface FilaRendicion {
@@ -127,8 +130,9 @@ export async function cargarRendicion(): Promise<
     // da el total: si difirieran, la suma del detalle no cuadraría con él.
     const proveedorParaItems = proveedorCotizador?.id ?? null
     const items: ItemCotizado[] = asigs.map(a => {
-      const precioUnitario = proveedorParaItems
-        ? (precioMap.get(`${proveedorParaItems}_${a.insumo_id}`) ?? null)
+      const provLinea = proveedorParaItems ? proveedorDeLinea(a, proveedorParaItems) : null
+      const precioUnitario = provLinea
+        ? (precioMap.get(`${provLinea}_${a.insumo_id}`) ?? null)
         : null
       return {
         id: a.id,
@@ -137,6 +141,9 @@ export async function cargarRendicion(): Promise<
         cantidad: a.cantidad,
         precioUnitario,
         subtotal: precioUnitario !== null ? precioUnitario * a.cantidad : null,
+        proveedorLineaNombre: provLinea && provLinea !== proveedorParaItems
+          ? (provPorId.get(provLinea)?.nombre ?? null)
+          : null,
       }
     })
 

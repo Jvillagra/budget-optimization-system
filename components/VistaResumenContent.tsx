@@ -185,9 +185,12 @@ export function VistaResumenContent() {
   const precioDe = useMemo(() => {
     const precioMap = buildPrecioMap(baseData?.precios ?? [])
     const congelado = new Map((baseData?.preciosCongelados ?? []).map(p => [`${p.segmento}_${p.insumo_id}`, p.precio_unitario]))
-    return (insumoId: string, seg: Segmento): number | null => {
+    // `proveedorLinea`: el propio de la línea (migración 017) si lo tiene;
+    // si no, el que se está mirando. Con compra cerrada manda el congelado.
+    return (insumoId: string, seg: Segmento, proveedorLinea: string | null = null): number | null => {
       if (compraDe.get(seg)) return congelado.get(`${seg}_${insumoId}`) ?? null
-      return proveedorId ? (precioMap.get(`${proveedorId}_${insumoId}`) ?? null) : null
+      const prov = proveedorLinea ?? proveedorId
+      return prov ? (precioMap.get(`${prov}_${insumoId}`) ?? null) : null
     }
   }, [baseData, compraDe, proveedorId])
 
@@ -201,7 +204,11 @@ export function VistaResumenContent() {
     const { beneficiarios, asignaciones } = baseData
 
     const segPorBen = new Map(beneficiarios.map(b => [b.id, b.segmento]))
-    const acumulado = new Map<string, { insumo_id: string; nombre: string; formato_venta: string; seg: Segmento; cantidad: number }>()
+    const nombreProv = new Map((baseData.proveedores ?? []).map(p => [p.id, p.nombre]))
+    // Una fila por material, segmento y proveedor propio de la línea: el
+    // polietileno que va a MCT no puede sumarse con el que va a Sodimac, o
+    // el total de acá dejaría de cuadrar con la Lista.
+    const acumulado = new Map<string, { insumo_id: string; nombre: string; formato_venta: string; seg: Segmento; cantidad: number; proveedorLinea: string | null }>()
 
     for (const a of asignaciones) {
       const insumo = a.catalogo_insumos
@@ -210,7 +217,8 @@ export function VistaResumenContent() {
       // Un insumo marcado para el otro proyecto no entra aunque esté asignado.
       if (insumo.segmento !== 'Ambos' && insumo.segmento !== seg) continue
 
-      const key = `${a.insumo_id}_${seg}`
+      const proveedorLinea = a.proveedor_id ?? null
+      const key = `${a.insumo_id}_${seg}_${proveedorLinea ?? ''}`
       const previo = acumulado.get(key)
       acumulado.set(key, {
         insumo_id: a.insumo_id,
@@ -218,6 +226,7 @@ export function VistaResumenContent() {
         formato_venta: insumo.formato_venta,
         seg,
         cantidad: (previo?.cantidad ?? 0) + a.cantidad,
+        proveedorLinea,
       })
     }
 
@@ -230,13 +239,13 @@ export function VistaResumenContent() {
 
     return Array.from(acumulado.values())
       .map(v => ({
-        key: `${v.insumo_id}_${v.seg}`,
+        key: `${v.insumo_id}_${v.seg}_${v.proveedorLinea ?? ''}`,
         insumo_id: v.insumo_id,
-        nombre: v.nombre,
+        nombre: v.proveedorLinea ? `${v.nombre} · en ${nombreProv.get(v.proveedorLinea) ?? 'otro proveedor'}` : v.nombre,
         cantidad: v.cantidad,
         formato_venta: v.formato_venta,
         seg: v.seg,
-        precioUnitario: precioDe(v.insumo_id, v.seg),
+        precioUnitario: precioDe(v.insumo_id, v.seg, v.proveedorLinea),
         tag: (segmentosPorInsumo.get(v.insumo_id)?.size ?? 0) > 1
           ? (v.seg === 'Cierre Perimetral' ? 'CP' as const : 'INV' as const)
           : undefined,

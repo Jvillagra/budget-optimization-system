@@ -1,8 +1,8 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  simularBeneficiario,
   calcularCostoCarrito,
+  simularBeneficiario,
   cotizarCarrito,
   proveedorPorDefecto,
   aporteDeBolsillo,
@@ -192,6 +192,28 @@ describe('cotizarCarrito', () => {
     const r = cotizarCarrito(asigs2, pA, mapa)
     assert.equal(r.itemsSinPrecio, 1)
     assert.equal(r.totalEsCompleto, false)
+  })
+})
+
+describe('calcularCostoCarrito con proveedor por línea', () => {
+  const mapa = buildPrecioMap([
+    { id: '1', proveedor_id: 'pa', insumo_id: 'i-polin', precio_unitario: 3950 },
+    { id: '2', proveedor_id: 'pa', insumo_id: 'i-poly', precio_unitario: 3832 },
+    { id: '3', proveedor_id: 'mct', insumo_id: 'i-poly', precio_unitario: 6539 },
+  ])
+  test('la línea con proveedor propio se cotiza ahí; las demás con el del socio', () => {
+    const r = calcularCostoCarrito([
+      { id: 'a1', beneficiario_id: 'b1', insumo_id: 'i-poly', cantidad: 20, proveedor_id: 'mct' },
+      { id: 'a2', beneficiario_id: 'b1', insumo_id: 'i-polin', cantidad: 14 },
+    ], 'pa', mapa)
+    assert.equal(r.total, 20 * 6539 + 14 * 3950)
+    assert.equal(r.itemsSinPrecio, 0)
+  })
+  test('proveedor propio sin precio para ese material = línea sin precio', () => {
+    const r = calcularCostoCarrito([
+      { id: 'a1', beneficiario_id: 'b1', insumo_id: 'i-polin', cantidad: 14, proveedor_id: 'mct' },
+    ], 'pa', mapa)
+    assert.equal(r.itemsSinPrecio, 1)
   })
 })
 

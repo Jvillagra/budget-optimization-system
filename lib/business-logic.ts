@@ -89,6 +89,13 @@ function getPrecio(map: Map<string, number | null>, provId: string, insumoId: st
   return v === undefined || v === null ? null : v
 }
 
+/** Con qué proveedor se cotiza una línea del carrito (migración 017): el
+ *  suyo si lo tiene, y si no el del socio. Es LA definición; el carrito, la
+ *  rendición, el ajuste y el consolidado la comparten para no discrepar. */
+export function proveedorDeLinea(linea: { proveedor_id?: string | null }, proveedorDelSocio: string): string {
+  return linea.proveedor_id ?? proveedorDelSocio
+}
+
 function errorResult(beneficiario: Beneficiario, msg: string): ResultadoSimulacion {
   return { beneficiario, error: msg, insumo_base_id: null, insumo_base_nombre: null, insumo_base_cantidad: 0, polines: 0, volumen_total: 0, gasto_total: 0, aporte_bolsillo: 0 }
 }
@@ -210,7 +217,7 @@ export function calcularCostoCarrito(
   let itemsConPrecio = 0
   let itemsSinPrecio = 0
   for (const a of asignaciones) {
-    const precio = getPrecio(precioMap, proveedorId, a.insumo_id)
+    const precio = getPrecio(precioMap, proveedorDeLinea(a, proveedorId), a.insumo_id)
     if (precio !== null) { total += a.cantidad * precio; itemsConPrecio++ }
     else itemsSinPrecio++
   }
@@ -333,6 +340,8 @@ export function esDePrueba(ben: { es_prueba?: boolean; email?: string | null }):
 export interface LineaAjustable {
   insumo_id: string
   cantidad: number
+  /** Proveedor propio de la línea (migración 017); null = el del socio. */
+  proveedor_id?: string | null
   insumo: CatalogoInsumo
 }
 
@@ -388,12 +397,12 @@ export function ajustarCarritoAPresupuesto(
   // Un solo precio faltante invalida el ajuste entero: el total sería parcial
   // y las cantidades saldrían calculadas contra un presupuesto que en realidad
   // ya está comprometido. Mismo criterio que aporteDeBolsillo.
-  const sinPrecio = financiadas.filter(l => getPrecio(precioMap, proveedorId, l.insumo_id) === null)
+  const sinPrecio = financiadas.filter(l => getPrecio(precioMap, proveedorDeLinea(l, proveedorId), l.insumo_id) === null)
   if (sinPrecio.length > 0) {
     return vacio(`Sin precio: ${sinPrecio.map(l => l.insumo.nombre).join(', ')}`)
   }
 
-  const precioDe = (l: LineaAjustable) => getPrecio(precioMap, proveedorId, l.insumo_id) as number
+  const precioDe = (l: LineaAjustable) => getPrecio(precioMap, proveedorDeLinea(l, proveedorId), l.insumo_id) as number
   const costoDe = (ls: LineaAjustable[]) => ls.reduce((t, l) => t + l.cantidad * precioDe(l), 0)
 
   const polines = financiadas.filter(l => esPolines(l.insumo))

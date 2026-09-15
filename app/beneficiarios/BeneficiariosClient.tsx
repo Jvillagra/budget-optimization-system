@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import type { Beneficiario, CatalogoInsumo, Asignacion, AyudaMemoria, Proveedor } from '@/lib/types'
-import { buildPrecioMap, calcularCostoCarrito, formatCLP, PRESUPUESTO_BASE } from '@/lib/business-logic'
+import { buildPrecioMap, calcularCostoCarrito, formatCLP, proveedorDeLinea, PRESUPUESTO_BASE } from '@/lib/business-logic'
 import { useProveedor, proveedorPorDefecto, STORAGE_KEY } from '@/lib/proveedor-context'
 import type { DatosStaff } from '@/lib/staff-data'
 import { Button, IconButton, Chip } from '@/components/design-system'
@@ -154,23 +154,32 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
     }))
   }
 
-  /** Corrige la cantidad de una línea. El endpoint devuelve la fila entera
-   *  con su catálogo, igual que POST, así que se reemplaza por id. */
-  async function cambiarCantidad(asignacionId: string, cantidad: number) {
-    if (!Number.isInteger(cantidad) || cantidad <= 0) return
+  /** Corrige una línea: cantidad o proveedor. El endpoint devuelve la fila
+   *  entera con su catálogo, igual que POST, así que se reemplaza por id.
+   *  Cambiar el proveedor reajusta el carrito en el servidor (los polines
+   *  absorben el saldo nuevo), y esas otras líneas vuelven en `ajuste`. */
+  async function cambiarLinea(asignacionId: string, cambios: { cantidad?: number; proveedor_id?: string | null }) {
     const res = await fetch('/api/asignaciones', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: asignacionId, cantidad }),
+      body: JSON.stringify({ id: asignacionId, ...cambios }),
     })
     if (!res.ok) return
-    const { data } = await res.json()
-    const fila = data as Asignacion
+    const { data, ajuste } = await res.json() as { data: Asignacion; ajuste: { detalle: { cambios: { insumo_id: string; cantidad_despues: number }[] }[] } | null }
+    const ajustadas = new Map<string, number>()
+    for (const d of ajuste?.detalle ?? []) for (const c of d.cambios) ajustadas.set(c.insumo_id, c.cantidad_despues)
     setAsignaciones(prev => ({
       ...prev,
-      [seleccionado!]: (prev[seleccionado!] ?? []).map(a => (a.id === fila.id ? fila : a)),
+      [seleccionado!]: (prev[seleccionado!] ?? []).map(a => {
+        if (a.id === data.id) return ajustadas.has(a.insumo_id) ? { ...data, cantidad: ajustadas.get(a.insumo_id) as number } : data
+        return ajustadas.has(a.insumo_id) ? { ...a, cantidad: ajustadas.get(a.insumo_id) as number } : a
+      }),
     }))
   }
+  const cambiarCantidad = (id: string, cantidad: number) => {
+    if (Number.isInteger(cantidad) && cantidad > 0) cambiarLinea(id, { cantidad })
+  }
+  const cambiarProveedorLinea = (id: string, proveedor_id: string | null) => cambiarLinea(id, { proveedor_id })
 
   function seleccionarBen(id: string) {
     const mismo = seleccionado === id
@@ -204,7 +213,7 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
     insumoForm, cantidadForm, agregando,
     setProveedorId, setInsumoForm,
     setCantidadForm: (v: number) => setCantidadForm(v),
-    agregar, eliminar, cambiarCantidad,
+    agregar, eliminar, cambiarCantidad, cambiarProveedorLinea,
   }
 
   return (
@@ -355,9 +364,10 @@ type PanelProps = {
   agregar: () => void
   eliminar: (id: string) => void
   cambiarCantidad: (id: string, cantidad: number) => void
+  cambiarProveedorLinea: (id: string, proveedor_id: string | null) => void
 }
 
-function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId, proveedores, precioMap, total, itemsSinPrecio, aporteBolsillo, porcentaje, insumoForm, cantidadForm, agregando, setProveedorId, setInsumoForm, setCantidadForm, agregar, eliminar, cambiarCantidad }: PanelProps) {
+function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId, proveedores, precioMap, total, itemsSinPrecio, aporteBolsillo, porcentaje, insumoForm, cantidadForm, agregando, setProveedorId, setInsumoForm, setCantidadForm, agregar, eliminar, cambiarCantidad, cambiarProveedorLinea }: PanelProps) {
   return (
     <>
       {/* Selector de proveedor */}
@@ -482,7 +492,10 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
             ) : (
               <ul className="space-y-1.5">
                 {asigsBen.map(a => {
-                  const precio = proveedorId ? (precioMap.get(`${proveedorId}_${a.insumo_id}`) ?? null) : null
+                  // El precio sale del proveedor de la línea si tiene uno
+                  // (migración 017), y si no del que se está mirando.
+                  const provLinea = proveedorId ? proveedorDeLinea(a, proveedorId) : null
+                  const precio = provLinea ? (precioMap.get(`${provLinea}_${a.insumo_id}`) ?? null) : null
                   const costo = precio !== null ? a.cantidad * precio : null
                   // Un insumo tiene UNA sola fila por socio (migración 012),
                   // así que el nombre alcanza para identificar qué se borra.
@@ -496,6 +509,22 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
                         {costo !== null && (
                           <span style={{ color: 'var(--verde-dark)' }}>{formatCLP(costo)}</span>
                         )}
+                        {/* Con qué proveedor se cotiza ESTA línea. "el del
+                            socio" es lo normal; elegir otro deja, por ejemplo,
+                            el polietileno en MCT y los polines en Sodimac. */}
+                        <select
+                          value={a.proveedor_id ?? ''}
+                          onChange={e => cambiarProveedorLinea(a.id, e.target.value || null)}
+                          aria-label={`Proveedor de ${nombreInsumo}`}
+                          className="block mt-1 max-w-full rounded-[4px] px-2 py-1 text-xs min-h-[36px] focus:outline-none"
+                          style={{
+                            border: '1px solid var(--linea-fuerte)', background: 'var(--papel)',
+                            color: a.proveedor_id ? 'var(--tinta)' : 'var(--tinta-45)',
+                          }}
+                        >
+                          <option value="">el del socio</option>
+                          {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                        </select>
                       </div>
                       {/* La cantidad se corrige acá mismo. Se guarda al salir
                           del campo, no en cada tecla: escribir "26" pasa por
