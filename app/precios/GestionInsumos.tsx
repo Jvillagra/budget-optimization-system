@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Pencil, EyeOff, RotateCcw } from 'lucide-react'
 import type { CatalogoInsumo, SegmentoCatalogo } from '@/lib/types'
 import { Button, Alert, ConfirmDialog } from '@/components/design-system'
@@ -20,8 +20,10 @@ type Borrador = { nombre: string; formato_venta: string; segmento: SegmentoCatal
 
 const BORRADOR_VACIO: Borrador = { nombre: '', formato_venta: '', segmento: 'Ambos' }
 
-export function GestionInsumos({ insumos, onChange, usoPorInsumo }: {
+export function GestionInsumos({ insumos, onChange, usoPorInsumo, editarInicialId = null }: {
   insumos: CatalogoInsumo[]
+  /** Material que llega ya en modo edición (el lápiz de la matriz). */
+  editarInicialId?: string | null
   onChange: (insumos: CatalogoInsumo[]) => void
   /** Cuántos socios tienen cada insumo en su carrito. Se usa para avisar
    *  ANTES de cambiar el segmento y para explicar por qué no se puede
@@ -37,6 +39,26 @@ export function GestionInsumos({ insumos, onChange, usoPorInsumo }: {
   const [guardando, setGuardando] = useState(false)
 
   const activos = insumos.filter(i => i.es_activo !== false)
+
+  // Al llegar desde el lápiz de la matriz, ese material abre editando. Se
+  // ajusta el estado durante el render (patrón de React para "reaccionar a
+  // una prop"), no en un efecto: un setState dentro de useEffect pinta dos
+  // veces y lint lo marca. Solo dispara cuando cambia el id pedido: guardar
+  // el nombre después no reabre nada.
+  const [inicialAtendido, setInicialAtendido] = useState<string | null>(null)
+  if (editarInicialId !== inicialAtendido) {
+    setInicialAtendido(editarInicialId)
+    const insumo = editarInicialId ? insumos.find(i => i.id === editarInicialId) : undefined
+    if (insumo) {
+      setEditandoId(insumo.id)
+      setEdicion({ nombre: insumo.nombre, formato_venta: insumo.formato_venta, segmento: insumo.segmento })
+    }
+  }
+  // El panel está arriba de la matriz: traer la fila a la vista.
+  const filaRefs = useRef(new Map<string, HTMLLIElement>())
+  useEffect(() => {
+    if (editarInicialId) filaRefs.current.get(editarInicialId)?.scrollIntoView({ block: 'center' })
+  }, [editarInicialId])
 
   function ordenar(lista: CatalogoInsumo[]) {
     return [...lista].sort((a, b) =>
@@ -171,6 +193,7 @@ export function GestionInsumos({ insumos, onChange, usoPorInsumo }: {
           return (
             <li
               key={insumo.id}
+              ref={el => { if (el) filaRefs.current.set(insumo.id, el); else filaRefs.current.delete(insumo.id) }}
               className="px-5 py-3 flex items-center justify-between gap-3 flex-wrap"
               style={{ borderBottom: '1px solid var(--linea)', opacity: activo ? 1 : 0.55 }}
             >

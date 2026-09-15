@@ -269,31 +269,6 @@ export function cotizarCarrito(
   return { proveedor, total, itemsSinPrecio, totalEsCompleto: itemsSinPrecio === 0 }
 }
 
-/** El carrito en sus dos partes: lo que paga el programa y lo que el socio
- *  pidió aparte y paga él (`es_extra`, migración 014). Es LA definición que
- *  usan /rendicion y el informe; /beneficiarios separa las líneas igual.
- *
- *  Un carrito del programa VACÍO porque todo se pidió aparte no es "sin
- *  cotizar": el socio no usó nada del presupuesto, y eso es un hecho completo
- *  ($0). Sin esta distinción, María Inés Burgos (47 polines de su bolsillo,
- *  nada del programa) salía como "0 productos sin precio cotizado" y fuera
- *  del total general, cuando lo cierto es que le sobra el presupuesto entero.
- *  Sin ninguna línea de ningún tipo sigue siendo incompleto: ahí no hay nada
- *  que afirmar (ver cotizarCarrito). */
-export function cotizarProgramaYSocio(
-  asignaciones: Asignacion[],
-  proveedor: Proveedor | null,
-  precioMap: Map<string, number | null>
-): { programa: CotizacionCarrito; socio: CotizacionCarrito } {
-  const delPrograma = asignaciones.filter(a => a.es_extra !== true)
-  const delSocio = asignaciones.filter(a => a.es_extra === true)
-  const socio = cotizarCarrito(delSocio, proveedor, precioMap)
-  const programa = proveedor && delPrograma.length === 0 && delSocio.length > 0
-    ? { proveedor, total: 0, itemsSinPrecio: 0, totalEsCompleto: true }
-    : cotizarCarrito(delPrograma, proveedor, precioMap)
-  return { programa, socio }
-}
-
 /** Lo que el socio tiene que poner de su bolsillo: todo lo que su compra pasa
  *  del presupuesto del programa. Es la cifra que María Inés le cobra.
  *
@@ -336,27 +311,28 @@ export function esDePrueba(ben: { es_prueba?: boolean; email?: string | null }):
 // presupuesto en silencio cuando cambiaba un precio (13 de 29 socios el
 // 2026-09-14, el mayor en $190.450).
 //
-// El orden en que ceden las cosas NO es arbitrario, y es el único punto de
-// este archivo donde conviene detenerse:
+// La regla, decidida por Juan el 2026-09-14 (reemplaza a la marca `es_extra`
+// de la migración 014, borrada en la 016):
 //
-//   1. Las líneas `es_extra` no se tocan NUNCA. Son lo que el socio decidió
-//      pagar de su bolsillo; bajárselas automáticamente sería decidir por él.
-//   2. Los materiales base (malla, polietileno) bajan proporcionalmente, y
-//      truncados a unidades enteras: media malla no se puede comprar.
-//   3. Los polines absorben el resto. Son el saldo del programa -- la regla
-//      de siempre (ver polinesQueCaben y la nota de revisarCarritos): lo que
-//      queda después del material base se gasta en polines.
+//   1. El material base (malla, polietileno) NUNCA se recorta. Es lo que el
+//      socio pidió y lo que alguien escribió a mano; bajárselo sería decidir
+//      por él.
+//   2. Los polines son SIEMPRE el saldo: lo que queda del presupuesto después
+//      del material base se gasta en polines (ver polinesQueCaben y la nota
+//      de revisarCarritos). Si el base ya pasa el presupuesto, quedan en 0.
+//   3. Todo lo que el carrito pasa de $189.000 es aporte propio del socio
+//      (aporteDeBolsillo). No hace falta marcar nada: la barra lo muestra.
 //
 // Es simétrico a propósito: si un precio BAJA, los polines SUBEN hasta gastar
 // el presupuesto. El presupuesto es lo que hay para gastar, no un techo que
-// convenga dejar sin usar.
+// convenga dejar sin usar. Consecuencia honesta: una cantidad de polines
+// escrita a mano dura hasta el siguiente cambio de precio.
 
 /** Una línea de carrito lista para ajustar. Se separa de `Asignacion` porque
  *  el ajuste necesita saber si la línea es polín, y eso vive en el catálogo. */
 export interface LineaAjustable {
   insumo_id: string
   cantidad: number
-  es_extra: boolean
   insumo: CatalogoInsumo
 }
 
@@ -370,7 +346,8 @@ export interface CambioDeLinea {
 export interface AjusteCarrito {
   /** Solo las líneas cuya cantidad cambia. Vacío = no hay nada que hacer. */
   cambios: CambioDeLinea[]
-  /** Costo de las líneas financiadas por el programa, antes y después. */
+  /** Costo del carrito antes y después. Puede quedar SOBRE el presupuesto:
+   *  el material base no se recorta, y ese exceso es aporte del socio. */
   totalAntes: number
   totalDespues: number
   /** Saldo del presupuesto que queda sin gastar (no hay polines donde
@@ -405,7 +382,7 @@ export function ajustarCarritoAPresupuesto(
   const vacio = (error: string | null, totalAntes = 0): AjusteCarrito =>
     ({ cambios: [], totalAntes, totalDespues: totalAntes, saldoSinUsar: 0, error })
 
-  const financiadas = lineas.filter(l => !l.es_extra)
+  const financiadas = lineas
   if (financiadas.length === 0) return vacio(null)
 
   // Un solo precio faltante invalida el ajuste entero: el total sería parcial
@@ -423,18 +400,13 @@ export function ajustarCarritoAPresupuesto(
   const base = financiadas.filter(l => !esPolines(l.insumo))
   const totalAntes = costoDe(financiadas)
 
-  // 2. El material base cede solo si por sí solo ya no cabe.
+  // 1. El material base no se toca. Si por sí solo pasa el presupuesto, el
+  // exceso es aporte del socio (regla 3), no una cantidad que recortar.
   const nuevaCantidadBase = new Map<string, number>()
-  let costoBase = costoDe(base)
-  if (costoBase > presupuesto) {
-    const factor = presupuesto / costoBase
-    for (const l of base) nuevaCantidadBase.set(l.insumo_id, Math.floor(l.cantidad * factor))
-    costoBase = base.reduce((t, l) => t + (nuevaCantidadBase.get(l.insumo_id) as number) * precioDe(l), 0)
-  } else {
-    for (const l of base) nuevaCantidadBase.set(l.insumo_id, l.cantidad)
-  }
+  for (const l of base) nuevaCantidadBase.set(l.insumo_id, l.cantidad)
+  const costoBase = costoDe(base)
 
-  // 3. Los polines se llevan el saldo. Si hay más de una línea de polines
+  // 2. Los polines se llevan el saldo. Si hay más de una línea de polines
   // (catálogo con duplicados), la primera estable se lleva el saldo y las
   // demás quedan en cero: repartir entre líneas indistinguibles sería
   // inventar un criterio que el programa no tiene.

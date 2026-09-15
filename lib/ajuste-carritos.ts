@@ -108,7 +108,7 @@ export async function ajustarCarritosDelProveedor(
     const lineas: LineaAjustable[] = (porBeneficiario.get(ben.id) ?? [])
       .map(a => {
         const insumo = a.catalogo_insumos ?? insumoPorId.get(a.insumo_id) ?? null
-        return insumo ? { insumo_id: a.insumo_id, cantidad: a.cantidad, es_extra: a.es_extra === true, insumo } : null
+        return insumo ? { insumo_id: a.insumo_id, cantidad: a.cantidad, insumo } : null
       })
       .filter((l): l is LineaAjustable => l !== null)
 
@@ -130,11 +130,8 @@ export async function ajustarCarritosDelProveedor(
     if (!opciones.aplicar) continue
 
     for (const c of ajuste.cambios) {
-      // La línea a tocar es la financiada por el programa, nunca la del socio:
-      // un mismo insumo puede estar en el carrito dos veces, una de cada tipo.
-      const fila = (porBeneficiario.get(ben.id) ?? []).find(
-        a => a.insumo_id === c.insumo_id && a.es_extra !== true
-      )
+      // Un insumo tiene UNA fila por socio (migración 012).
+      const fila = (porBeneficiario.get(ben.id) ?? []).find(a => a.insumo_id === c.insumo_id)
       if (!fila) continue
 
       const { error } = await admin

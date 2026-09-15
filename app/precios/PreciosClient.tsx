@@ -56,6 +56,14 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
   const [provError, setProvError] = useState<string | null>(null)
   const [aDesactivar, setADesactivar] = useState<Proveedor | null>(null)
   const [gestionAbierta, setGestionAbierta] = useState(false)
+  // El lápiz de la matriz abre el panel de materiales con ESE material ya en
+  // edición: el nombre se ve en la matriz, y ahí es donde alguien intenta
+  // corregirlo. Una sola vía de edición (el panel), dos formas de llegar.
+  const [editarInicialId, setEditarInicialId] = useState<string | null>(null)
+  function editarMaterial(id: string) {
+    setEditarInicialId(id)
+    setGestionAbierta(true)
+  }
   // Segmentos con compra confirmada: sus precios quedaron congelados en el
   // momento de confirmar (compras_segmento_precio). Editar acá sigue siendo
   // legitimo -- hace falta para cotizar el otro proyecto, y "Polines" lo
@@ -496,7 +504,7 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
           pantallas obligaría a ir y volver para cargar un insumo nuevo con
           su precio. */}
       {gestionAbierta && (
-        <GestionInsumos insumos={insumos} onChange={setInsumos} usoPorInsumo={usoPorInsumo} />
+        <GestionInsumos insumos={insumos} onChange={setInsumos} usoPorInsumo={usoPorInsumo} editarInicialId={editarInicialId} />
       )}
 
       {/* Mobile: un proveedor a la vez, tarjetas grandes por insumo (ver
@@ -546,6 +554,15 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
                         <div className="min-w-0">
                           <p className="text-sm font-medium truncate" style={{ color: 'var(--tinta)' }}>{insumo.nombre}</p>
                           <p className="text-xs" style={{ color: 'var(--tinta-45)' }}>{insumo.formato_venta}</p>
+                          <button
+                            type="button"
+                            onClick={() => editarMaterial(insumo.id)}
+                            aria-label={`Editar el material ${insumo.nombre}`}
+                            className="inline-flex items-center gap-1 text-xs font-semibold min-h-[44px] pr-3"
+                            style={{ color: 'var(--verde-dark)' }}
+                          >
+                            <Pencil size={12} /> Editar nombre
+                          </button>
                         </div>
                         <div className="w-28 shrink-0">
                           <PrecioCell
@@ -647,6 +664,7 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
                     saving={saving}
                     errores={errores}
                     onBlur={handleBlur}
+                    onEditar={editarMaterial}
                   />
                 )),
               ]
@@ -777,7 +795,8 @@ export default function PreciosClient({ initial }: { initial: DatosStaff | null 
   )
 }
 
-function PrecioRow({ insumo, proveedores, precios, saving, errores, onBlur }: {
+function PrecioRow({ insumo, proveedores, precios, saving, errores, onBlur, onEditar }: {
+  onEditar: (insumoId: string) => void
   insumo: CatalogoInsumo
   proveedores: Proveedor[]
   precios: PrecioMap
@@ -797,7 +816,17 @@ function PrecioRow({ insumo, proveedores, precios, saving, errores, onBlur }: {
           backdropFilter: 'none',
         }}
       >
-        {insumo.nombre}
+        <span className="inline-flex items-center gap-1.5">
+          {insumo.nombre}
+          <IconButton
+            onClick={() => onEditar(insumo.id)}
+            className="h-9 w-9"
+            aria-label={`Editar el material ${insumo.nombre}`}
+            title="Editar nombre"
+          >
+            <Pencil size={13} />
+          </IconButton>
+        </span>
       </td>
       <td className="px-4 py-2.5 whitespace-nowrap text-xs" style={{ color: 'var(--tinta-45)' }}>
         {insumo.formato_venta}

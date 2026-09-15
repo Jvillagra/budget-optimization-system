@@ -1,7 +1,7 @@
 import 'server-only'
 import { getSupabaseAdmin } from './supabase-admin'
 import { urlsFirmadasFoto } from './r2'
-import { cotizarProgramaYSocio, proveedorPorDefecto, aporteDeBolsillo, esDePrueba, precioPolinDeReferencia } from './business-logic'
+import { cotizarCarrito, proveedorPorDefecto, aporteDeBolsillo, esDePrueba, precioPolinDeReferencia } from './business-logic'
 import type { Asignacion, Proveedor, PrecioProveedor, FotoCompra, Beneficiario, CatalogoInsumo } from './types'
 
 // Agregación por beneficiario para la rendición. La consumen /api/rendicion
@@ -11,10 +11,6 @@ import type { Asignacion, Proveedor, PrecioProveedor, FotoCompra, Beneficiario, 
 // el informe del auditor con el criterio viejo.
 
 export interface ItemCotizado {
-  /** true = esta línea la paga el socio de su bolsillo (migración 014). No
-   *  cuenta contra el presupuesto del programa ni la toca el ajuste
-   *  automático. */
-  esExtra?: boolean
   id: string
   insumoNombre: string
   formatoVenta: string | null
@@ -24,10 +20,6 @@ export interface ItemCotizado {
 }
 
 export interface FilaRendicion {
-  /** Lo que el socio paga de su bolsillo por las líneas que él eligió sumar.
-   *  Es independiente de `aporteBolsillo`, que mide cuánto se pasó del
-   *  presupuesto el carrito financiado por el programa. */
-  totalDelSocio?: number
   id: string
   nombre: string
   segmento: string
@@ -126,14 +118,10 @@ export async function cargarRendicion(): Promise<
     const proveedorCotizador = ben.proveedor_compra_id
       ? (provPorId.get(ben.proveedor_compra_id) ?? null)
       : referencia
-    // El total del PROGRAMA excluye las líneas que el socio decidió pagar de
-    // su bolsillo (migración 014). Cotizar el carrito entero contra el
-    // presupuesto mezclaría las dos cosas: el uso del presupuesto saldría
-    // inflado y el aporte de bolsillo dejaría de distinguir "se pasó" de
-    // "eligió sumar". /beneficiarios ya los separa; si acá no, las dos
-    // pantallas volverían a discrepar sobre el mismo socio -- que es el bug
-    // que definió este proyecto.
-    const { programa: cot, socio: cotSocio } = cotizarProgramaYSocio(asigs, proveedorCotizador, precioMap)
+    // Un solo total por socio: el carrito entero contra su presupuesto. Todo
+    // lo que pasa de ahí es aporte propio (regla del 2026-09-14, que
+    // reemplazó a la marca `es_extra`). /beneficiarios calcula lo mismo.
+    const cot = cotizarCarrito(asigs, proveedorCotizador, precioMap)
 
     // Cotización línea a línea del carrito real, con el mismo proveedor que
     // da el total: si difirieran, la suma del detalle no cuadraría con él.
@@ -149,7 +137,6 @@ export async function cargarRendicion(): Promise<
         cantidad: a.cantidad,
         precioUnitario,
         subtotal: precioUnitario !== null ? precioUnitario * a.cantidad : null,
-        esExtra: a.es_extra === true,
       }
     })
 
@@ -166,7 +153,6 @@ export async function cargarRendicion(): Promise<
         ? (provPorId.get(ben.proveedor_compra_id)?.nombre ?? null)
         : null,
       total: cot.total,
-      totalDelSocio: cotSocio.total,
       itemsSinPrecio: cot.itemsSinPrecio,
       totalEsCompleto: cot.totalEsCompleto,
       aporteBolsillo: aporteDeBolsillo(cot, ben.presupuesto_base),

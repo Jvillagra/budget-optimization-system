@@ -254,26 +254,6 @@ export function VistaResumenContent() {
 
   const totalGasto = filas.reduce((s, f) => s + subtotal(f), 0)
 
-  // Cuánto de ese total NO lo paga el programa. Las líneas `es_extra` son las
-  // que el socio pidió aparte y paga de su bolsillo (migración 014): hay que
-  // comprarlas igual, así que siguen en la lista de materiales, pero el total
-  // general las sumaba junto con la plata del programa sin decirlo. Por eso
-  // esta pantalla marcaba $5.188.724 mientras la Lista de /rendición sumaba
-  // $5.003.074 para los mismos 29 socios -- la misma compra con dos cifras
-  // distintas y nada que explicara la diferencia, que es justo el bug que
-  // este proyecto existe para no repetir.
-  const gastoDelSocio = useMemo(() => {
-    if (!baseData || !isLoaded) return 0
-    const segPorBen = new Map(baseData.beneficiarios.map(b => [b.id, b.segmento]))
-    return baseData.asignaciones.reduce((acc, a) => {
-      if (a.es_extra !== true) return acc
-      const seg = segPorBen.get(a.beneficiario_id)
-      if (!seg) return acc
-      const precio = precioDe(a.insumo_id, seg)
-      return precio === null ? acc : acc + precio * a.cantidad
-    }, 0)
-  }, [baseData, isLoaded, precioDe])
-
   const hayPrecios = filas.some(f => f.precioUnitario !== null)
   const totalPolines = filas.filter(f => esPolin(f.nombre)).reduce((s, f) => s + f.cantidad, 0)
 
@@ -465,18 +445,6 @@ export function VistaResumenContent() {
               <p className="titulo-xl mt-3 tabular-nums">
                 {hayPrecios ? formatCLP(totalGasto) : '—'}
               </p>
-
-              {/* Sin esta línea, el total de acá y el de la Lista de
-                  /rendición son dos cifras distintas para la misma compra y
-                  nada dice por qué. Solo aparece cuando hay algo que separar:
-                  si ningún socio pidió nada aparte, una línea que dice
-                  "$0 lo pone el socio" es ruido. */}
-              {hayPrecios && gastoDelSocio > 0 && (
-                <p className="text-sm mt-1.5 tabular-nums" style={{ color: 'var(--text-muted)' }}>
-                  El programa paga {formatCLP(totalGasto - gastoDelSocio)} · {formatCLP(gastoDelSocio)} lo pone
-                  el socio que lo pidió aparte
-                </p>
-              )}
 
               {/* Reparto CP / INV. Antes era una barra apilada de 56px de alto
                   con el porcentaje escrito adentro en blanco: leía como una

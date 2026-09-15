@@ -9,9 +9,9 @@ import {
 import type { CatalogoInsumo } from '../lib/types.ts'
 
 // El presupuesto por socio es FIJO y las cantidades son la variable. Estos
-// tests fijan el ORDEN en que ceden las cosas, que es la regla de negocio:
-// las líneas del socio no se tocan, el material base baja proporcionalmente y
-// truncado a unidades enteras, y los polines absorben el resto.
+// tests fijan la regla de negocio (Juan, 2026-09-14): el material base nunca
+// se recorta, los polines son siempre el saldo, y lo que pasa del presupuesto
+// es aporte propio del socio.
 
 const POLIN: CatalogoInsumo = { id: 'i-polin', segmento: 'Ambos', nombre: 'Polines (4 a 5 cm)', formato_venta: 'Unidad' }
 const MALLA: CatalogoInsumo = { id: 'i-malla', segmento: 'Cierre Perimetral', nombre: 'Malla Ursus 80 cm', formato_venta: 'Rollo 100m' }
@@ -24,8 +24,8 @@ function precios(mapa: Record<string, number | null>): Map<string, number | null
   return new Map(Object.entries(mapa).map(([insumoId, v]) => [`${PROV}_${insumoId}`, v]))
 }
 
-function linea(insumo: CatalogoInsumo, cantidad: number, es_extra = false): LineaAjustable {
-  return { insumo_id: insumo.id, cantidad, es_extra, insumo }
+function linea(insumo: CatalogoInsumo, cantidad: number): LineaAjustable {
+  return { insumo_id: insumo.id, cantidad, insumo }
 }
 
 const cambioDe = (r: { cambios: { insumo_id: string; cantidad_despues: number }[] }, id: string) =>
@@ -54,37 +54,22 @@ describe('ajustarCarritoAPresupuesto', () => {
     assert.ok(r.totalDespues <= PRESUPUESTO)
   })
 
-  test('las líneas del socio no se tocan ni cuentan contra su presupuesto', () => {
-    // `asignaciones` tiene unique(beneficiario_id, insumo_id) desde la
-    // migración 012, así que un insumo no puede estar dos veces en el mismo
-    // carrito: ser extra es un atributo de la línea, no una línea aparte.
-    const mapa = precios({ 'i-malla': 67575, 'i-polin': 6590, 'i-poly': 3832 })
-    const r = ajustarCarritoAPresupuesto(
-      [linea(MALLA, 1), linea(POLIN, 30), linea(POLY, 50, true)],
-      PROV, mapa, PRESUPUESTO
-    )
-    assert.equal(cambioDe(r, 'i-poly'), undefined, 'la línea del socio no se toca')
-    assert.equal(cambioDe(r, 'i-polin'), 18, 'el extra no consume presupuesto')
-    assert.equal(r.totalAntes, 67575 + 30 * 6590, 'el extra tampoco entra en el total del programa')
-  })
-
-  test('si el material base no cabe, baja proporcionalmente y truncado a enteros', () => {
-    // 3 mallas a 85.419 = 256.257, que no cabe en 189.000.
-    // factor 0,7375 -> floor(3 * 0,7375) = 2 mallas = 170.838
+  test('si el material base no cabe, NO se recorta: los polines quedan en 0 y el exceso es del socio', () => {
+    // 3 mallas a 85.419 = 256.257, que no cabe en 189.000. Antes del
+    // 2026-09-14 el ajuste bajaba la malla a 2; ahora la malla es intocable.
     const mapa = precios({ 'i-malla': 85419, 'i-polin': 6590 })
     const r = ajustarCarritoAPresupuesto([linea(MALLA, 3), linea(POLIN, 10)], PROV, mapa, PRESUPUESTO)
-    assert.equal(cambioDe(r, 'i-malla'), 2)
-    // saldo 18.162 -> 2 polines (13.180), sobran 4.982
-    assert.equal(cambioDe(r, 'i-polin'), 2)
-    assert.equal(r.saldoSinUsar, 189000 - 170838 - 2 * 6590)
-    assert.ok(r.totalDespues <= PRESUPUESTO, 'nunca queda sobre presupuesto')
+    assert.equal(cambioDe(r, 'i-malla'), undefined, 'la malla no se toca')
+    assert.equal(cambioDe(r, 'i-polin'), 0, 'no hay saldo para polines')
+    assert.equal(r.saldoSinUsar, 0)
+    assert.equal(r.totalDespues, 3 * 85419, 'el total queda sobre presupuesto: la diferencia es aporte propio')
   })
 
-  test('si ni una unidad del material base cabe, la cantidad queda en cero', () => {
+  test('una malla más cara que el presupuesto entero tampoco se recorta', () => {
     const mapa = precios({ 'i-malla': 200000, 'i-polin': 6590 })
     const r = ajustarCarritoAPresupuesto([linea(MALLA, 1), linea(POLIN, 5)], PROV, mapa, PRESUPUESTO)
-    assert.equal(cambioDe(r, 'i-malla'), 0)
-    assert.ok(r.totalDespues <= PRESUPUESTO)
+    assert.equal(cambioDe(r, 'i-malla'), undefined)
+    assert.equal(cambioDe(r, 'i-polin'), 0)
   })
 
   test('un solo precio faltante bloquea el ajuste entero', () => {
@@ -111,13 +96,6 @@ describe('ajustarCarritoAPresupuesto', () => {
   test('un carrito que ya calza no genera ningún cambio', () => {
     const mapa = precios({ 'i-malla': 67575, 'i-polin': 3950 })
     const r = ajustarCarritoAPresupuesto([linea(MALLA, 1), linea(POLIN, 30)], PROV, mapa, PRESUPUESTO)
-    assert.deepEqual(r.cambios, [])
-    assert.equal(r.error, null)
-  })
-
-  test('un carrito de puras líneas del socio no se toca', () => {
-    const mapa = precios({ 'i-malla': 67575 })
-    const r = ajustarCarritoAPresupuesto([linea(MALLA, 3, true)], PROV, mapa, PRESUPUESTO)
     assert.deepEqual(r.cambios, [])
     assert.equal(r.error, null)
   })

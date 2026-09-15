@@ -131,23 +131,22 @@ export async function DELETE(req: NextRequest) {
   return NextResponse.json({ ok: true })
 }
 
-/** Marca o desmarca una línea como "la paga el socio de su bolsillo"
- *  (migración 014). Es lo único que se puede cambiar de una línea existente:
- *  la cantidad se toca agregando (POST, que suma) o eliminando, y desde el
- *  2026-09-14 también la mueve el ajuste automático al presupuesto.
+/** Cambia la cantidad de una línea existente. Es lo que necesita quien mira
+ *  el carrito y ve "Polines × 13": corregir el 13, no agregar y restar.
  *
- *  Por qué es un atributo de la línea y no una línea aparte: `asignaciones`
- *  tiene unique(beneficiario_id, insumo_id) desde la migración 012, así que
- *  un mismo insumo no puede estar dos veces en el carrito de un socio. Marcar
- *  la línea mueve TODA su cantidad al bolsillo del socio. */
+ *  Un insumo tiene UNA fila por socio (migración 012), así que `id` alcanza.
+ *  La cantidad de polines escrita a mano dura hasta el siguiente cambio de
+ *  precio: los polines son el saldo (lib/business-logic.ts, ajuste). */
 export async function PATCH(req: NextRequest) {
   const ctx = await getViewerContext(); if (!isStaff(ctx)) return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
 
   const body = await req.json().catch(() => null)
   const id = body?.id
-  const es_extra = body?.es_extra
+  const cantidad = Number(body?.cantidad)
   if (typeof id !== 'string') return NextResponse.json({ error: 'id es requerido' }, { status: 400 })
-  if (typeof es_extra !== 'boolean') return NextResponse.json({ error: 'es_extra debe ser true o false' }, { status: 400 })
+  if (!Number.isInteger(cantidad) || cantidad <= 0) {
+    return NextResponse.json({ error: 'cantidad debe ser un entero positivo' }, { status: 400 })
+  }
 
   const admin = getSupabaseAdmin()
   const { data: previa } = await admin
@@ -157,13 +156,13 @@ export async function PATCH(req: NextRequest) {
     .maybeSingle()
   if (!previa) return NextResponse.json({ error: 'No encontrada' }, { status: 404 })
 
-  const fila = previa as { beneficiario_id: string; es_extra?: boolean }
+  const fila = previa as { beneficiario_id: string; insumo_id: string; cantidad: number }
   const bloqueo = await bloqueadoPorCompra(fila.beneficiario_id)
   if (bloqueo) return NextResponse.json({ error: bloqueo }, { status: 409 })
 
   const { data, error } = await admin
     .from('asignaciones')
-    .update({ es_extra })
+    .update({ cantidad })
     .eq('id', id)
     .select('*, catalogo_insumos(*)')
     .single()
@@ -174,9 +173,8 @@ export async function PATCH(req: NextRequest) {
   }
 
   await logAudit('asignaciones', 'update', id, {
-    cambios: { es_extra },
-    anterior: { es_extra: fila.es_extra === true },
-    beneficiario_id: fila.beneficiario_id,
+    beneficiario_id: fila.beneficiario_id, insumo_id: fila.insumo_id,
+    cantidad_anterior: fila.cantidad, cantidad,
     actor: { email: ctx.email, userId: ctx.userId, role: ctx.role },
   })
   return NextResponse.json({ data })

@@ -6,7 +6,7 @@ import type { Beneficiario, CatalogoInsumo, Asignacion, AyudaMemoria, Proveedor 
 import { buildPrecioMap, calcularCostoCarrito, formatCLP, PRESUPUESTO_BASE } from '@/lib/business-logic'
 import { useProveedor, proveedorPorDefecto, STORAGE_KEY } from '@/lib/proveedor-context'
 import type { DatosStaff } from '@/lib/staff-data'
-import { Button, IconButton, Chip, InfoTip } from '@/components/design-system'
+import { Button, IconButton, Chip } from '@/components/design-system'
 
 type Filtro = 'todos' | 'Invernadero' | 'Cierre Perimetral'
 
@@ -100,30 +100,19 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
     ? insumos.filter(i =>
         i.es_activo !== false && (i.segmento === benSeleccionado.segmento || i.segmento === 'Ambos'))
     : []
-  // Dos totales, no uno: desde la migración 014 una línea puede estar marcada
-  // como "la paga el socio". Lo que el programa financia tiene que caber en el
-  // presupuesto -- y el ajuste automático lo mantiene ahí; lo que el socio
-  // suma por su cuenta no compite por esa plata y nadie se lo baja.
-  const lineasDelPrograma = asigsBen.filter(a => a.es_extra !== true)
-  const lineasDelSocio = asigsBen.filter(a => a.es_extra === true)
+  // Un solo total: el carrito entero contra el presupuesto. Lo que pasa de
+  // ahí es aporte propio del socio (regla del 2026-09-14, que reemplazó a la
+  // marca "la paga el socio" de la migración 014). /rendicion calcula igual.
   const carritoCalc = proveedorId
-    ? calcularCostoCarrito(lineasDelPrograma, proveedorId, precioMap)
-    : { total: 0, itemsConPrecio: 0, itemsSinPrecio: 0 }
-  const calcSocio = proveedorId
-    ? calcularCostoCarrito(lineasDelSocio, proveedorId, precioMap)
+    ? calcularCostoCarrito(asigsBen, proveedorId, precioMap)
     : { total: 0, itemsConPrecio: 0, itemsSinPrecio: 0 }
   const { total, itemsSinPrecio } = carritoCalc
-  const totalDelSocio = calcSocio.total
   // El presupuesto es una columna por beneficiario (beneficiarios.presupuesto_base),
   // que es la que usa la simulación. Usar la constante global acá hacía que
   // la ficha mostrara un aporte de bolsillo equivocado para cualquier socio
   // con presupuesto distinto del default.
   const presupuestoSel = benSeleccionado?.presupuesto_base ?? PRESUPUESTO_BASE
-  // Lo que el socio pone: lo que eligió pagar, más cualquier exceso del
-  // programa que todavía no se haya reajustado (un precio que subió y aún no
-  // se guardó, por ejemplo).
-  const excesoDelPrograma = Math.max(0, total - presupuestoSel)
-  const aporteBolsillo = excesoDelPrograma + totalDelSocio
+  const aporteBolsillo = Math.max(0, total - presupuestoSel)
   const porcentaje = presupuestoSel > 0 ? Math.min(100, (total / presupuestoSel) * 100) : 0
   const bensFiltrados = filtro === 'todos' ? beneficiarios : beneficiarios.filter(b => b.segmento === filtro)
 
@@ -165,14 +154,14 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
     }))
   }
 
-  /** Mueve una línea entre "la paga el programa" y "la paga el socio". Es lo
-   *  que separa los dos totales, y lo que protege esa línea del ajuste
-   *  automático al presupuesto (ver lib/business-logic.ts). */
-  async function marcarComoExtra(asignacionId: string, es_extra: boolean) {
+  /** Corrige la cantidad de una línea. El endpoint devuelve la fila entera
+   *  con su catálogo, igual que POST, así que se reemplaza por id. */
+  async function cambiarCantidad(asignacionId: string, cantidad: number) {
+    if (!Number.isInteger(cantidad) || cantidad <= 0) return
     const res = await fetch('/api/asignaciones', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: asignacionId, es_extra }),
+      body: JSON.stringify({ id: asignacionId, cantidad }),
     })
     if (!res.ok) return
     const { data } = await res.json()
@@ -215,7 +204,7 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
     insumoForm, cantidadForm, agregando,
     setProveedorId, setInsumoForm,
     setCantidadForm: (v: number) => setCantidadForm(v),
-    agregar, eliminar, marcarComoExtra, totalDelSocio,
+    agregar, eliminar, cambiarCantidad,
   }
 
   return (
@@ -365,11 +354,10 @@ type PanelProps = {
   setCantidadForm: (v: number) => void
   agregar: () => void
   eliminar: (id: string) => void
-  marcarComoExtra: (id: string, es_extra: boolean) => void
-  totalDelSocio: number
+  cambiarCantidad: (id: string, cantidad: number) => void
 }
 
-function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId, proveedores, precioMap, total, itemsSinPrecio, aporteBolsillo, porcentaje, insumoForm, cantidadForm, agregando, setProveedorId, setInsumoForm, setCantidadForm, agregar, eliminar, marcarComoExtra, totalDelSocio }: PanelProps) {
+function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId, proveedores, precioMap, total, itemsSinPrecio, aporteBolsillo, porcentaje, insumoForm, cantidadForm, agregando, setProveedorId, setInsumoForm, setCantidadForm, agregar, eliminar, cambiarCantidad }: PanelProps) {
   return (
     <>
       {/* Selector de proveedor */}
@@ -441,6 +429,10 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
                 <span>presupuesto usado</span>
                 <span>{porcentaje.toFixed(1)}%</span>
               </div>
+              {/* Pasado el presupuesto la barra se llena entera y cambia a
+                  alerta: el tramo de más no cabe en 100%, así que lo dice la
+                  cifra de abajo. No hay marca por línea: todo lo que pasa
+                  de $189.000 es aporte propio, y con eso se entiende. */}
               <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--linea)' }}>
                 <div className="h-full rounded-full transition-all" style={{
                   width: `${porcentaje}%`,
@@ -471,41 +463,18 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
                     Paga de su bolsillo
                   </p>
                   <p className="text-xl font-bold" style={{ color: 'var(--alerta)' }}>{formatCLP(aporteBolsillo)}</p>
-                  {/* De dónde sale la cifra. Son dos cosas distintas: lo que
-                      el socio eligió sumar, y un exceso del programa que el
-                      ajuste al presupuesto todavía no corrigió. */}
-                  {totalDelSocio > 0 && aporteBolsillo !== totalDelSocio && (
-                    <p className="text-xs mt-1" style={{ color: 'var(--alerta)' }}>
-                      {formatCLP(totalDelSocio)} que agregó + {formatCLP(aporteBolsillo - totalDelSocio)} sobre el presupuesto
-                    </p>
-                  )}
-                  {totalDelSocio > 0 && aporteBolsillo === totalDelSocio && (
-                    <p className="text-xs mt-1" style={{ color: 'var(--alerta)' }}>
-                      Todo esto lo agregó él; el programa le cubre {formatCLP(total)}
-                    </p>
-                  )}
+                  <p className="text-xs mt-1" style={{ color: 'var(--alerta)' }}>
+                    {formatCLP(total)} de compra − {formatCLP(ben.presupuesto_base ?? PRESUPUESTO_BASE)} de presupuesto
+                  </p>
                 </div>
               )}
             </div>
           )}
 
           <div>
-            {/* La ayuda explica los DOS botones de una vez y vive en el
-                encabezado, no dentro de cada linea: el boton "Del programa"
-                ya es un control, y meterle un "?" adentro seria un control
-                anidado dentro de otro (mismo criterio que los cuadros de
-                estado del panel de avance). */}
-            <div className="flex items-center gap-1.5 mb-2">
-              <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--tinta-45)' }}>
-                lo que va a comprar
-              </p>
-              <InfoTip etiqueta="quién paga cada línea">
-                Cada línea dice quién la paga. <strong>Del programa</strong>: sale del presupuesto
-                de {formatCLP(ben.presupuesto_base ?? PRESUPUESTO_BASE)} que le corresponde al socio.
-                <strong> Del socio</strong>: la pidió aparte y la paga él de su bolsillo, así que no
-                gasta presupuesto ni se le descuenta. Toca el botón para cambiarlo.
-              </InfoTip>
-            </div>
+            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--tinta-45)' }}>
+              lo que va a comprar
+            </p>
             {asigsBen.length === 0 ? (
               <p className="text-xs" style={{ color: 'var(--tinta-45)' }}>
                 Todavía no tiene materiales. Elige el proveedor y agrégalos aquí abajo.
@@ -518,36 +487,34 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
                   // Un insumo tiene UNA sola fila por socio (migración 012),
                   // así que el nombre alcanza para identificar qué se borra.
                   const nombreInsumo = a.catalogo_insumos?.nombre ?? 'Insumo'
-                  const esExtra = a.es_extra === true
                   return (
                     <li key={a.id} className="flex items-center gap-2 text-xs group">
                       <div className="flex-1 min-w-0">
                         <span className="font-medium truncate block" style={{ color: 'var(--tinta)' }}>
-                          {nombreInsumo} × {a.cantidad}
+                          {nombreInsumo}
                         </span>
-                        <span className="flex items-center gap-1.5 flex-wrap">
-                          {costo !== null && (
-                            <span style={{ color: esExtra ? 'var(--alerta)' : 'var(--verde-dark)' }}>{formatCLP(costo)}</span>
-                          )}
-                          {esExtra && (
-                            <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--alerta)' }}>
-                              la paga el socio
-                            </span>
-                          )}
-                        </span>
+                        {costo !== null && (
+                          <span style={{ color: 'var(--verde-dark)' }}>{formatCLP(costo)}</span>
+                        )}
                       </div>
-                      {/* Mueve la línea entre los dos totales. Marcarla la saca
-                          del presupuesto del programa y la protege del ajuste
-                          automático: nadie le baja al socio lo que él decidió
-                          pagar. */}
-                      <Chip
-                        activo={esExtra}
-                        onClick={() => marcarComoExtra(a.id, !esExtra)}
-                        aria-pressed={esExtra}
-                        title={esExtra ? 'Volver a cargarla al presupuesto del programa' : 'Marcar: esta línea la paga el socio'}
-                      >
-                        {esExtra ? 'Del socio' : 'Del programa'}
-                      </Chip>
+                      {/* La cantidad se corrige acá mismo. Se guarda al salir
+                          del campo, no en cada tecla: escribir "26" pasa por
+                          "2", y guardar ese 2 sería un cambio real. */}
+                      <input
+                        type="number"
+                        min={1}
+                        defaultValue={a.cantidad}
+                        key={`${a.id}-${a.cantidad}`}
+                        aria-label={`Cantidad de ${nombreInsumo}`}
+                        onBlur={e => {
+                          const v = parseInt(e.target.value)
+                          if (Number.isInteger(v) && v > 0 && v !== a.cantidad) cambiarCantidad(a.id, v)
+                          else e.target.value = String(a.cantidad)
+                        }}
+                        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                        className="w-16 rounded-[4px] px-2 text-sm text-right tabular-nums min-h-[44px] focus:outline-none"
+                        style={{ border: '1px solid var(--linea-fuerte)', background: 'var(--papel)', color: 'var(--tinta)' }}
+                      />
                       <IconButton
                         onClick={() => eliminar(a.id)}
                         tone="peligro"
