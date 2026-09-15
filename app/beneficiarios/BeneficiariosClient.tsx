@@ -3,8 +3,7 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import type { Beneficiario, CatalogoInsumo, Asignacion, AyudaMemoria, Proveedor } from '@/lib/types'
-import { buildPrecioMap, calcularCostoCarrito, formatCLP, proveedorDeLinea, PRESUPUESTO_BASE } from '@/lib/business-logic'
-import { useProveedor, proveedorPorDefecto, STORAGE_KEY } from '@/lib/proveedor-context'
+import { buildPrecioMap, calcularCostoCarrito, formatCLP, proveedorDeLinea, proveedorDelSocio, PRESUPUESTO_BASE } from '@/lib/business-logic'
 import type { DatosStaff } from '@/lib/staff-data'
 import { Button, IconButton, Chip } from '@/components/design-system'
 
@@ -22,7 +21,6 @@ const ETIQUETA_FILTRO: Record<Filtro, string> = {
 // datos llegan dentro del RSC y no hay fetch al montar. Si viene null
 // (falló la carga server-side) se intenta /api/data como antes.
 export default function BeneficiariosClient({ initial }: { initial: DatosStaff | null }) {
-  const { proveedorId, setProveedorId } = useProveedor()
   const [beneficiarios, setBeneficiarios] = useState<Beneficiario[]>([])
   const [insumos, setInsumos] = useState<CatalogoInsumo[]>([])
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
@@ -55,15 +53,7 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
         const provs = (todosProvs as Proveedor[] | undefined)?.filter(p => p.es_activo)
         if (bens) setBeneficiarios(bens as Beneficiario[])
         if (ins) setInsumos(ins as CatalogoInsumo[])
-        if (provs) {
-          setProveedores(provs as Proveedor[])
-          const savedId = localStorage.getItem(STORAGE_KEY)
-          const validSaved = savedId && (provs as Proveedor[]).find(p => p.id === savedId)
-          const porDefecto = proveedorPorDefecto(provs as Proveedor[])
-          if (!validSaved && porDefecto) {
-            setProveedorId(porDefecto.id)
-          }
-        }
+        if (provs) setProveedores(provs as Proveedor[])
         if (asigs) {
           const map: Record<string, Asignacion[]> = {}
           for (const a of asigs as Asignacion[]) {
@@ -100,6 +90,10 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
     ? insumos.filter(i =>
         i.es_activo !== false && (i.segmento === benSeleccionado.segmento || i.segmento === 'Ambos'))
     : []
+  // El proveedor que valoriza el carrito es el del socio (proveedorDelSocio),
+  // el mismo que usa /rendicion. Ya no hay un "ver precios de" local: con él
+  // esta pantalla y /rendicion podían decir totales distintos del mismo socio.
+  const proveedorId = benSeleccionado ? (proveedorDelSocio(benSeleccionado, proveedores)?.id ?? '') : ''
   // Un solo total: el carrito entero contra el presupuesto. Lo que pasa de
   // ahí es aporte propio del socio (regla del 2026-09-14, que reemplazó a la
   // marca "la paga el socio" de la migración 014). /rendicion calcula igual.
@@ -211,7 +205,7 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
     proveedorId, proveedores, precioMap,
     total, itemsSinPrecio, aporteBolsillo, porcentaje,
     insumoForm, cantidadForm, agregando,
-    setProveedorId, setInsumoForm,
+    setInsumoForm,
     setCantidadForm: (v: number) => setCantidadForm(v),
     agregar, eliminar, cambiarCantidad, cambiarProveedorLinea,
   }
@@ -243,9 +237,10 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
             {bensFiltrados.map(ben => {
               const asigs = asignaciones[ben.id] ?? []
-              const { total: costoTotal } = proveedorId ? calcularCostoCarrito(asigs, proveedorId, precioMap) : { total: 0 }
+              const provBen = proveedorDelSocio(ben, proveedores)?.id ?? ''
+              const { total: costoTotal } = provBen ? calcularCostoCarrito(asigs, provBen, precioMap) : { total: 0 }
               const presupuestoBen = ben.presupuesto_base ?? PRESUPUESTO_BASE
-              const tieneAporte = Boolean(proveedorId) && costoTotal > presupuestoBen
+              const tieneAporte = Boolean(provBen) && costoTotal > presupuestoBen
               const isSelected = seleccionado === ben.id
               const itemsCarrito = asigs.length
 
@@ -278,7 +273,7 @@ export default function BeneficiariosClient({ initial }: { initial: DatosStaff |
 
                   <p className="text-xs mt-2 tabular-nums" style={{ color: 'var(--tinta-70)' }}>
                     {itemsCarrito} material{itemsCarrito !== 1 ? 'es' : ''}
-                    {proveedorId && itemsCarrito > 0 && <> · {formatCLP(costoTotal)} de {formatCLP(presupuestoBen)}</>}
+                    {provBen && itemsCarrito > 0 && <> · {formatCLP(costoTotal)} de {formatCLP(presupuestoBen)}</>}
                   </p>
 
                   {tieneAporte && (
@@ -358,7 +353,6 @@ type PanelProps = {
   insumoForm: string
   cantidadForm: number
   agregando: boolean
-  setProveedorId: (v: string) => void
   setInsumoForm: (v: string) => void
   setCantidadForm: (v: number) => void
   agregar: () => void
@@ -367,25 +361,15 @@ type PanelProps = {
   cambiarProveedorLinea: (id: string, proveedor_id: string | null) => void
 }
 
-function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId, proveedores, precioMap, total, itemsSinPrecio, aporteBolsillo, porcentaje, insumoForm, cantidadForm, agregando, setProveedorId, setInsumoForm, setCantidadForm, agregar, eliminar, cambiarCantidad, cambiarProveedorLinea }: PanelProps) {
+function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId, proveedores, precioMap, total, itemsSinPrecio, aporteBolsillo, porcentaje, insumoForm, cantidadForm, agregando, setInsumoForm, setCantidadForm, agregar, eliminar, cambiarCantidad, cambiarProveedorLinea }: PanelProps) {
+  // Qué línea tiene abierto su selector de proveedor. En reposo cada línea
+  // dice en texto con quién se cotiza; el selector aparece solo al tocar
+  // "cambiar" y se cierra al elegir. Cambiar proveedor pasa una vez por
+  // socio: no merece un control permanente bajo cada material.
+  const [lineaEditando, setLineaEditando] = useState<string | null>(null)
+  const nombreProveedor = (id: string | null) => proveedores.find(p => p.id === id)?.nombre ?? 'sin proveedor'
   return (
     <>
-      {/* Selector de proveedor */}
-      <div className="rounded-[6px] p-4 glass">
-        <label className="text-xs font-semibold block mb-1.5" style={{ color: 'var(--cafe)' }}>
-          ver precios de
-        </label>
-        <select
-          value={proveedorId}
-          onChange={e => setProveedorId(e.target.value)}
-          className="w-full rounded-[4px] px-3 py-2 text-sm focus:outline-none"
-          style={{ border: '1px solid var(--linea-fuerte)', background: 'var(--papel)' }}
-        >
-          <option value="">— sin precios —</option>
-          {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-        </select>
-      </div>
-
       {ben ? (
         <div className="rounded-[6px] p-4 glass space-y-4">
           <div>
@@ -487,7 +471,7 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
             </p>
             {asigsBen.length === 0 ? (
               <p className="text-xs" style={{ color: 'var(--tinta-45)' }}>
-                Todavía no tiene materiales. Elige el proveedor y agrégalos aquí abajo.
+                Todavía no tiene materiales. Agrégalos aquí abajo.
               </p>
             ) : (
               <ul className="space-y-1.5">
@@ -506,25 +490,37 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
                         <span className="font-medium truncate block" style={{ color: 'var(--tinta)' }}>
                           {nombreInsumo}
                         </span>
+                        <div className="flex items-center gap-2 flex-wrap">
                         {costo !== null && (
                           <span style={{ color: 'var(--verde-dark)' }}>{formatCLP(costo)}</span>
                         )}
-                        {/* Con qué proveedor se cotiza ESTA línea. "el del
-                            socio" es lo normal; elegir otro deja, por ejemplo,
-                            el polietileno en MCT y los polines en Sodimac. */}
-                        <select
-                          value={a.proveedor_id ?? ''}
-                          onChange={e => cambiarProveedorLinea(a.id, e.target.value || null)}
-                          aria-label={`Proveedor de ${nombreInsumo}`}
-                          className="block mt-1 max-w-full rounded-[4px] px-2 py-1 text-xs min-h-[36px] focus:outline-none"
-                          style={{
-                            border: '1px solid var(--linea-fuerte)', background: 'var(--papel)',
-                            color: a.proveedor_id ? 'var(--tinta)' : 'var(--tinta-45)',
-                          }}
-                        >
-                          <option value="">el del socio</option>
-                          {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                        </select>
+                        {/* Con qué proveedor se cotiza ESTA línea: el del
+                            socio salvo que se elija otro (por ejemplo, el
+                            polietileno en MCT y los polines en Sodimac). */}
+                        {lineaEditando === a.id ? (
+                          <select
+                            autoFocus
+                            value={a.proveedor_id ?? ''}
+                            onChange={e => { cambiarProveedorLinea(a.id, e.target.value || null); setLineaEditando(null) }}
+                            onBlur={() => setLineaEditando(null)}
+                            aria-label={`Proveedor de ${nombreInsumo}`}
+                            className="block mt-1 max-w-full rounded-[4px] px-2 py-1 text-xs min-h-[44px] focus:outline-none"
+                            style={{ border: '1px solid var(--linea-fuerte)', background: 'var(--papel)', color: 'var(--tinta)' }}
+                          >
+                            <option value="">{nombreProveedor(proveedorId)} (el del socio)</option>
+                            {proveedores.filter(p => p.id !== proveedorId).map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                          </select>
+                        ) : (
+                          <Button
+                            variant="link"
+                            onClick={() => setLineaEditando(a.id)}
+                            aria-label={`Cambiar proveedor de ${nombreInsumo}`}
+                            className="text-xs"
+                          >
+                            en {nombreProveedor(provLinea)} · cambiar
+                          </Button>
+                        )}
+                        </div>
                       </div>
                       {/* La cantidad se corrige acá mismo. Se guarda al salir
                           del campo, no en cada tecla: escribir "26" pasa por
@@ -582,7 +578,7 @@ function DetailPanel({ ben, asigsBen, ayudaBen, insumosCompatibles, proveedorId,
                 <>
                   {sinPrecio && (
                     <p className="text-xs font-medium" style={{ color: 'var(--cafe)' }}>
-                      Insumo no disponible en este proveedor
+                      Sin precio en {nombreProveedor(proveedorId)}
                     </p>
                   )}
                   <div className="flex gap-2">

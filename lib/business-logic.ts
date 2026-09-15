@@ -238,6 +238,20 @@ export function proveedorPorDefecto<T extends { id: string; nombre: string }>(pr
   return proveedores.find(p => p.nombre.trim().toLowerCase().includes('sodimac')) ?? proveedores[0]
 }
 
+/** Con qué proveedor se valoriza el carrito de UN socio: el de compra si ya
+ *  se eligió, y si no el de referencia (Sodimac). Nunca un "más barato"
+ *  calculado, y nunca una vista local del teléfono: hasta el 2026-09-15
+ *  /beneficiarios usaba el selector "ver precios de" como si fuera el del
+ *  socio y mostraba $266.337 donde /rendicion decía $188.850. Una sola
+ *  definición para las dos pantallas. `proveedores` son los ACTIVOS. */
+export function proveedorDelSocio<T extends { id: string; nombre: string }>(
+  ben: { proveedor_compra_id: string | null },
+  proveedores: T[]
+): T | undefined {
+  return (ben.proveedor_compra_id ? proveedores.find(p => p.id === ben.proveedor_compra_id) : undefined)
+    ?? proveedorPorDefecto(proveedores)
+}
+
 export interface CotizacionCarrito {
   proveedor: Proveedor | null
   total: number

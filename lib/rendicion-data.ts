@@ -1,7 +1,7 @@
 import 'server-only'
 import { getSupabaseAdmin } from './supabase-admin'
 import { urlsFirmadasFoto } from './r2'
-import { cotizarCarrito, proveedorDeLinea, proveedorPorDefecto, aporteDeBolsillo, esDePrueba, precioPolinDeReferencia } from './business-logic'
+import { cotizarCarrito, proveedorDeLinea, proveedorDelSocio, proveedorPorDefecto, aporteDeBolsillo, esDePrueba, precioPolinDeReferencia } from './business-logic'
 import type { Asignacion, Proveedor, PrecioProveedor, FotoCompra, Beneficiario, CatalogoInsumo } from './types'
 
 // Agregación por beneficiario para la rendición. La consumen /api/rendicion
@@ -111,16 +111,15 @@ export async function cargarRendicion(): Promise<
   // Es el mismo que muestra el selector de /beneficiarios, para que las dos
   // pantallas no puedan discrepar sobre el mismo socio. Solo se consideran
   // los activos: un proveedor dado de baja no puede ser la referencia.
-  const referencia = proveedorPorDefecto(provs.filter(p => p.es_activo)) ?? null
+  const activos = provs.filter(p => p.es_activo)
+  const referencia = proveedorPorDefecto(activos) ?? null
 
   const filas: FilaRendicion[] = visibles.map(ben => {
     const asigs = asignacionesPorBen.get(ben.id) ?? []
 
     // Quién valoriza el carrito: el proveedor de compra confirmado si ya se
     // eligió, y si no el de referencia. Nunca un "más barato" calculado.
-    const proveedorCotizador = ben.proveedor_compra_id
-      ? (provPorId.get(ben.proveedor_compra_id) ?? null)
-      : referencia
+    const proveedorCotizador = proveedorDelSocio(ben, activos) ?? null
     // Un solo total por socio: el carrito entero contra su presupuesto. Todo
     // lo que pasa de ahí es aporte propio (regla del 2026-09-14, que
     // reemplazó a la marca `es_extra`). /beneficiarios calcula lo mismo.
