@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#060908">
+<title>Entregas PAT</title>
+<style>html{background:#060908}body{margin:0}</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: mobile first. Todo se diseña para una columna de 360 px con el pulgar y se amplía con min-width. Una sola familia sin cursivas, texto grande y alto contraste (público de adultos mayores). Jerarquía: etiqueta > título > cifra o nombre en negrita > apoyo. Verde de marca; terracota solo para el pago adicional. */
+:root{
+  --bg:#060908; --shell:rgba(255,255,255,.04); --core:#0b100e; --fg:#f6f8f6; --fg2:rgba(246,248,246,.78); --line:rgba(255,255,255,.12);
+  --g:#8fd1ae; --g2:#3a8a6c; --sage:#c4dccf; --warm:#f09a72;
+  --sans:'Geist',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --spring:cubic-bezier(.32,.72,0,1);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:17px;line-height:1.55;font-style:normal;padding-inline:16px;padding-block:0 96px;overflow-x:hidden}
+em,i{font-style:normal}
+.wrap{max-width:1080px;margin-inline:auto}
+h1,h2,h3{font-weight:600;margin:0;text-wrap:balance;line-height:1.1;letter-spacing:-.025em}
+h2{font-size:34px}
+h3{font-size:22px;letter-spacing:-.015em}
+p{margin:0}
+.tag{display:inline-block;font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;padding:8px 14px;border-radius:99px;border:1px solid var(--line);color:var(--g)}
+.tag.warm{color:var(--warm)}
+.shell{background:var(--shell);border:1px solid var(--line);border-radius:1.5rem;padding:6px}
+.core{background:var(--core);border-radius:calc(1.5rem - 6px);padding:20px;box-shadow:inset 0 1px 1px rgba(255,255,255,.09);position:relative;overflow:hidden;min-width:0}
+section{margin-top:72px}
+.head{display:grid;gap:14px;margin-bottom:28px;justify-items:start}
+.head p{font-size:19px;color:var(--fg2);max-width:36ch}
+/* hero */
+.hero{position:relative;min-height:min(50svh,440px);display:flex;align-items:flex-end;padding-block:88px 44px;margin-inline:-16px;padding-inline:16px;overflow:hidden}
+.hero canvas{position:absolute;inset:0;width:100%;height:100%}
+.orb{position:absolute;border-radius:50%;pointer-events:none;will-change:transform}
+.o1{width:480px;height:480px;left:-30%;top:-20%;background:radial-gradient(circle,rgba(143,209,174,.22),transparent 65%);animation:drift1 14s ease-in-out infinite alternate}
+.o2{width:400px;height:400px;right:-30%;top:10%;background:radial-gradient(circle,rgba(58,138,108,.3),transparent 65%);animation:drift2 17s ease-in-out infinite alternate}
+@keyframes drift1{to{transform:translate3d(60px,40px,0)}}
+@keyframes drift2{to{transform:translate3d(-70px,30px,0)}}
+.hero::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(6,9,8,0) 45%,var(--bg) 100%);pointer-events:none}
+.hero-in{position:relative;z-index:1;max-width:1080px;margin-inline:auto;width:100%;display:grid;gap:20px;justify-items:start}
+.hero h1{font-size:clamp(42px,12.4vw,120px);font-weight:700;letter-spacing:-.045em;line-height:1.02}
+.hero h1 .ln{display:block;overflow:hidden;padding-bottom:.08em}
+.hero h1 .ln>span{display:block;animation:rise 1.1s var(--spring) both}
+.hero h1 .ln.acc{color:var(--g)}
+.hero h1 .ln.acc>span{animation-delay:.18s}
+@keyframes rise{from{transform:translateY(105%)}}
+.hero .rule{display:block;height:3px;width:72px;border-radius:3px;background:var(--g);transform-origin:left;animation:grow 1.2s var(--spring) .6s both}
+@keyframes grow{from{transform:scaleX(0)}}
+/* cifras */
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{padding:18px 16px}
+.stat b{display:block;font-weight:700;font-size:48px;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.04em}
+.stat span{display:block;margin-top:10px;font-size:16px;color:var(--fg2);line-height:1.35}
+/* resumen */
+.grid2{display:grid;grid-template-columns:1fr;gap:10px}
+.grid2>*{min-width:0}
+.bars{display:grid;gap:26px;margin-top:26px}
+.bar{display:grid;grid-template-columns:1fr auto;grid-template-areas:'lab num' 'trk trk';gap:10px 14px;align-items:baseline}
+.bar .lab{grid-area:lab;font-size:19px;font-weight:500}
+.bar .lab small{display:block;font-size:16px;font-weight:400;color:var(--fg2)}
+.bar em{grid-area:num;font-weight:700;font-size:38px;line-height:1;font-variant-numeric:tabular-nums}
+.bar .t{grid-area:trk;height:16px;border-radius:9px;background:rgba(255,255,255,.1);overflow:hidden}
+.bar .t i{display:block;height:100%;width:100%;background:var(--c);border-radius:9px;transform:scaleX(0);transform-origin:left;transition:transform 1.5s var(--spring)}
+.go .bar .t i{transform:scaleX(var(--w))}
+.donut{display:grid;justify-items:start;gap:26px;margin-top:24px}
+.donut svg{width:190px;height:190px}
+.donut circle{fill:none;stroke-width:14;transition:stroke-dasharray 1.7s var(--spring)}
+.leg{display:grid;gap:14px;width:100%;font-size:19px;font-weight:500}
+.leg span{display:flex;gap:12px;align-items:center}
+.leg s{width:14px;height:14px;border-radius:4px;background:var(--c);flex:none}
+.leg b{font-weight:700;font-size:24px;margin-left:auto;font-variant-numeric:tabular-nums}
+/* polines */
+.pol-hero{display:grid;gap:4px;padding-bottom:22px;border-bottom:1px solid var(--line)}
+.pol-big{font-weight:700;font-size:84px;line-height:.95;letter-spacing:-.05em;font-variant-numeric:tabular-nums;color:var(--g)}
+.pol-cap{font-size:19px;font-weight:500}
+.pol-cap small{display:block;font-size:16px;font-weight:400;color:var(--fg2)}
+.pols{display:grid;gap:22px;margin-top:22px}
+.pr-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:10px}
+.pr-top .nm{font-weight:600;font-size:19px}
+.pr-top .pc{font-weight:700;font-size:28px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.pol-st{display:grid;grid-template-columns:repeat(38,1fr);gap:2px;height:44px;align-items:end}
+.pol-st i{display:block;height:100%;border-radius:2px 2px 1px 1px;background:linear-gradient(180deg,var(--sage),var(--g2));transform:scaleY(.06);transform-origin:bottom;opacity:.25;transition:transform .8s var(--spring),opacity .5s var(--spring);will-change:transform}
+.pol-st i.on{transform:scaleY(1);opacity:1}
+.replay{margin-top:14px;font:inherit;font-size:16px;font-weight:500;min-height:48px;padding:0 2px;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--fg);cursor:pointer;transition:border-color .4s var(--spring),color .4s var(--spring)}
+.replay:hover{border-color:var(--g);color:var(--g)}
+/* javier */
+.alerta .core{background:radial-gradient(110% 120% at 0% 0%,rgba(240,154,114,.14),transparent 55%),var(--core)}
+.alerta h2{margin-top:18px;font-size:36px}
+.amt-wrap{margin-top:26px;display:grid;gap:4px}
+.amt-wrap .cap{font-size:19px;font-weight:500;color:var(--fg2)}
+.amt{font-weight:700;font-size:clamp(64px,19vw,132px);line-height:.95;letter-spacing:-.045em;color:var(--warm);font-variant-numeric:tabular-nums}
+.eqn{display:grid;gap:8px;margin-top:30px}
+.eqn .cell{border:1px solid var(--line);border-radius:1rem;padding:16px 18px}
+.eqn .cell b{display:block;font-weight:700;font-size:30px;line-height:1.1;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.eqn .cell span{display:block;margin-top:4px;font-size:16px;color:var(--fg2);line-height:1.35}
+.eqn .cell.res{border-color:rgba(240,154,114,.55)}
+.eqn .cell.res b{color:var(--warm)}
+.eqn .op{text-align:center;font-size:26px;line-height:1;color:var(--fg2)}
+.meter{margin-top:26px}
+.track{display:flex;gap:4px;height:14px}
+.track>div{border-radius:9px;transform:scaleX(0);transition:transform 1.4s var(--spring)}
+.track .a{width:92.1%;background:var(--g);transform-origin:left}
+.track .b{width:7.9%;background:var(--warm);transform-origin:left;transition-delay:1.1s;position:relative;overflow:hidden}
+.go .track>div{transform:scaleX(1)}
+.track .b::after{content:'';position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.55) 50%,transparent 70%);transform:translateX(-120%);animation:shine 3.4s ease-in-out infinite}
+@keyframes shine{0%{transform:translateX(-120%)}40%,100%{transform:translateX(120%)}}
+.lbls{display:flex;justify-content:space-between;gap:12px;margin-top:12px;font-size:16px;color:var(--fg2)}
+.lbls b{color:var(--fg);font-weight:600}
+/* detalle */
+.tabs{display:grid;grid-template-columns:1fr 1fr;gap:0 18px;margin-bottom:26px}
+.tabs button{position:relative;font:inherit;font-size:18px;font-weight:500;min-height:52px;padding:0 2px;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--fg2);text-align:left;cursor:pointer;transition:color .4s var(--spring)}
+.tabs button::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:3px;border-radius:3px;background:var(--g);transform:scaleX(0);transform-origin:left;transition:transform .5s var(--spring)}
+.tabs button[aria-pressed="true"]{color:var(--fg);font-weight:600}
+.tabs button[aria-pressed="true"]::after{transform:scaleX(1)}
+button:focus-visible{outline:2px solid var(--g);outline-offset:4px;border-radius:4px}
+.sum{display:grid;gap:4px;padding-bottom:22px;border-bottom:1px solid var(--line)}
+.sum .big{font-weight:700;font-size:80px;line-height:.9;letter-spacing:-.05em;font-variant-numeric:tabular-nums}
+.sum .unit{font-size:14px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--g);margin-top:8px}
+.sum .meta{color:var(--fg2);font-size:18px}
+.share{margin-top:14px;height:6px;border-radius:9px;background:rgba(255,255,255,.1);overflow:hidden}
+.share i{display:block;height:100%;width:100%;background:var(--g);transform-origin:left;transition:transform 1.2s var(--spring)}
+.row{display:grid;grid-template-columns:28px 1fr auto;gap:12px;align-items:center;padding:18px 0;border-bottom:1px solid var(--line);animation:rowin .8s var(--spring) both}
+@keyframes rowin{from{opacity:0;transform:translateY(14px)}}
+.row .n{font-size:16px;font-weight:500;color:var(--fg2);font-variant-numeric:tabular-nums}
+.row .who{min-width:0;display:grid;gap:9px}
+.row .who b{font-weight:600;font-size:19px;line-height:1.25}
+.tiles{display:flex;gap:6px}
+.tile{width:22px;height:22px;border-radius:5px;border:1.5px solid var(--g);background-image:linear-gradient(rgba(143,209,174,.6) 1px,transparent 1px),linear-gradient(90deg,rgba(143,209,174,.6) 1px,transparent 1px);background-size:7px 7px}
+.row .q{font-weight:700;font-size:32px;line-height:1;font-variant-numeric:tabular-nums;text-align:right;letter-spacing:-.02em}
+.row .q small{display:block;margin-top:4px;font-size:12px;font-weight:600;color:var(--fg2);letter-spacing:.12em}
+.row.warm .q{color:var(--warm)}
+.obs{margin-top:22px;color:var(--fg2);font-size:17px}
+/* tablet y escritorio */
+@media (min-width:700px){
+  body{font-size:18px}
+  section{margin-top:120px}
+  h2{font-size:48px}
+  .head{margin-bottom:40px}
+  .shell{border-radius:2rem;padding:8px}
+  .core{border-radius:calc(2rem - 8px);padding:40px}
+  .hero{min-height:min(72svh,600px);padding-block:104px 64px}
+  .hero .rule{width:120px;height:4px}
+  .stats{grid-template-columns:repeat(4,1fr);gap:14px}
+  .stat{padding:24px 22px}.stat b{font-size:68px}
+  .grid2{grid-template-columns:1fr 1fr;gap:14px}
+  .donut{grid-template-columns:auto 1fr;align-items:center;gap:30px}
+  .pol-hero{grid-template-columns:auto 1fr;gap:28px;align-items:end}
+  .pol-big{font-size:120px}
+  .pols{grid-template-columns:1fr 1fr;gap:30px 40px}
+  .pol-st{height:56px;gap:3px}
+  .alerta h2{font-size:52px}
+  .eqn{grid-template-columns:1fr auto 1fr auto 1fr;align-items:stretch;gap:12px}
+  .eqn .op{align-self:center}
+  .tabs{display:flex;gap:0 30px}
+  .tabs button{white-space:nowrap}
+  .sum{grid-template-columns:auto 1fr;gap:4px 28px;align-items:end}
+  .sum .big{font-size:120px;grid-row:span 2}
+  .sum .unit{align-self:end;margin-top:0}.sum .meta{align-self:start}
+  .share{grid-column:1/-1}
+  .row{grid-template-columns:44px 1fr auto;gap:18px;padding:20px 4px;transition:background .4s var(--spring),padding .4s var(--spring)}
+  .row:hover{background:rgba(143,209,174,.06);padding-inline:14px}
+  .row .who b{font-size:21px}.row .q{font-size:36px}
+}
+@media (min-width:1000px){.o1{width:680px;height:680px}.o2{width:520px;height:520px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}.pol-st i{transform:scaleY(1);opacity:1}.bar .t i{transform:scaleX(var(--w))}.track>div{transform:none}}
+</style>
+</head>
+<body>
+<div class="hero" id="hero">
+  <div class="orb o1"></div><div class="orb o2"></div>
+  <canvas id="mesh" aria-hidden="true"></canvas>
+  <div class="hero-in">
+    <span class="tag">Proyecto PAT · Villarrica</span>
+    <h1><span class="ln"><span>Mallas y polines</span></span><span class="ln acc"><span>para 22 socios</span></span></h1>
+    <i class="rule" aria-hidden="true"></i>
+  </div>
+</div>
+
+<div class="wrap">
+<section style="margin-top:8px" id="s-stats">
+  <div class="stats">
+    <div class="shell"><div class="core stat"><b data-n="54">54</b><span>mallas en total</span></div></div>
+    <div class="shell"><div class="core stat"><b data-n="152">152</b><span>polines en total</span></div></div>
+    <div class="shell"><div class="core stat"><b data-n="22">22</b><span>socios reciben entrega</span></div></div>
+    <div class="shell"><div class="core stat"><b data-n="1">1</b><span>socio con pago adicional</span></div></div>
+  </div>
+</section>
+
+<section id="s-compra">
+  <div class="head"><span class="tag">Resumen</span><h2>Qué se entrega en total</h2></div>
+  <div class="grid2">
+    <div class="shell"><div class="core"><h3>Mallas por tipo</h3><div class="bars" id="bars-mallas"></div></div></div>
+    <div class="shell"><div class="core"><h3>Mallas y polines</h3>
+      <div class="donut">
+        <svg viewBox="0 0 200 200" role="img" aria-label="Reparto de mallas y polines"><g id="don" transform="rotate(-90 100 100)"></g>
+          <text x="100" y="108" text-anchor="middle" fill="#f6f8f6" font-family="Geist,system-ui,sans-serif" font-weight="700" font-size="46">206</text>
+          <text x="100" y="132" text-anchor="middle" fill="rgba(246,248,246,.78)" font-family="Geist,system-ui,sans-serif" font-weight="600" font-size="12" letter-spacing="2">UNIDADES</text></svg>
+        <div class="leg" id="don-leg"></div>
+      </div></div></div>
+  </div>
+</section>
+
+<section id="s-pol">
+  <div class="head"><span class="tag">Polines</span></div>
+  <div class="shell"><div class="core">
+    <div class="pol-hero"><div class="pol-big" id="pol-sum">152</div></div>
+    <div class="pols" id="pols"></div>
+    <button class="replay" type="button" id="replay">Ver de nuevo</button>
+  </div></div>
+</section>
+
+<section id="s-jav">
+  <div class="shell alerta"><div class="core">
+    <span class="tag warm">Pago adicional</span>
+    <h2>Javier Norambuena</h2>
+    <div class="amt-wrap"><span class="cap">Debe pagar el socio</span><div class="amt" id="amt">$16.416</div></div>
+    <div class="eqn">
+      <div class="cell"><b>$205.416</b><span>3 mallas galvanizadas 5014 a $68.472 cada una</span></div>
+      <div class="op">−</div>
+      <div class="cell"><b>$189.000</b><span>Presupuesto del programa</span></div>
+      <div class="op">=</div>
+      <div class="cell res"><b>$16.416</b><span>Pago del socio</span></div>
+    </div>
+    <div class="meter" aria-hidden="true">
+      <div class="track"><div class="a"></div><div class="b"></div></div>
+      <div class="lbls"><span><b>Programa</b> $189.000</span><span><b style="color:var(--warm)">Socio</b> $16.416</span></div>
+    </div>
+  </div></div>
+</section>
+
+<section id="s-det">
+  <div class="head"><span class="tag">Detalle</span><h2>Qué recibe cada socio</h2></div>
+  <div class="shell"><div class="core">
+    <div class="tabs" id="tabs" role="group" aria-label="Grupos de entrega"></div>
+    <div class="sum" id="sum"></div>
+    <div class="rows" id="rows"></div>
+    <p class="obs" id="obs"></p>
+  </div></div>
+</section>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const ease=p=>1-Math.pow(1-p,3);
+const raf=requestAnimationFrame;
+const G=[
+ {n:'Malla Inchalam',u:'mallas',tot:21,of:54,ofTxt:'de 54 mallas del programa',kind:'malla',rows:[[22,'Ricardo Barra Bravo',3],[23,'Marisol Pereda',3],[24,'Ana Luz Huisca',3],[25,'Jessica Huisca',3],[26,'Sergio Huisca',3],[27,'Orlando Burgos',3],[28,'María Inés Burgos',3]],obs:'Malla cuadriculada galvanizada de 1,50 m. Se entrega sin polines.'},
+ {n:'Malla Ursus',u:'mallas',tot:30,of:54,ofTxt:'de 54 mallas del programa',kind:'malla',rows:[[12,'Mariana Pirquinao',3],[13,'Jacqueline Barra',3],[14,'María Eliana Catrilef',3],[15,'Marcia Catrilef',3],[16,'Ricardo Barra C.',3],[17,'César Barra C.',3],[18,'Edith Huisca',3],[19,'Carole Fernández',3],[20,'Margarita Catripán',3],[21,'Teresa Palma',3]],obs:'Malla ganadera tipo 740. Se entrega sin polines.'},
+ {n:'Polines',u:'polines',tot:152,of:152,ofTxt:'de 152 polines del programa',kind:'pol',rows:[[8,'María Elena Huisca',38],[9,'Joel Jaramillo',38],[10,'Alejandra Huisca',38],[11,'Luisa Suazo',38]],obs:'Polines de 4 a 5 cm. Estos cuatro socios reciben solo polines.'},
+ {n:'Javier Norambuena',u:'mallas',tot:3,of:54,ofTxt:'de 54 mallas del programa',kind:'jav',rows:[[29,'Malla galvanizada 5014 · 3 × $68.472','$205.416'],['','Presupuesto del programa','− $189.000'],['','Pago adicional del socio','$16.416']],obs:'La diferencia sobre el presupuesto la paga el socio.'}
+];
+const MAL=[['Malla Inchalam','7 socios',21,'#8fd1ae'],['Malla Ursus','10 socios',30,'#c4dccf'],['Malla galvanizada 5014','Javier Norambuena',3,'#f09a72']];
+$('bars-mallas').innerHTML=MAL.map(m=>`<div class="bar"><div class="lab">${m[0]}<small>${m[1]}</small></div><em>${m[2]}</em><div class="t"><i style="--c:${m[3]};--w:${m[2]/30}"></i></div></div>`).join('');
+const D=[['Malla Inchalam',21,'#8fd1ae'],['Malla Ursus',30,'#c4dccf'],['Malla 5014',3,'#f09a72'],['Polines',152,'#3a8a6c']];
+const T=206,R=82,C=2*Math.PI*R,GAP=4;let off=0;
+$('don').innerHTML=D.map(d=>{const len=Math.max(0,d[1]/T*C-GAP);const e=`<circle cx="100" cy="100" r="${R}" stroke="${d[2]}" stroke-dasharray="${reduce?len:0} ${C}" stroke-dashoffset="${-off}" data-len="${len}" data-c="${C}"/>`;off+=d[1]/T*C;return e}).join('');
+$('don-leg').innerHTML=D.map(d=>`<span style="--c:${d[2]}"><s></s>${d[0]}<b>${d[1]}</b></span>`).join('');
+$('pols').innerHTML=G[2].rows.map(r=>`<div class="pr"><div class="pr-top"><span class="nm">${r[1]}</span><span class="pc">38</span></div><div class="pol-st">${'<i></i>'.repeat(38)}</div></div>`).join('');
+let polToken=0;
+function playPol(){
+  const tk=++polToken,cards=[...document.querySelectorAll('.pr')];
+  cards.forEach(c=>{c.querySelectorAll('.pol-st i').forEach(b=>b.classList.remove('on'));c.querySelector('.pc').textContent=reduce?38:0});
+  $('pol-sum').textContent=reduce?152:0;
+  if(reduce){cards.forEach(c=>c.querySelectorAll('.pol-st i').forEach(b=>b.classList.add('on')));return}
+  const t0=performance.now()+350,dur=2400,stag=320;
+  (function f(t){
+    if(tk!==polToken)return;
+    let done=true;
+    cards.forEach((c,ci)=>{
+      const p=Math.max(0,Math.min(1,(t-t0-ci*stag)/dur)),k=Math.round(38*ease(p)),bars=c.querySelectorAll('.pol-st i');
+      bars.forEach((b,i)=>b.classList.toggle('on',i<k));
+      c.querySelector('.pc').textContent=k;
+      if(p<1)done=false;
+    });
+    const ps=Math.max(0,Math.min(1,(t-t0)/(dur+3*stag)));$('pol-sum').textContent=Math.round(152*ease(ps));
+    if(!done||ps<1)raf(f)
+  })(performance.now())
+}
+const tabs=$('tabs');
+G.forEach((g,i)=>{const b=document.createElement('button');b.type='button';b.textContent=g.n;b.dataset.i=i;tabs.appendChild(b)});
+function show(i){
+  const g=G[i];
+  tabs.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.i===i)));
+  $('sum').innerHTML=`<div class="big" id="big">${g.tot}</div><div class="unit">${g.u}</div><div class="meta">${g.kind==='jav'?'1 socio':g.rows.length+' socios'} · ${g.ofTxt}</div><div class="share"><i id="shr" style="transform:scaleX(0)"></i></div>`;
+  raf(()=>raf(()=>{$('shr').style.transform=`scaleX(${g.tot/g.of})`}));
+  const tiles=q=>Array.from({length:q},()=>`<span class="tile"></span>`).join('');
+  $('rows').innerHTML=g.rows.map((r,k)=>{
+    const st=`style="animation-delay:${k*60}ms"`;
+    if(g.kind==='jav'){const warm=k===2;return `<div class="row${warm?' warm':''}" ${st}><span class="n">${r[0]||''}</span><div class="who"><b>${r[1]}</b></div><div class="q">${r[2]}</div></div>`}
+    if(g.kind==='pol')return `<div class="row" ${st}><span class="n">${r[0]}</span><div class="who"><b>${r[1]}</b></div><div class="q">${r[2]}<small>POLINES</small></div></div>`;
+    return `<div class="row" ${st}><span class="n">${r[0]}</span><div class="who"><b>${r[1]}</b><div class="tiles">${tiles(r[2])}</div></div><div class="q">${r[2]}<small>MALLAS</small></div></div>`}).join('');
+  $('obs').textContent=g.obs;
+  if(!reduce){const el=$('big'),t0=performance.now();(function f(t){const p=Math.min(1,(t-t0)/900);el.textContent=Math.round(g.tot*ease(p));if(p<1)raf(f)})(t0)}
+}
+tabs.addEventListener('click',e=>{const b=e.target.closest('button');if(b)show(+b.dataset.i)});
+show(0);
+function cnt(el,to,dur,fmt){if(reduce){el.textContent=fmt(to);return}const t0=performance.now();(function f(t){const p=Math.min(1,(t-t0)/dur);el.textContent=fmt(Math.round(to*(1-Math.pow(1-p,4))));if(p<1)raf(f)})(t0)}
+function restart(sec,cls){sec.classList.remove(cls);void sec.offsetWidth;sec.classList.add(cls)}
+function playStats(){document.querySelectorAll('.stat b').forEach(b=>cnt(b,+b.dataset.n,1500,v=>v))}
+function playCompra(){const s=$('s-compra');document.querySelectorAll('#don circle').forEach(c=>{c.style.transition='none';c.setAttribute('stroke-dasharray',`0 ${c.dataset.c}`)});restart(s,'go');void s.offsetWidth;document.querySelectorAll('#don circle').forEach(c=>{c.style.transition='';c.setAttribute('stroke-dasharray',`${c.dataset.len} ${c.dataset.c}`)})}
+function playJav(){const s=$('s-jav');restart(s,'go');cnt($('amt'),16416,1900,v=>'$'+v.toLocaleString('es-CL'))}
+const last={};
+function once(k,fn,gap=3500){const n=performance.now();if(last[k]&&n-last[k]<gap)return;last[k]=n;fn()}
+const PLAY={'s-stats':playStats,'s-compra':playCompra,'s-pol':playPol,'s-jav':playJav};
+function playAll(){Object.entries(PLAY).forEach(([k,fn])=>once(k,fn,0))}
+playAll();
+if(!reduce){setInterval(()=>{if(!document.hidden)playAll()},11000)}
+Object.entries(PLAY).forEach(([k,fn])=>{const el=$(k);['pointerenter','pointerdown'].forEach(ev=>el.addEventListener(ev,()=>once(k,fn,4500),{passive:true}))});
+Object.keys(PLAY).forEach(id=>new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting)once(id,PLAY[id],6000)}),{threshold:.3}).observe($(id)));
+$('replay').addEventListener('click',()=>{last['s-pol']=0;once('s-pol',playPol,0)});
+(function(){
+  const cv=$('mesh'),ctx=cv.getContext('2d');let W,H,t0=performance.now(),px=0,run=true;
+  function size(){const dpr=Math.min(2,devicePixelRatio||1),r=cv.getBoundingClientRect();W=r.width;H=r.height;cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}
+  size();addEventListener('resize',size);
+  addEventListener('pointermove',e=>{px=e.clientX/innerWidth-.5},{passive:true});
+  new IntersectionObserver(es=>{const was=run;run=es[0].isIntersecting;if(run&&!was)raf(frame)}).observe($('hero'));
+  function frame(now){
+    if(!run)return;
+    const tm=(now-t0)/1000,e=ease(Math.min(1,tm/3));
+    ctx.clearRect(0,0,W,H);
+    const horizon=H*.4,cx=W/2+px*60+Math.sin(tm*.4)*40,cell=Math.max(30,W/16),n=Math.ceil(W/cell)+6;
+    ctx.lineWidth=1;
+    for(let i=-n;i<=n;i++){
+      const prog=Math.max(0,Math.min(1,e*1.7-Math.abs(i)/(n*1.15)));
+      const x1=cx+i*cell*.45,x0=cx+i*cell*1.7,xe=x1+(x0-x1)*prog,ye=horizon+(H-horizon)*prog;
+      ctx.strokeStyle=`rgba(196,220,207,${.1+.2*(1-Math.abs(i)/n)})`;
+      ctx.beginPath();ctx.moveTo(x1,horizon);ctx.lineTo(xe,ye);ctx.stroke();
+    }
+    for(let k=0;k<16;k++){
+      const f0=((k/16)+tm*.045)%1,f=Math.pow(f0,1.9),y=horizon+(H-horizon)*f;
+      const half=W*(.1+.95*f)*Math.min(1,e*2.3);
+      ctx.strokeStyle=`rgba(143,209,174,${.08+.4*f})`;
+      ctx.beginPath();ctx.moveTo(cx-half,y);ctx.lineTo(cx+half,y);ctx.stroke();
+    }
+    if(!reduce||tm<3.2)raf(frame);
+  }
+  raf(frame);
+})();
+</script>
+</body>
+</html>
+

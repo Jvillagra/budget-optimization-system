@@ -22,6 +22,12 @@ const PUBLIC_PATHS = ['/login', '/auth/callback', '/api/auth/session', '/manifes
 // /favicon.ico e /icons/* estaban permitidos, así que /logo.png y los
 // favicon-*.png quedaban detrás del gate y se rompían en /login.
 const STATIC_ASSET_RE = /\.(png|jpg|jpeg|svg|webp|ico|gif)$/i
+// Página estática pública de entregas (public/e/<token>.html). La única
+// protección es que el nombre del archivo es un token de 32 hex imposible de
+// adivinar: quien tenga el link entra, y reenviar el link la abre a terceros.
+// Contiene nombres de socios y un monto, sin RUT ni datos de contacto, y lleva
+// noindex. No usar este patrón para nada que sea sensible de verdad.
+const ENTREGAS_PUBLICA_RE = /^\/e\/[a-f0-9]{32}\.html$/
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
@@ -31,7 +37,8 @@ export async function proxy(req: NextRequest) {
     pathname.startsWith('/_next') ||
     pathname.startsWith('/icons') ||
     pathname.startsWith('/screenshots') ||
-    STATIC_ASSET_RE.test(pathname)
+    STATIC_ASSET_RE.test(pathname) ||
+    ENTREGAS_PUBLICA_RE.test(pathname)
 
   if (isPublic) return NextResponse.next()
 
