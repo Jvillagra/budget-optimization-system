@@ -175,7 +175,7 @@ button:focus-visible{outline:2px solid var(--g);outline-offset:4px;border-radius
   <canvas id="mesh" aria-hidden="true"></canvas>
   <div class="hero-in">
     <span class="tag">Proyecto PAT · Villarrica</span>
-    <h1><span class="ln"><span>Mallas y polines</span></span><span class="ln acc"><span>para 22 socios</span></span></h1>
+    <h1><span class="ln"><span>Mallas, polietileno y polines</span></span><span class="ln acc"><span>para 29 socios</span></span></h1>
     <i class="rule" aria-hidden="true"></i>
   </div>
 </div>
@@ -184,8 +184,8 @@ button:focus-visible{outline:2px solid var(--g);outline-offset:4px;border-radius
 <section style="margin-top:8px" id="s-stats">
   <div class="stats">
     <div class="shell"><div class="core stat"><b data-n="54">54</b><span>mallas en total</span></div></div>
-    <div class="shell"><div class="core stat"><b data-n="152">152</b><span>polines en total</span></div></div>
-    <div class="shell"><div class="core stat"><b data-n="22">22</b><span>socios reciben entrega</span></div></div>
+    <div class="shell"><div class="core stat"><b data-n="140">140</b><span>metros de polietileno</span></div></div>
+    <div class="shell"><div class="core stat"><b data-n="29">29</b><span>socios reciben entrega</span></div></div>
     <div class="shell"><div class="core stat"><b data-n="1">1</b><span>socio con pago adicional</span></div></div>
   </div>
 </section>
@@ -194,11 +194,11 @@ button:focus-visible{outline:2px solid var(--g);outline-offset:4px;border-radius
   <div class="head"><span class="tag">Resumen</span><h2>Qué se entrega en total</h2></div>
   <div class="grid2">
     <div class="shell"><div class="core"><h3>Mallas por tipo</h3><div class="bars" id="bars-mallas"></div></div></div>
-    <div class="shell"><div class="core"><h3>Mallas y polines</h3>
+    <div class="shell"><div class="core"><h3>Socios por tipo de entrega</h3>
       <div class="donut">
-        <svg viewBox="0 0 200 200" role="img" aria-label="Reparto de mallas y polines"><g id="don" transform="rotate(-90 100 100)"></g>
-          <text x="100" y="108" text-anchor="middle" fill="#f6f8f6" font-family="Geist,system-ui,sans-serif" font-weight="700" font-size="46">206</text>
-          <text x="100" y="132" text-anchor="middle" fill="rgba(246,248,246,.78)" font-family="Geist,system-ui,sans-serif" font-weight="600" font-size="12" letter-spacing="2">UNIDADES</text></svg>
+        <svg viewBox="0 0 200 200" role="img" aria-label="Socios por tipo de entrega"><g id="don" transform="rotate(-90 100 100)"></g>
+          <text x="100" y="108" text-anchor="middle" fill="#f6f8f6" font-family="Geist,system-ui,sans-serif" font-weight="700" font-size="46">29</text>
+          <text x="100" y="132" text-anchor="middle" fill="rgba(246,248,246,.78)" font-family="Geist,system-ui,sans-serif" font-weight="600" font-size="12" letter-spacing="2">SOCIOS</text></svg>
         <div class="leg" id="don-leg"></div>
       </div></div></div>
   </div>
@@ -252,12 +252,13 @@ const G=[
  {n:'Malla Inchalam',u:'mallas',tot:21,of:54,ofTxt:'de 54 mallas del programa',kind:'malla',rows:[[22,'Ricardo Barra Bravo',3],[23,'Marisol Pereda',3],[24,'Ana Luz Huisca',3],[25,'Jessica Huisca',3],[26,'Sergio Huisca',3],[27,'Orlando Burgos',3],[28,'María Inés Burgos',3]],obs:'Malla cuadriculada galvanizada de 1,50 m. Se entrega sin polines.'},
  {n:'Malla Ursus',u:'mallas',tot:30,of:54,ofTxt:'de 54 mallas del programa',kind:'malla',rows:[[12,'Mariana Pirquinao',3],[13,'Jacqueline Barra',3],[14,'María Eliana Catrilef',3],[15,'Marcia Catrilef',3],[16,'Ricardo Barra C.',3],[17,'César Barra C.',3],[18,'Edith Huisca',3],[19,'Carole Fernández',3],[20,'Margarita Catripán',3],[21,'Teresa Palma',3]],obs:'Malla ganadera tipo 740. Se entrega sin polines.'},
  {n:'Polines',u:'polines',tot:152,of:152,ofTxt:'de 152 polines del programa',kind:'pol',rows:[[8,'María Elena Huisca',38],[9,'Joel Jaramillo',38],[10,'Alejandra Huisca',38],[11,'Luisa Suazo',38]],obs:'Polines de 4 a 5 cm. Estos cuatro socios reciben solo polines.'},
+ {n:'Polietileno',u:'metros',tot:140,of:140,ofTxt:'140 m de polietileno y 98 polines',kind:'poli',rows:[[1,'Carmen Antipan',20],[2,'Fernando Catrilef',20],[3,'John Morales',20],[4,'Goinda Palma',20],[5,'Cristian Ramírez',20],[6,'Juana Quilal',20],[7,'María Palma',20]],obs:'Polietileno para invernadero, folio 6 m de 300 micrones. Cada socio recibe 20 m y 14 polines.'},
  {n:'Javier Norambuena',u:'mallas',tot:3,of:54,ofTxt:'de 54 mallas del programa',kind:'jav',rows:[[29,'Malla galvanizada 5014 · 3 × $68.472','$205.416'],['','Presupuesto del programa','− $189.000'],['','Pago adicional del socio','$16.416']],obs:'La diferencia sobre el presupuesto la paga el socio.'}
 ];
 const MAL=[['Malla Inchalam','7 socios',21,'#8fd1ae'],['Malla Ursus','10 socios',30,'#c4dccf'],['Malla galvanizada 5014','Javier Norambuena',3,'#f09a72']];
 $('bars-mallas').innerHTML=MAL.map(m=>`<div class="bar"><div class="lab">${m[0]}<small>${m[1]}</small></div><em>${m[2]}</em><div class="t"><i style="--c:${m[3]};--w:${m[2]/30}"></i></div></div>`).join('');
-const D=[['Malla Inchalam',21,'#8fd1ae'],['Malla Ursus',30,'#c4dccf'],['Malla 5014',3,'#f09a72'],['Polines',152,'#3a8a6c']];
-const T=206,R=82,C=2*Math.PI*R,GAP=4;let off=0;
+const D=[['Malla Ursus',10,'#c4dccf'],['Malla Inchalam',7,'#8fd1ae'],['Polietileno',7,'#7fb7c4'],['Polines',4,'#3a8a6c'],['Malla 5014',1,'#f09a72']];
+const T=29,R=82,C=2*Math.PI*R,GAP=4;let off=0;
 $('don').innerHTML=D.map(d=>{const len=Math.max(0,d[1]/T*C-GAP);const e=`<circle cx="100" cy="100" r="${R}" stroke="${d[2]}" stroke-dasharray="${reduce?len:0} ${C}" stroke-dashoffset="${-off}" data-len="${len}" data-c="${C}"/>`;off+=d[1]/T*C;return e}).join('');
 $('don-leg').innerHTML=D.map(d=>`<span style="--c:${d[2]}"><s></s>${d[0]}<b>${d[1]}</b></span>`).join('');
 $('pols').innerHTML=G[2].rows.map(r=>`<div class="pr"><div class="pr-top"><span class="nm">${r[1]}</span><span class="pc">38</span></div><div class="pol-st">${'<i></i>'.repeat(38)}</div></div>`).join('');
@@ -292,6 +293,7 @@ function show(i){
   $('rows').innerHTML=g.rows.map((r,k)=>{
     const st=`style="animation-delay:${k*60}ms"`;
     if(g.kind==='jav'){const warm=k===2;return `<div class="row${warm?' warm':''}" ${st}><span class="n">${r[0]||''}</span><div class="who"><b>${r[1]}</b></div><div class="q">${r[2]}</div></div>`}
+    if(g.kind==='poli')return `<div class="row" ${st}><span class="n">${r[0]}</span><div class="who"><b>${r[1]}</b></div><div class="q">${r[2]} m<small>+ 14 POLINES</small></div></div>`;
     if(g.kind==='pol')return `<div class="row" ${st}><span class="n">${r[0]}</span><div class="who"><b>${r[1]}</b></div><div class="q">${r[2]}<small>POLINES</small></div></div>`;
     return `<div class="row" ${st}><span class="n">${r[0]}</span><div class="who"><b>${r[1]}</b><div class="tiles">${tiles(r[2])}</div></div><div class="q">${r[2]}<small>MALLAS</small></div></div>`}).join('');
   $('obs').textContent=g.obs;
